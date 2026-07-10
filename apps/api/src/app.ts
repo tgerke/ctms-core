@@ -527,7 +527,8 @@ export function buildApp(db: Db, sql: Sql) {
             "multipart/form-data": {
               schema: z.object({
                 file: z.custom<File>((v) => v instanceof File, "file required"),
-                tmf_artifact_id: z.coerce.number().int(),
+                // Defaults to the Site Monitoring Visit Report artifact (01.03.01).
+                tmf_artifact_id: z.coerce.number().int().optional(),
                 title: z.string().min(1),
                 link_kind: VisitDocumentLinkSchema,
               }),
@@ -557,8 +558,15 @@ export function buildApp(db: Db, sql: Sql) {
       if (!visit) return c.json({ error: "monitoring visit not found" }, 404);
       const form = c.req.valid("form");
       const actor = c.get("actor");
+      let artifactId = form.tmf_artifact_id;
+      if (artifactId === undefined) {
+        const [artifact] = await sql`
+          SELECT id FROM tmf_artifact WHERE code = '01.03.01'`;
+        if (!artifact) return c.json({ error: "monitoring report artifact not seeded" }, 404);
+        artifactId = artifact.id as number;
+      }
       const result = await uploadDocument(db, actor, {
-        tmfArtifactId: form.tmf_artifact_id,
+        tmfArtifactId: artifactId,
         studyId: visit.study_id,
         studySiteId: visit.study_site_id,
         personId: null,

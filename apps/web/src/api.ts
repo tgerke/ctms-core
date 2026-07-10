@@ -98,6 +98,123 @@ export interface DocumentDetail {
   signatures: Record<string, any>[];
 }
 
+// --- Operational layer --------------------------------------------------------
+
+export type VisitStage =
+  | "scheduled"
+  | "overdue"
+  | "awaiting_report"
+  | "report_pending_review"
+  | "follow_up"
+  | "complete";
+
+export type VisitType = "pre_study" | "initiation" | "interim" | "close_out";
+
+export interface MonitoringVisit {
+  monitoring_visit_id: string;
+  study_id: string;
+  study_site_id: string;
+  site_number: string;
+  site_name: string;
+  visit_type: VisitType;
+  scheduled_date: string;
+  visit_date: string | null;
+  monitor_person_id: string | null;
+  monitor_given_name: string | null;
+  monitor_family_name: string | null;
+  summary: string | null;
+  trip_report_document_id: string | null;
+  trip_report_status: string | null;
+  open_action_items: number;
+  total_action_items: number;
+  stage: VisitStage;
+}
+
+export interface ActionItem {
+  id: string;
+  monitoring_visit_id: string;
+  description: string;
+  due_date: string | null;
+  resolved_at: string | null;
+  resolved_by: string | null;
+  resolved_by_given_name: string | null;
+  resolved_by_family_name: string | null;
+  resolution_note: string | null;
+  created_at: string;
+  status: "open" | "overdue" | "resolved";
+}
+
+export type IssueCategory =
+  | "protocol_deviation"
+  | "monitoring_finding"
+  | "safety"
+  | "data_quality"
+  | "other";
+export type IssueSeverity = "minor" | "major" | "critical";
+export type IssueStatus = "open" | "overdue" | "resolved";
+
+export interface Issue {
+  id: string;
+  study_id: string;
+  study_site_id: string | null;
+  monitoring_visit_id: string | null;
+  site_number: string | null;
+  site_name: string | null;
+  category: IssueCategory;
+  severity: IssueSeverity;
+  title: string;
+  description: string | null;
+  identified_date: string;
+  identified_by: string | null;
+  identified_by_given_name?: string | null;
+  identified_by_family_name?: string | null;
+  due_date: string | null;
+  resolved_at: string | null;
+  resolved_by: string | null;
+  resolution_note: string | null;
+  created_at: string;
+  status: IssueStatus;
+}
+
+export interface SiteEnrollment {
+  study_id: string;
+  study_site_id: string;
+  site_number: string;
+  site_name: string;
+  target_enrollment: number | null;
+  as_of_date: string | null;
+  screened: number | null;
+  enrolled: number | null;
+  withdrawn: number | null;
+  completed: number | null;
+  pct_of_target: number | string | null;
+}
+
+export interface Milestone {
+  id: string;
+  study_id: string;
+  study_site_id: string | null;
+  site_number: string | null;
+  name: string;
+  planned_date: string;
+  actual_date: string | null;
+  created_at: string;
+  status: "achieved" | "overdue" | "upcoming";
+}
+
+export interface VisitDetail {
+  visit: MonitoringVisit;
+  documents: {
+    link_kind: "trip_report" | "confirmation_letter" | "follow_up_letter";
+    document_id: string;
+    title: string;
+    status: string;
+    effective_date: string | null;
+  }[];
+  actionItems: ActionItem[];
+  issues: Issue[];
+}
+
 const token = () => localStorage.getItem("ctms_token") ?? "dev-admin-token";
 
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
@@ -195,6 +312,229 @@ export function useUpload() {
         body: form,
       });
     },
+    onSuccess: () => qc.invalidateQueries(),
+  });
+}
+
+// --- Operational layer hooks ---------------------------------------------------
+
+export const useVisits = (
+  studyId: string | undefined,
+  filter?: { studySiteId?: string; stage?: VisitStage },
+) =>
+  useQuery({
+    queryKey: ["visits", studyId, filter],
+    queryFn: () => {
+      const params = new URLSearchParams();
+      if (filter?.studySiteId) params.set("study_site_id", filter.studySiteId);
+      if (filter?.stage) params.set("stage", filter.stage);
+      const qs = params.toString();
+      return api<MonitoringVisit[]>(
+        `/studies/${studyId}/monitoring-visits${qs ? `?${qs}` : ""}`,
+      );
+    },
+    enabled: !!studyId,
+  });
+
+export const useVisit = (visitId: string | undefined) =>
+  useQuery({
+    queryKey: ["visit", visitId],
+    queryFn: () => api<VisitDetail>(`/monitoring-visits/${visitId}`),
+    enabled: !!visitId,
+  });
+
+export const useIssues = (
+  studyId: string | undefined,
+  filter?: { studySiteId?: string; status?: IssueStatus },
+) =>
+  useQuery({
+    queryKey: ["issues", studyId, filter],
+    queryFn: () => {
+      const params = new URLSearchParams();
+      if (filter?.studySiteId) params.set("study_site_id", filter.studySiteId);
+      if (filter?.status) params.set("status", filter.status);
+      const qs = params.toString();
+      return api<Issue[]>(`/studies/${studyId}/issues${qs ? `?${qs}` : ""}`);
+    },
+    enabled: !!studyId,
+  });
+
+export const useEnrollment = (studyId: string | undefined) =>
+  useQuery({
+    queryKey: ["enrollment", studyId],
+    queryFn: () => api<SiteEnrollment[]>(`/studies/${studyId}/enrollment`),
+    enabled: !!studyId,
+  });
+
+export const useMilestones = (studyId: string | undefined) =>
+  useQuery({
+    queryKey: ["milestones", studyId],
+    queryFn: () => api<Milestone[]>(`/studies/${studyId}/milestones`),
+    enabled: !!studyId,
+  });
+
+const jsonInit = (method: string, body: unknown): RequestInit => ({
+  method,
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify(body),
+});
+
+export function useScheduleVisit(studyId: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      studySiteId: string;
+      visitType: VisitType;
+      scheduledDate: string;
+    }) =>
+      api<{ id: string }>(
+        `/studies/${studyId}/monitoring-visits`,
+        jsonInit("POST", {
+          study_site_id: input.studySiteId,
+          visit_type: input.visitType,
+          scheduled_date: input.scheduledDate,
+        }),
+      ),
+    onSuccess: () => qc.invalidateQueries(),
+  });
+}
+
+export function useUpdateVisit() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      visitId: string;
+      visitDate?: string;
+      summary?: string;
+    }) =>
+      api<{ id: string }>(
+        `/monitoring-visits/${input.visitId}`,
+        jsonInit("PATCH", {
+          ...(input.visitDate !== undefined ? { visit_date: input.visitDate } : {}),
+          ...(input.summary !== undefined ? { summary: input.summary } : {}),
+        }),
+      ),
+    onSuccess: () => qc.invalidateQueries(),
+  });
+}
+
+/** Upload a visit document (trip report / letter): fresh document, linked to the visit. */
+export function useVisitUpload() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: {
+      visitId: string;
+      file: File;
+      title: string;
+      linkKind: "trip_report" | "confirmation_letter" | "follow_up_letter";
+    }) => {
+      const form = new FormData();
+      form.set("file", input.file);
+      form.set("title", input.title);
+      form.set("link_kind", input.linkKind);
+      return api<{ document_id: string; version_id: string }>(
+        `/monitoring-visits/${input.visitId}/documents`,
+        { method: "POST", body: form },
+      );
+    },
+    onSuccess: () => qc.invalidateQueries(),
+  });
+}
+
+export function useCreateActionItem() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { visitId: string; description: string; dueDate?: string }) =>
+      api<{ id: string }>(
+        `/monitoring-visits/${input.visitId}/action-items`,
+        jsonInit("POST", {
+          description: input.description,
+          ...(input.dueDate ? { due_date: input.dueDate } : {}),
+        }),
+      ),
+    onSuccess: () => qc.invalidateQueries(),
+  });
+}
+
+export function useResolveActionItem() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { actionItemId: string; resolutionNote?: string }) =>
+      api<{ id: string }>(
+        `/action-items/${input.actionItemId}`,
+        jsonInit("PATCH", {
+          ...(input.resolutionNote ? { resolution_note: input.resolutionNote } : {}),
+        }),
+      ),
+    onSuccess: () => qc.invalidateQueries(),
+  });
+}
+
+export function useCreateIssue(studyId: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      studySiteId?: string;
+      monitoringVisitId?: string;
+      category: IssueCategory;
+      severity: IssueSeverity;
+      title: string;
+      identifiedDate: string;
+      dueDate?: string;
+    }) =>
+      api<{ id: string }>(
+        `/studies/${studyId}/issues`,
+        jsonInit("POST", {
+          ...(input.studySiteId ? { study_site_id: input.studySiteId } : {}),
+          ...(input.monitoringVisitId
+            ? { monitoring_visit_id: input.monitoringVisitId }
+            : {}),
+          category: input.category,
+          severity: input.severity,
+          title: input.title,
+          identified_date: input.identifiedDate,
+          ...(input.dueDate ? { due_date: input.dueDate } : {}),
+        }),
+      ),
+    onSuccess: () => qc.invalidateQueries(),
+  });
+}
+
+export function useResolveIssue() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { issueId: string; resolutionNote?: string }) =>
+      api<{ id: string }>(
+        `/issues/${input.issueId}`,
+        jsonInit("PATCH", {
+          ...(input.resolutionNote ? { resolution_note: input.resolutionNote } : {}),
+        }),
+      ),
+    onSuccess: () => qc.invalidateQueries(),
+  });
+}
+
+export function useReportEnrollment() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      studySiteId: string;
+      asOfDate: string;
+      screened: number;
+      enrolled: number;
+      withdrawn: number;
+      completed: number;
+    }) =>
+      api<{ id: string }>(
+        `/study-sites/${input.studySiteId}/enrollment`,
+        jsonInit("PUT", {
+          as_of_date: input.asOfDate,
+          screened: input.screened,
+          enrolled: input.enrolled,
+          withdrawn: input.withdrawn,
+          completed: input.completed,
+        }),
+      ),
     onSuccess: () => qc.invalidateQueries(),
   });
 }

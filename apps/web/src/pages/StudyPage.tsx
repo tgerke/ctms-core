@@ -1,12 +1,27 @@
 import { useMemo } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
+  useEnrollment,
   useExpected,
+  useIssues,
+  useMilestones,
   useSites,
+  useVisits,
   type ExpectedDocument,
+  type IssueStatus,
   type Study,
+  type VisitStage,
 } from "../api";
-import { STATUS, StatusCell, StatusChip, worst } from "../status";
+import { EnrollmentBars, IssueListItem, MilestoneStrip, VisitListItem } from "../ops";
+import {
+  ISSUE_STATUS,
+  SpecChip,
+  STATUS,
+  StatusCell,
+  StatusChip,
+  VISIT_STAGE,
+  worst,
+} from "../status";
 
 function StatTile({
   label,
@@ -31,6 +46,25 @@ export default function StudyPage({ study }: { study: Study | undefined }) {
   const { data: sites } = useSites(study?.id);
   const { data: expected } = useExpected(study?.id);
   const navigate = useNavigate();
+  // Filters live in the URL so any view is a pasteable link.
+  const [params, setParams] = useSearchParams();
+  const visitStage = (params.get("visit_stage") as VisitStage | null) ?? undefined;
+  const issueStatus = (params.get("issue_status") as IssueStatus | null) ?? undefined;
+  const { data: milestones } = useMilestones(study?.id);
+  const { data: enrollment } = useEnrollment(study?.id);
+  const { data: visits } = useVisits(study?.id, { stage: visitStage });
+  const { data: issues } = useIssues(study?.id, { status: issueStatus });
+
+  const setParam = (key: string, value: string | undefined) => {
+    setParams(
+      (p) => {
+        if (value === undefined || p.get(key) === value) p.delete(key);
+        else p.set(key, value);
+        return p;
+      },
+      { replace: true },
+    );
+  };
 
   const { grid, zones, studyLevel, stats } = useMemo(() => {
     const rows = expected ?? [];
@@ -98,6 +132,81 @@ export default function StudyPage({ study }: { study: Study | undefined }) {
           cssVar={stats.pending ? "--info" : undefined}
         />
       </div>
+
+      {/* Operational layer: milestones, enrollment, visits, issues */}
+      <section className="card">
+        <h2 className="border-b border-hairline px-4 py-3 font-medium">
+          Milestones{" "}
+          <span className="text-xs font-normal text-muted">planned vs actual — derived</span>
+        </h2>
+        <div className="px-4 py-3">
+          <MilestoneStrip milestones={milestones ?? []} />
+        </div>
+      </section>
+
+      <section className="card">
+        <h2 className="border-b border-hairline px-4 py-3 font-medium">
+          Enrollment vs target{" "}
+          <span className="text-xs font-normal text-muted">
+            as reported by sites — subject-level data stays in the EDC
+          </span>
+        </h2>
+        <EnrollmentBars rows={enrollment ?? []} />
+      </section>
+
+      <section className="card">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-hairline px-4 py-3">
+          <h2 className="font-medium">Monitoring visits</h2>
+          <div className="ml-auto flex flex-wrap gap-2">
+            {(Object.keys(VISIT_STAGE) as VisitStage[]).map((s) => (
+              <button
+                key={s}
+                onClick={() => setParam("visit_stage", s)}
+                className={visitStage && visitStage !== s ? "opacity-40" : ""}
+                aria-pressed={visitStage === s}
+              >
+                <SpecChip spec={VISIT_STAGE[s]} />
+              </button>
+            ))}
+          </div>
+        </div>
+        {visits?.length === 0 ? (
+          <p className="px-4 py-3 text-sm text-muted">No visits match.</p>
+        ) : (
+          <ul className="divide-y divide-hairline">
+            {visits?.map((v) => (
+              <VisitListItem key={v.monitoring_visit_id} v={v} showSite />
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section className="card">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-hairline px-4 py-3">
+          <h2 className="font-medium">Issues & deviations</h2>
+          <div className="ml-auto flex flex-wrap gap-2">
+            {(Object.keys(ISSUE_STATUS) as IssueStatus[]).map((s) => (
+              <button
+                key={s}
+                onClick={() => setParam("issue_status", s)}
+                className={issueStatus && issueStatus !== s ? "opacity-40" : ""}
+                aria-pressed={issueStatus === s}
+              >
+                <SpecChip spec={ISSUE_STATUS[s]} />
+              </button>
+            ))}
+          </div>
+        </div>
+        {issues?.length === 0 ? (
+          <p className="px-4 py-3 text-sm text-muted">No issues match.</p>
+        ) : (
+          <ul className="divide-y divide-hairline">
+            {issues?.map((i) => (
+              <IssueListItem key={i.id} issue={i} showSite />
+            ))}
+          </ul>
+        )}
+      </section>
 
       {/* Completeness grid: requirements × sites */}
       <section className="card overflow-x-auto">

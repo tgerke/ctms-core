@@ -2,13 +2,23 @@ import { ArrowLeft, Upload } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import {
+  useEnrollment,
   useExpected,
+  useIssues,
   useSites,
   useStaff,
   useUpload,
+  useVisits,
   type ExpectedDocument,
   type Study,
 } from "../api";
+import {
+  EnrollmentBars,
+  IssueListItem,
+  ReportEnrollmentForm,
+  ScheduleVisitForm,
+  VisitListItem,
+} from "../ops";
 import { StatusChip } from "../status";
 
 const ROLE_LABEL: Record<string, string> = {
@@ -25,6 +35,10 @@ export default function SitePage({ study }: { study: Study | undefined }) {
   const site = sites?.find((s) => s.study_site_id === studySiteId);
   const { data: expected } = useExpected(study?.id, { studySiteId });
   const { data: staff } = useStaff(studySiteId);
+  const { data: visits } = useVisits(study?.id, { studySiteId });
+  const { data: issues } = useIssues(study?.id, { studySiteId });
+  const { data: enrollment } = useEnrollment(study?.id);
+  const siteEnrollment = enrollment?.filter((e) => e.study_site_id === studySiteId);
 
   const byZone = useMemo(() => {
     const zones = new Map<string, ExpectedDocument[]>();
@@ -84,6 +98,53 @@ export default function SitePage({ study }: { study: Study | undefined }) {
             </li>
           ))}
         </ul>
+      </section>
+
+      <section className="card">
+        <div className="flex flex-wrap items-center gap-3 border-b border-hairline px-4 py-3">
+          <h2 className="font-medium">Monitoring visits</h2>
+          <div className="ml-auto">
+            <ScheduleVisitForm studyId={study.id} studySiteId={site.study_site_id} />
+          </div>
+        </div>
+        {visits?.length === 0 ? (
+          <p className="px-4 py-3 text-sm text-muted">No visits yet.</p>
+        ) : (
+          <ul className="divide-y divide-hairline">
+            {visits?.map((v) => (
+              <VisitListItem key={v.monitoring_visit_id} v={v} />
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section className="card">
+        <h2 className="border-b border-hairline px-4 py-3 font-medium">Issues & deviations</h2>
+        {issues?.length === 0 ? (
+          <p className="px-4 py-3 text-sm text-muted">No issues at this site.</p>
+        ) : (
+          <ul className="divide-y divide-hairline">
+            {issues?.map((i) => (
+              <IssueListItem key={i.id} issue={i} />
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section className="card">
+        <h2 className="border-b border-hairline px-4 py-3 font-medium">
+          Enrollment{" "}
+          <span className="text-xs font-normal text-muted">
+            as-reported aggregates; corrections are audited
+          </span>
+        </h2>
+        <EnrollmentBars rows={siteEnrollment ?? []} />
+        <div className="border-t border-hairline px-4 py-3">
+          <ReportEnrollmentForm
+            studySiteId={site.study_site_id}
+            latest={siteEnrollment?.[0]}
+          />
+        </div>
       </section>
 
       {[...byZone.entries()].map(([zoneLabel, rows]) => (

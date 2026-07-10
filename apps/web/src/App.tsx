@@ -5,6 +5,7 @@ import { useChainStatus, useStudies } from "./api";
 import DocumentPage from "./pages/DocumentPage";
 import SitePage from "./pages/SitePage";
 import StudyPage from "./pages/StudyPage";
+import VisitPage from "./pages/VisitPage";
 
 function useTheme() {
   const [dark, setDark] = useState(
@@ -84,6 +85,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<StudyPage study={study} />} />
           <Route path="/sites/:studySiteId" element={<SitePage study={study} />} />
+          <Route path="/visits/:visitId" element={<VisitPage />} />
           <Route path="/documents/:documentId" element={<DocumentPage />} />
         </Routes>
       </main>

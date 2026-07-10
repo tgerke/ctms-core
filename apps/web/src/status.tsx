@@ -1,13 +1,19 @@
 import {
+  AlertTriangle,
   Archive,
+  CalendarClock,
   Check,
+  CircleAlert,
   CircleDashed,
+  CircleDot,
   Clock,
+  FileClock,
   Hourglass,
+  ListChecks,
   X,
   type LucideIcon,
 } from "lucide-react";
-import type { ExpectedStatus } from "./api";
+import type { ExpectedStatus, IssueSeverity, IssueStatus, VisitStage } from "./api";
 
 /** Status is never color-alone: every rendering pairs icon + label or tooltip. */
 export interface StatusSpec {
@@ -45,6 +51,48 @@ export const STATUS: Record<ExpectedStatus, StatusSpec> = {
 
 export const worst = (statuses: ExpectedStatus[]): ExpectedStatus =>
   statuses.reduce((a, b) => (STATUS[a].rank <= STATUS[b].rank ? a : b));
+
+/** Visit lifecycle stages: derived by v_monitoring_visit_status, never stored. */
+export const VISIT_STAGE: Record<VisitStage, Omit<StatusSpec, "rank">> = {
+  overdue: { label: "Overdue", icon: CircleAlert, cssVar: "--status-critical" },
+  awaiting_report: { label: "Awaiting report", icon: FileClock, cssVar: "--status-warn" },
+  report_pending_review: { label: "Report in review", icon: Hourglass, cssVar: "--info" },
+  follow_up: { label: "Follow-up", icon: ListChecks, cssVar: "--status-warn" },
+  scheduled: { label: "Scheduled", icon: CalendarClock, cssVar: "--muted", hollow: true },
+  complete: { label: "Complete", icon: Check, cssVar: "--status-good" },
+};
+
+export const ISSUE_STATUS: Record<IssueStatus, Omit<StatusSpec, "rank">> = {
+  overdue: { label: "Overdue", icon: CircleAlert, cssVar: "--status-critical" },
+  open: { label: "Open", icon: CircleDot, cssVar: "--status-warn" },
+  resolved: { label: "Resolved", icon: Check, cssVar: "--status-good" },
+};
+
+export const ISSUE_SEVERITY: Record<IssueSeverity, Omit<StatusSpec, "rank">> = {
+  critical: { label: "Critical", icon: AlertTriangle, cssVar: "--status-critical" },
+  major: { label: "Major", icon: AlertTriangle, cssVar: "--status-warn" },
+  minor: { label: "Minor", icon: AlertTriangle, cssVar: "--muted" },
+};
+
+/** Generic chip for any Omit<StatusSpec, "rank">-shaped spec (visits, issues). */
+export function SpecChip({ spec }: { spec: Omit<StatusSpec, "rank"> }) {
+  const Icon = spec.icon;
+  return (
+    <span
+      className="inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs font-medium"
+      style={{
+        color: `var(${spec.cssVar})`,
+        borderColor: `color-mix(in srgb, var(${spec.cssVar}) 40%, transparent)`,
+        background: spec.hollow
+          ? "transparent"
+          : `color-mix(in srgb, var(${spec.cssVar}) 12%, transparent)`,
+      }}
+    >
+      <Icon size={12} strokeWidth={2.5} aria-hidden />
+      <span className="text-ink2">{spec.label}</span>
+    </span>
+  );
+}
 
 export function StatusChip({ status }: { status: ExpectedStatus }) {
   const spec = STATUS[status];
