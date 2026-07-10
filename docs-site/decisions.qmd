@@ -70,6 +70,15 @@ the EDC owns subject-level data, as a firm boundary. No bespoke workflow
 modules: configuration is rows, lifecycles are SQL views, and the `v_*` views
 are documented public query surface.
 
+## ADR-0007 — Quarto docs site with static, source-verified examples
+
+This site is a Quarto website whose code examples are displayed, never executed:
+publishing needs only Quarto, not the running stack. The drift risk that live
+execution would catch is mitigated at writing time instead — every example is
+checked against the actual route definitions and views, not written from memory —
+and any page can opt into executed chunks later if a live-CI setup becomes worth
+its cost.
+
 ---
 
 Two of these — ADR-0004 and ADR-0006 — are the same idea applied twice, and it
