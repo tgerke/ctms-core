@@ -274,6 +274,10 @@ export function buildApp(db: Db, sql: Sql) {
                 study_site_id: z.string().uuid().optional(),
                 person_id: z.string().uuid().optional(),
                 title: z.string().min(1),
+                // Filing provenance (ADR-0011): set by source systems (e.g. an
+                // EDC's filing worker), omitted for human uploads.
+                source_system: z.string().min(1).max(200).optional(),
+                source_ref: z.string().min(1).max(500).optional(),
               }),
             },
           },
@@ -311,6 +315,8 @@ export function buildApp(db: Db, sql: Sql) {
         fileName: form.file.name,
         mimeType: form.file.type || "application/octet-stream",
         bytes,
+        sourceSystem: form.source_system ?? null,
+        sourceRef: form.source_ref ?? null,
       });
       return c.json(
         {

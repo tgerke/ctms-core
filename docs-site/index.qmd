@@ -72,13 +72,18 @@ df_expected |>
 
 Honesty about scope is part of the design:
 
-- **Not validated software.** The Part 11 mechanisms are built and tested, but
-  formal computer system validation (GAMP 5, IQ/OQ/PQ, SOPs) has not been
-  performed. The [compliance mapping](compliance.qmd) states exactly what is and
-  isn't claimed.
+- **Not validated software.** The repo generates its own validation raw
+  material — IQ checks against the live environment, an OQ report, and a
+  requirement→test traceability matrix (`pnpm validation:iq` /
+  `pnpm validation:artifacts`) — but the validation *program* (GAMP 5 SOPs,
+  risk assessment, training records, a QMS) is organizational work that has
+  not been performed. The [compliance mapping](compliance.qmd) states exactly
+  what is and isn't claimed.
 - **Not an EDC.** Enrollment data is site-reported aggregates only;
   subject-level clinical data stays in your EDC. This is a firm boundary, not a
-  roadmap gap.
+  roadmap gap — though your EDC can *file into* the TMF through the documented
+  upload API as a machine identity with provenance (ADR-0011): documents and
+  aggregates come in, subject data never does.
 - **Not the full TMF Reference Model out of the box.** The seed ships an
   illustrative subset of roughly 40 artifacts using official numbering;
   `pnpm db:import-tmf` loads the complete CDISC model verbatim from the

@@ -157,6 +157,10 @@ const personSpecs: PersonSpec[] = [
   // Sponsor / CRO staff (no site role)
   { key: "feld", given: "Nora", family: "Feld", credentials: "MPH", site: null, role: null },
   { key: "patel", given: "Ravi", family: "Patel", credentials: "CCRA", site: null, role: null },
+  // Machine identity (ADR-0011): the EDC's filing worker authenticates as this
+  // person record (dev-service-token, or an OIDC client subject mapped via
+  // API_SERVICE_SUBJECTS) and files documents with provenance.
+  { key: "edc", given: "EDC", family: "Filing", credentials: null, site: null, role: null },
 ];
 
 const personId = new Map<string, string>();
@@ -190,6 +194,9 @@ for (const spec of personSpecs) {
 await db.insert(s.accessGrant).values([
   { personId: personId.get("feld")!, role: "admin" },
   { personId: personId.get("patel")!, role: "monitor" },
+  // Least privilege for the machine identity: ingest (read + upload, never
+  // sign), scoped to the one study it files for.
+  { personId: personId.get("edc")!, role: "ingest", studyId },
 ]);
 
 // --- Requirement rules -------------------------------------------------------

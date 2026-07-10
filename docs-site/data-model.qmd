@@ -74,7 +74,7 @@ no schema change.
   identity maps onto persons at the API layer, so the identity provider is
   swappable without touching the regulated facts.
 - **access_grant** — what a person may *do* through the API: a role
-  (`admin | trial_ops | monitor | read_only`), optionally scoped to one study
+  (`admin | trial_ops | monitor | read_only | ingest`), optionally scoped to one study
   or one study-site, mapping to operations (read / upload / sign / approve /
   administer). Revocation is a timestamp, never a delete, and every grant
   change lands in the audit trail — an access review is a query. Deliberately
@@ -89,7 +89,8 @@ no schema change.
   effective and expiry dates for licenses, approvals, and training certificates.
 - **document_version** — **immutable**: the database rejects UPDATE and DELETE
   for every role. Each version records number, sha256 of the content, filename,
-  MIME type, size, uploader, and timestamp. File bytes live in a
+  MIME type, size, uploader, timestamp, and — when a source system filed it —
+  `source_system`/`source_ref` provenance (ADR-0011). File bytes live in a
   content-addressed store keyed by that hash — a local directory in dev, or S3
   with Object Lock so the bytes are WORM (ADR-0009); duplicate uploads
   deduplicate for free.

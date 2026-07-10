@@ -43,6 +43,13 @@
       "when": 1783698508572,
       "tag": "0005_audit_taxonomy",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1783706805998,
+      "tag": "0006_filing_provenance",
+      "breakpoints": true
     }
   ]
 }

@@ -8,13 +8,16 @@ import type { Sql } from "@ctms/db";
  */
 
 export type Operation = "read" | "upload" | "sign" | "approve" | "administer";
-export type AccessRole = "admin" | "trial_ops" | "monitor" | "read_only";
+export type AccessRole = "admin" | "trial_ops" | "monitor" | "read_only" | "ingest";
 
 const ROLE_OPERATIONS: Record<AccessRole, readonly Operation[]> = {
   admin: ["read", "upload", "sign", "approve", "administer"],
   trial_ops: ["read", "upload", "sign", "approve"],
   monitor: ["read", "upload", "sign"],
   read_only: ["read"],
+  // Machine identities filing from source systems (ADR-0011): a service can
+  // read and upload but never sign — signatures need a human ceremony.
+  ingest: ["read", "upload"],
 };
 
 export interface Grant {

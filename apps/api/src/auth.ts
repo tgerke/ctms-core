@@ -59,6 +59,10 @@ export function configureTokens(): void {
     email: "ravi.patel@meridiancro.example",
     roleLabel: "monitor",
   });
+  tokenToEmail.set(process.env.API_TOKEN_SERVICE ?? "dev-service-token", {
+    email: "edc.filing@corc.example",
+    roleLabel: "service",
+  });
 }
 
 // --- oidc mode ----------------------------------------------------------------
@@ -93,6 +97,24 @@ async function verifyOidcToken(token: string): Promise<JWTPayload> {
     audience: process.env.OIDC_AUDIENCE,
   });
   return payload;
+}
+
+/**
+ * Machine identities (ADR-0011): client-credentials tokens carry no verified
+ * email, so configured subjects map directly to provisioned person records.
+ * API_SERVICE_SUBJECTS=sub:email[,sub:email...] — e.g. the IdP client id of
+ * an EDC's filing worker to its seeded service person.
+ */
+function serviceSubjectEmail(sub: unknown): string | null {
+  if (typeof sub !== "string" || sub === "") return null;
+  const spec = process.env.API_SERVICE_SUBJECTS;
+  if (!spec) return null;
+  for (const entry of spec.split(",")) {
+    const sep = entry.indexOf(":");
+    if (sep === -1) continue;
+    if (entry.slice(0, sep).trim() === sub) return entry.slice(sep + 1).trim();
+  }
+  return null;
 }
 
 function emailClaim(payload: JWTPayload): string | null {
@@ -134,7 +156,7 @@ export function authMiddleware(sql: Sql): MiddlewareHandler<Env> {
       } catch {
         return c.json({ error: "missing or invalid bearer token" }, 401);
       }
-      const claimed = emailClaim(payload);
+      const claimed = serviceSubjectEmail(payload.sub) ?? emailClaim(payload);
       if (!claimed) {
         return c.json({ error: "token carries no verified email identity" }, 403);
       }

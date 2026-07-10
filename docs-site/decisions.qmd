@@ -107,6 +107,18 @@ tokens appearing verbatim in test names. A hand-maintained matrix drifts
 silently — the same failure mode as a stored status column, which this project
 exists to reject (ADR-0004, applied to evidence).
 
+## ADR-0011 — A generic source-system filing interface; EDC integration stays outside the data boundary
+
+Source systems — an EDC first — file documents into the TMF through the same
+audited upload endpoint people use, authenticated as machine identities (an
+OIDC client-credentials subject mapped to a provisioned person record) holding
+the `ingest` role: read and upload, never sign or approve. Filed versions
+carry `source_system`/`source_ref` provenance and land as `pending_review`
+like any upload — automation feeds the TMF, a human still blesses it. The
+reference client is [edc-core](https://github.com/tgerke/edc-core), this
+project's AGPL sibling on the data-capture side; the boundary holds: documents
+and aggregates come in, subject-level clinical data never does.
+
 ---
 
 Three of these — ADR-0004, ADR-0006, and ADR-0010 — are the same idea applied

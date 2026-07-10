@@ -66,7 +66,10 @@ Register two OIDC clients (or one, if the IdP allows both flows):
 
 Every user needs a `person` row whose email matches the IdP's verified email
 claim, plus an `access_grant` row for their role and scope. Provisioning is
-two audited INSERTs; there is no separate user store to reconcile.
+two audited INSERTs; there is no separate user store to reconcile. Machine
+identities (a source system's filing worker, ADR-0011) work the same way:
+a client-credentials OIDC client whose subject maps to its person row via
+`API_SERVICE_SUBJECTS`, granted `ingest` scoped to its study.
 
 ## Bring-up order
 

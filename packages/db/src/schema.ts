@@ -37,7 +37,9 @@ export const documentStatus = pgEnum("document_status", [
 export const signatureMeaning = pgEnum("signature_meaning", ["author", "review", "approval"]);
 // System-access roles (who may call which API operations) — distinct from
 // study_site_role, which records site staffing facts. See ADR-0008.
-export const accessRole = pgEnum("access_role", ["admin", "trial_ops", "monitor", "read_only"]);
+// 'ingest' is the machine-identity role for source-system filing (ADR-0011):
+// read + upload only — a service can never sign or approve.
+export const accessRole = pgEnum("access_role", ["admin", "trial_ops", "monitor", "read_only", "ingest"]);
 // How the signer re-authenticated at signing time (§11.200). seed_fixture marks
 // demo signatures fabricated by the seed, not a real signing ceremony.
 export const reauthMethod = pgEnum("reauth_method", [
@@ -264,6 +266,10 @@ export const documentVersion = pgTable(
     sizeBytes: integer("size_bytes").notNull(),
     uploadedBy: uuid("uploaded_by").references(() => person.id),
     uploadedAt: timestamp("uploaded_at", { withTimezone: true }).notNull().defaultNow(),
+    // Filing provenance (ADR-0011): which source system filed this version and
+    // its native reference (e.g. an EDC casebook id). Null for human uploads.
+    sourceSystem: text("source_system"),
+    sourceRef: text("source_ref"),
   },
   (t) => [uniqueIndex("document_version_number_idx").on(t.documentId, t.versionNumber)],
 );

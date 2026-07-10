@@ -22,6 +22,10 @@ export interface UploadInput {
   // artifact + scope exists. Needed for per-visit records (trip reports): two
   // visits at one site share artifact and scope but are distinct documents.
   forceNew?: boolean;
+  // Filing provenance (ADR-0011): the source system that filed this version
+  // and its native reference. Absent for human uploads.
+  sourceSystem?: string | null;
+  sourceRef?: string | null;
 }
 
 /**
@@ -88,6 +92,8 @@ export async function uploadDocument(db: Db, actor: Actor, input: UploadInput) {
         mimeType: input.mimeType,
         sizeBytes,
         uploadedBy: actor.personId ?? null,
+        sourceSystem: input.sourceSystem ?? null,
+        sourceRef: input.sourceRef ?? null,
       })
       .returning();
     return { document: doc, version: versions[0]!, sha256 };

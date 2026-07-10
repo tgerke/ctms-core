@@ -21,16 +21,18 @@ at `http://localhost:8787/docs`.
 Auth: `Authorization: Bearer <token>`. Two modes, selected by `AUTH_MODE`:
 
 - **`dev`** — static tokens from `.env.example` (`dev-admin-token`,
-  `dev-monitor-token`) map to seeded people. Demo only.
+  `dev-monitor-token`, `dev-service-token`) map to seeded people. Demo only.
 - **`oidc`** — the token is a JWT from your identity provider
   (`OIDC_ISSUER`/`OIDC_AUDIENCE`); its verified email claim resolves to a
   person record. Any OIDC-compliant IdP works (Okta, Entra ID, Auth0,
-  Keycloak).
+  Keycloak). Machine identities (client-credentials tokens with no email
+  claim) resolve by subject instead, via `API_SERVICE_SUBJECTS` (ADR-0011).
 
 Either way the identity must hold an `access_grant` row: roles
-(`admin`, `trial_ops`, `monitor`, `read_only`) map to operations
-(read / upload / sign / approve / administer), optionally scoped to one study
-or study-site (ADR-0008). Denials are 403 and name the missing permission.
+(`admin`, `trial_ops`, `monitor`, `read_only`, `ingest`) map to operations
+(read / upload / sign / approve / administer; `ingest` is read + upload for
+source-system filing), optionally scoped to one study or study-site
+(ADR-0008). Denials are 403 and name the missing permission.
 
 ## The monitor's morning, from R
 

@@ -65,7 +65,7 @@ erDiagram
   pharmacist, research nurse) at a study-site, with start/end dates. Role assignments
   are auditable facts and the anchor for person-scoped requirements.
 - **access_grant** — API authorization (ADR-0008): a person holds a role
-  (`admin | trial_ops | monitor | read_only`), optionally scoped to one study or one
+  (`admin | trial_ops | monitor | read_only | ingest`), optionally scoped to one study or one
   study-site. Roles map to operations (read / upload / sign / approve / administer)
   in `packages/core/src/authz.ts`. Revocation is a `revoked_at` timestamp, never a
   delete, and grant changes are audited like any other row. Distinct from
@@ -80,7 +80,8 @@ erDiagram
   Lifecycle `status`: `pending_review → effective → superseded`. Optional
   `effective_date` / `expires_at` (licenses, approvals, training certificates).
 - **document_version** — **immutable** (DB triggers reject UPDATE/DELETE): version
-  number, `sha256` of content, filename, MIME type, size, uploader, timestamp. File
+  number, `sha256` of content, filename, MIME type, size, uploader, timestamp, and —
+  when a source system filed it — `source_system`/`source_ref` provenance (ADR-0011). File
   bytes live in a content-addressed store behind a driver interface
   (`STORAGE_DRIVER=local` directory for dev, `s3` with Object Lock for WORM bytes —
   ADR-0009); the database holds metadata and the hash.
