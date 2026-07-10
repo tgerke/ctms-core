@@ -19,8 +19,6 @@ export function configureTokens(): void {
   });
 }
 
-const actorCache = new Map<string, Actor>();
-
 export function authMiddleware(sql: Sql) {
   return async (c: Context, next: Next) => {
     const header = c.req.header("authorization") ?? "";
@@ -29,19 +27,17 @@ export function authMiddleware(sql: Sql) {
     if (!mapped) {
       return c.json({ error: "missing or invalid bearer token" }, 401);
     }
-    let actor = actorCache.get(token);
-    if (!actor) {
-      const people = await sql`
-        SELECT id, given_name, family_name FROM person WHERE email = ${mapped.email}`;
-      const person = people[0];
-      actor = person
-        ? {
-            personId: person.id as string,
-            label: `${person.given_name} ${person.family_name} (${mapped.roleLabel})`,
-          }
-        : { label: `${mapped.email} (${mapped.roleLabel})` };
-      actorCache.set(token, actor);
-    }
+    // Resolved per request (single indexed lookup): person ids change on
+    // re-seed, so caching the mapping goes stale.
+    const people = await sql`
+      SELECT id, given_name, family_name FROM person WHERE email = ${mapped.email}`;
+    const person = people[0];
+    const actor: Actor = person
+      ? {
+          personId: person.id as string,
+          label: `${person.given_name} ${person.family_name} (${mapped.roleLabel})`,
+        }
+      : { label: `${mapped.email} (${mapped.roleLabel})` };
     c.set("actor", actor);
     await next();
   };
