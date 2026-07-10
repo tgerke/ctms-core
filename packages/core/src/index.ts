@@ -1,15 +1,38 @@
 export { withActor, type Actor, type Tx } from "./actor.js";
 export { uploadDocument, signDocumentVersion, sha256Hex, type UploadInput } from "./documents.js";
 export {
+  achieveMilestone,
+  createActionItem,
+  createIssue,
+  createMilestone,
+  linkVisitDocument,
+  reportEnrollment,
+  resolveActionItem,
+  resolveIssue,
+  scheduleVisit,
+  updateVisit,
+  type IssueCategory,
+  type IssueSeverity,
+  type VisitDocumentLink,
+  type VisitType,
+} from "./operations.js";
+export {
   auditEvents,
   documentAuditTrail,
   documentDetail,
   expectedDocuments,
   listStudies,
   siteStaff,
+  studyEnrollment,
+  studyIssues,
+  studyMilestones,
   studySites,
+  studyVisits,
   syncExpectedDocuments,
   verifyAuditChain,
+  visitDetail,
   type ExpectedDocumentRow,
   type ExpectedStatus,
+  type IssueStatus,
+  type VisitStage,
 } from "./queries.js";

@@ -171,6 +171,103 @@ export async function verifyAuditChain(sql: Sql) {
   return { events: n, problems };
 }
 
+// ---------------------------------------------------------------------------
+// Operational layer (ADR-0006). All reads go through the v_* views so the API
+// and a direct SQL connection can never disagree about a lifecycle stage.
+// ---------------------------------------------------------------------------
+
+export type VisitStage =
+  | "scheduled"
+  | "overdue"
+  | "awaiting_report"
+  | "report_pending_review"
+  | "follow_up"
+  | "complete";
+
+export type IssueStatus = "open" | "overdue" | "resolved";
+
+export async function studyVisits(
+  sql: Sql,
+  filter: { studyId: string; studySiteId?: string; stage?: VisitStage },
+) {
+  return sql`
+    SELECT v.*
+    FROM v_monitoring_visit_status v
+    WHERE v.study_id = ${filter.studyId}
+      AND (${filter.studySiteId ?? null}::uuid IS NULL OR v.study_site_id = ${filter.studySiteId ?? null})
+      AND (${filter.stage ?? null}::text IS NULL OR v.stage = ${filter.stage ?? null})
+    ORDER BY v.scheduled_date DESC, v.site_number`;
+}
+
+export async function visitDetail(sql: Sql, monitoringVisitId: string) {
+  const visits = await sql`
+    SELECT v.* FROM v_monitoring_visit_status v
+    WHERE v.monitoring_visit_id = ${monitoringVisitId}`;
+  if (visits.length === 0) return null;
+  const documents = await sql`
+    SELECT mvd.link_kind, d.id AS document_id, d.title, d.status, d.effective_date
+    FROM monitoring_visit_document mvd
+    JOIN document d ON d.id = mvd.document_id
+    WHERE mvd.monitoring_visit_id = ${monitoringVisitId}
+    ORDER BY mvd.created_at`;
+  const actionItems = await sql`
+    SELECT ai.*,
+           p.given_name AS resolved_by_given_name,
+           p.family_name AS resolved_by_family_name,
+           CASE
+             WHEN ai.resolved_at IS NOT NULL THEN 'resolved'
+             WHEN ai.due_date IS NOT NULL AND ai.due_date < CURRENT_DATE THEN 'overdue'
+             ELSE 'open'
+           END AS status
+    FROM visit_action_item ai
+    LEFT JOIN person p ON p.id = ai.resolved_by
+    WHERE ai.monitoring_visit_id = ${monitoringVisitId}
+    ORDER BY ai.resolved_at NULLS FIRST, ai.due_date NULLS LAST, ai.created_at`;
+  const issues = await sql`
+    SELECT i.* FROM v_issue_status i
+    WHERE i.monitoring_visit_id = ${monitoringVisitId}
+    ORDER BY i.identified_date DESC`;
+  return { visit: visits[0], documents, actionItems, issues };
+}
+
+export async function studyIssues(
+  sql: Sql,
+  filter: {
+    studyId: string;
+    studySiteId?: string;
+    status?: IssueStatus;
+    category?: string;
+    severity?: string;
+  },
+) {
+  return sql`
+    SELECT i.*,
+           p.given_name AS identified_by_given_name,
+           p.family_name AS identified_by_family_name
+    FROM v_issue_status i
+    LEFT JOIN person p ON p.id = i.identified_by
+    WHERE i.study_id = ${filter.studyId}
+      AND (${filter.studySiteId ?? null}::uuid IS NULL OR i.study_site_id = ${filter.studySiteId ?? null})
+      AND (${filter.status ?? null}::text IS NULL OR i.status = ${filter.status ?? null})
+      AND (${filter.category ?? null}::text IS NULL OR i.category::text = ${filter.category ?? null})
+      AND (${filter.severity ?? null}::text IS NULL OR i.severity::text = ${filter.severity ?? null})
+    ORDER BY (i.status = 'overdue') DESC, i.severity DESC, i.identified_date DESC`;
+}
+
+export async function studyEnrollment(sql: Sql, studyId: string) {
+  return sql`
+    SELECT e.* FROM v_site_enrollment e
+    WHERE e.study_id = ${studyId}
+    ORDER BY e.site_number`;
+}
+
+export async function studyMilestones(sql: Sql, studyId: string) {
+  return sql`
+    SELECT m.* FROM v_milestone_status m
+    WHERE m.study_id = ${studyId}
+    ORDER BY m.planned_date, m.site_number NULLS FIRST`;
+}
+
 export async function syncExpectedDocuments(sql: Sql, studyId: string) {
   const [{ synced }] = await sql<[{ synced: number }]>`
     SELECT ctms_sync_expected_documents(${studyId}) AS synced`;

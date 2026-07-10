@@ -18,6 +18,10 @@ export interface UploadInput {
   fileName: string;
   mimeType: string;
   bytes: Uint8Array;
+  // Always create a fresh document, even if a non-superseded one with the same
+  // artifact + scope exists. Needed for per-visit records (trip reports): two
+  // visits at one site share artifact and scope but are distinct documents.
+  forceNew?: boolean;
 }
 
 /**
@@ -30,19 +34,21 @@ export async function uploadDocument(db: Db, actor: Actor, input: UploadInput) {
   return withActor(db, actor, async (tx) => {
     const scopeSite = input.studySiteId ?? null;
     const scopePerson = input.personId ?? null;
-    const existing = await tx
-      .select()
-      .from(document)
-      .where(
-        and(
-          eq(document.tmfArtifactId, input.tmfArtifactId),
-          eq(document.studyId, input.studyId),
-          scopeSite ? eq(document.studySiteId, scopeSite) : isNull(document.studySiteId),
-          scopePerson ? eq(document.personId, scopePerson) : isNull(document.personId),
-          ne(document.status, "superseded"),
-        ),
-      )
-      .limit(1);
+    const existing = input.forceNew
+      ? []
+      : await tx
+          .select()
+          .from(document)
+          .where(
+            and(
+              eq(document.tmfArtifactId, input.tmfArtifactId),
+              eq(document.studyId, input.studyId),
+              scopeSite ? eq(document.studySiteId, scopeSite) : isNull(document.studySiteId),
+              scopePerson ? eq(document.personId, scopePerson) : isNull(document.personId),
+              ne(document.status, "superseded"),
+            ),
+          )
+          .limit(1);
 
     let doc = existing[0];
     if (!doc) {
@@ -141,24 +147,35 @@ export async function signDocumentVersion(
           ...(input.expiresAt ? { expiresAt: input.expiresAt } : {}),
         })
         .where(eq(document.id, doc.id));
-      // Supersede siblings covering the same requirement scope.
-      await tx
-        .update(document)
-        .set({ status: "superseded" })
-        .where(
-          and(
-            eq(document.tmfArtifactId, doc.tmfArtifactId),
-            eq(document.studyId, doc.studyId),
-            doc.studySiteId
-              ? eq(document.studySiteId, doc.studySiteId)
-              : isNull(document.studySiteId),
-            doc.personId
-              ? eq(document.personId, doc.personId)
-              : isNull(document.personId),
-            eq(document.status, "effective"),
-            ne(document.id, doc.id),
-          ),
-        );
+      // Supersede siblings covering the same requirement scope. Visit-linked
+      // documents (trip reports etc.) are per-visit records, not competing
+      // fulfillments: they neither supersede nor get superseded.
+      const [{ visitLinked }] = (await tx.execute(sql`
+        SELECT EXISTS (SELECT 1 FROM monitoring_visit_document mvd
+                       WHERE mvd.document_id = ${doc.id}) AS "visitLinked"`)) as unknown as [
+        { visitLinked: boolean },
+      ];
+      if (!visitLinked) {
+        await tx
+          .update(document)
+          .set({ status: "superseded" })
+          .where(
+            and(
+              eq(document.tmfArtifactId, doc.tmfArtifactId),
+              eq(document.studyId, doc.studyId),
+              doc.studySiteId
+                ? eq(document.studySiteId, doc.studySiteId)
+                : isNull(document.studySiteId),
+              doc.personId
+                ? eq(document.personId, doc.personId)
+                : isNull(document.personId),
+              eq(document.status, "effective"),
+              ne(document.id, doc.id),
+              sql`NOT EXISTS (SELECT 1 FROM monitoring_visit_document mvd
+                              WHERE mvd.document_id = ${document.id})`,
+            ),
+          );
+      }
     }
     return signatures[0]!;
   });
