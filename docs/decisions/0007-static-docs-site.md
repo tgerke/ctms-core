@@ -27,5 +27,9 @@ Quarto's dotenv support finds `.env.example` and fails on the missing variables)
 
 - API changes can silently stale the docs examples; touching a route or view
   should include a grep through `docs-site/` for its name.
+- The app screenshots in `docs-site/images/` are equally static and go stale
+  when the UI changes. `docs-site/screenshots.mjs` regenerates them against
+  the running seeded stack (headless Chrome over CDP, no extra dependencies);
+  it looks its subjects up via the API because seeding regenerates UUIDs.
 - The docs build stays fast and dependency-free, and contributors can render
   the site with nothing but Quarto installed.
