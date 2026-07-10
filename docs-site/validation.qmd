@@ -24,7 +24,14 @@ hand-written (ADR-0010):
 
 ## Running the program
 
-The GAMP 5 shape of a pilot validation, and who owns each step:
+A GAMP 5-aligned pilot validation, step by step, and who owns each one. One
+terminology note first: GAMP 5 (Second Edition, Section 4.4) deliberately does
+not use IQ/OQ/PQ for computerized system life cycles — aligning with FDA's
+*General Principles of Software Validation* — and instead describes
+specification and verification activities, with Table 4.1 mapping the
+traditional qualification terms onto them. The commands here keep the
+traditional names because assessors and quality agreements still ask in those
+terms; if your SOPs follow the Guide's vocabulary, Table 4.1 is the bridge.
 
 1. **Categorization and risk assessment** — yours. GAMP 5 (Second Edition,
    Appendix M4) treats categories 3–5 as a continuum, expects a system to

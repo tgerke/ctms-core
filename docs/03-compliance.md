@@ -29,7 +29,7 @@ validation effort inherits architecture instead of retrofit.
 | Records identifiable, version-controlled | Typed by TMF RM artifact + scoped identity; monotonic immutable versions |
 | Completeness of essential records | Requirement rules + `v_expected_document_status`: expected-vs-actual is continuously computed, per site and per person |
 | Access, availability, readability | Relational queries + documented API; records retrievable by identity, not folder-path memory |
-| Control of records, prevention of premature destruction | DB-level immutability; deletes of domain rows are themselves audited events |
+| Records protected from unauthorised alteration and from inappropriate destruction or accidental loss (2.12.9, 3.16.1(v)) | DB-level immutability; deletes of domain rows are themselves audited events |
 | Protection of blind / privacy when sharing | Out of scope this phase (single-tenant demo; no blinded roles yet) |
 
 ## Honest gaps (current phase)

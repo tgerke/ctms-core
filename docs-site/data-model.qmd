@@ -44,7 +44,7 @@ erDiagram
 ## Reference taxonomy
 
 **tmf_zone → tmf_section → tmf_artifact** mirror the CDISC TMF Reference Model
-hierarchy (11 zones → 48 sections → 249 artifacts in the official model).
+hierarchy (11 zones of numbered sections and artifacts in the official model).
 
 ::: {.callout-important}
 ## The seeded taxonomy is an illustrative subset
@@ -144,7 +144,7 @@ hash, so tampering is detectable by walking the chain — and there is an
 endpoint that does exactly that (`GET /audit-chain/verify`).
 
 UPDATE and DELETE on `audit_event` itself raise an error at the database level,
-for every role including the owner. "Changes shall not obscure previously
+for every role including the owner. "Record changes shall not obscure previously
 recorded information" (§11.10(e)) is a property of the schema, not a code path.
 
 ## Views are public API {#views-are-public-api}

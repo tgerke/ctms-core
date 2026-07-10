@@ -43,7 +43,8 @@ erDiagram
 ## Reference taxonomy
 
 - **tmf_zone / tmf_section / tmf_artifact** — the CDISC TMF Reference Model v3.x
-  hierarchy (11 zones → 48 sections → 249 artifacts in the official model). We seed an
+  hierarchy (11 zones of numbered sections and artifacts in the official model;
+  counts come from the imported spreadsheet, per ADR-0012). We seed an
   **illustrative subset** (~40 artifacts across Trial Management, Regulatory, IRB/IEC,
   Site Management, IP, Safety zones), flagged in the seed; `pnpm db:import-tmf`
   loads the official CDISC spreadsheet verbatim, upserting by artifact number with
@@ -159,8 +160,8 @@ like endpoint fields: additive changes are safe, renames/removals are breaking.
   (pgcrypto), serialized with an advisory lock. Any retroactive edit breaks every
   subsequent hash — tampering is detectable by walking the chain.
 - UPDATE/DELETE on `audit_event` itself raises at the database level, for every role
-  including the owner. Part 11 §11.10(e)'s "changes shall not obscure previously
-  recorded information" is a property of the schema, not a code path.
+  including the owner. Part 11 §11.10(e)'s "[r]ecord changes shall not obscure
+  previously recorded information" is a property of the schema, not a code path.
 
 ## Deliberate choices
 

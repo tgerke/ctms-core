@@ -41,7 +41,7 @@ folders-of-PDFs.
 | Records identifiable, version-controlled | Typed by TMF RM artifact + scoped identity; monotonic immutable versions |
 | Completeness of essential records | Requirement rules + `v_expected_document_status`: expected-vs-actual is continuously computed, per site and per person |
 | Access, availability, readability | Relational queries + a documented API; records retrievable by identity, not folder-path memory |
-| Control of records, prevention of premature destruction | Database-level immutability; deletes of domain rows are themselves audited events |
+| Records protected from unauthorised alteration and from inappropriate destruction or accidental loss (2.12.9, 3.16.1(v)) | Database-level immutability; deletes of domain rows are themselves audited events |
 | Protection of blinding / privacy when sharing | Out of scope this phase (single-tenant demo; no blinded roles yet) |
 
 ## What this looks like in the product

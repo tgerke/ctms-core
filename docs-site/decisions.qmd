@@ -49,7 +49,7 @@ consumer.
 
 The seed contains roughly 40 hand-checked artifacts across the TMF Reference
 Model's major zones, labeled as an illustrative subset, rather than attempting
-to reproduce the full 249-artifact model from an LLM's memory. Reproducing the
+to reproduce the complete model from an LLM's memory. Reproducing the
 official taxonomy from model memory risks hallucinated artifact numbers and
 names — unacceptable in a regulated-domain tool. Numbering follows the official
 scheme, and `pnpm db:import-tmf` now loads the CDISC download verbatim without
