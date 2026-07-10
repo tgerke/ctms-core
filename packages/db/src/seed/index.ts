@@ -584,6 +584,15 @@ for (const m of milestoneSpecs) {
   });
 }
 
+// --- Read-only role for direct SQL access (docs/04-api.md) --------------------
+// The v_* views are documented public surface; this role is how a data team
+// reads them without the API. Dev-grade credentials, like the API tokens.
+await sql`DO $$ BEGIN
+  CREATE ROLE ctms_readonly LOGIN PASSWORD 'ctms_readonly';
+EXCEPTION WHEN duplicate_object THEN NULL; END $$`;
+await sql`GRANT USAGE ON SCHEMA public TO ctms_readonly`;
+await sql`GRANT SELECT ON ALL TABLES IN SCHEMA public TO ctms_readonly`;
+
 // --- Summary -----------------------------------------------------------------
 const summary = await sql`
   SELECT status, count(*)::int AS n

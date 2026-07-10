@@ -26,6 +26,15 @@ erDiagram
     tmf_artifact ||--o{ requirement_rule : requires
     study ||--o{ requirement_rule : configures
     requirement_rule ||--o{ expected_document : materializes
+    study_site ||--o{ monitoring_visit : hosts
+    monitoring_visit ||--o{ monitoring_visit_document : links
+    document ||--o{ monitoring_visit_document : linked
+    monitoring_visit ||--o{ visit_action_item : raises
+    study ||--o{ issue : tracks
+    study_site o|--o{ issue : scopes
+    monitoring_visit o|--o{ issue : identifies
+    study_site ||--o{ enrollment_report : reports
+    study ||--o{ study_milestone : plans
 ```
 
 ## Reference taxonomy
@@ -85,6 +94,45 @@ erDiagram
   ground truth, so it cannot drift.
 - **v_study_site_completeness** (*view*) — per-site rollup: counts by status, percent
   current.
+
+## Operational layer
+
+The CTMS features around the documents — monitoring visits, issues, enrollment,
+milestones — follow the same rule as completeness: **facts in tables, lifecycle in
+views** (ADR-0006). No table in this layer has a status column.
+
+- **monitoring_visit** — a visit at a study-site: type
+  (`pre_study | initiation | interim | close_out`), `scheduled_date`, `visit_date`
+  (null until conducted), monitor, summary.
+- **monitoring_visit_document** — links documents to visits with a kind
+  (`trip_report | confirmation_letter | follow_up_letter`). Trip reports are ordinary
+  documents: immutable versions, §11.70-bound approval signatures. Visit-linked
+  documents are per-visit records — they are exempt from the supersede-siblings step
+  on approval, and per-visit uploads always create a fresh document.
+- **visit_action_item** — findings to close out: description, `due_date`,
+  `resolved_at`/`resolved_by`/note.
+- **issue** — protocol deviations and findings, scoped to the study or a site,
+  optionally linked to the visit that identified them: category, severity, identified/
+  due/resolved dates, resolution note.
+- **enrollment_report** — as-reported operational aggregates per (site, `as_of_date`):
+  screened/enrolled/withdrawn/completed. Subject-level clinical data stays in the EDC —
+  a firm scope boundary. Corrections are audited UPDATEs, not silent overwrites.
+  `study_site.target_enrollment` holds the site's target.
+- **study_milestone** — planned vs actual dates, study- or site-scoped.
+
+Derived views: **v_monitoring_visit_status** (stage: `scheduled → overdue →
+awaiting_report → report_pending_review → follow_up → complete`, computed from the
+dates, the linked trip report's document status, and open action items),
+**v_issue_status** (`open | overdue | resolved`), **v_site_enrollment** (latest report
+per site vs target), **v_milestone_status** (`achieved | overdue | upcoming`).
+
+### Views are public API
+
+The `v_*` views are not internals: they are the documented, stable query surface. A
+data scientist with a read-only Postgres connection (DBI/dbplyr in R, psycopg or
+SQLAlchemy in Python) reads the same derived truth the REST API serves — the two can
+never disagree, because the API is just `SELECT`s over these views. Treat view columns
+like endpoint fields: additive changes are safe, renames/removals are breaking.
 
 ## Audit trail
 

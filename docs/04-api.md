@@ -87,3 +87,72 @@ request("http://localhost:8787") |>
 
 Both calls leave hash-chained audit events attributed to the token's person;
 `GET /audit-chain/verify` confirms the chain end-to-end.
+
+## The CRA's week, from R
+
+The operational layer answers the questions a monitor plans a week around — as flat
+data frames, filterable server-side, with every lifecycle stage derived, never stored.
+
+```r
+study <- df_studies$id[1]
+
+# Visits needing attention: overdue, or conducted without a trip report
+bind_rows(
+  ctms("studies", study, "monitoring-visits", "?stage=overdue"),
+  ctms("studies", study, "monitoring-visits", "?stage=awaiting_report")
+) |>
+  select(site_number, visit_type, scheduled_date, visit_date, stage)
+
+# Open action items roll up on the same view the visit page uses
+ctms("studies", study, "monitoring-visits") |>
+  filter(open_action_items > 0) |>
+  select(site_number, visit_type, open_action_items, stage)
+
+# Unresolved major/critical issues, most urgent first
+ctms("studies", study, "issues") |>
+  filter(status != "resolved", severity %in% c("major", "critical")) |>
+  arrange(desc(status == "overdue"), due_date) |>
+  select(site_number, category, severity, title, due_date, status)
+
+# Enrollment vs target — which site gets the recruitment call
+ctms("studies", study, "enrollment") |>
+  select(site_number, enrolled, target_enrollment, pct_of_target, as_of_date)
+
+# Milestones: planned vs actual, drift visible
+ctms("studies", study, "milestones") |>
+  select(name, site_number, planned_date, actual_date, status)
+```
+
+Writes are the same shape — schedule a visit, record a deviation, report counts:
+
+```r
+request("http://localhost:8787") |>
+  req_url_path_append("studies", study, "issues") |>
+  req_auth_bearer_token("dev-admin-token") |>
+  req_body_json(list(
+    study_site_id = site_id, category = "protocol_deviation", severity = "major",
+    title = "Dosing outside window, subject 002-011",
+    identified_date = as.character(Sys.Date()),
+    due_date = as.character(Sys.Date() + 14)
+  )) |>
+  req_perform()
+```
+
+## Skip the API entirely: the views are the contract
+
+The `v_*` views are documented public surface (see `02-data-model.md`). With a
+read-only Postgres role, dbplyr composes against the same derived truth the dashboard
+shows — no export, no sync, no drift:
+
+```r
+con <- DBI::dbConnect(RPostgres::Postgres(),
+  host = "localhost", port = 5433, dbname = "ctms",
+  user = "ctms_readonly", password = "ctms_readonly")  # dev role, created by seed
+
+dplyr::tbl(con, "v_monitoring_visit_status") |>
+  dplyr::filter(stage %in% c("overdue", "awaiting_report")) |>
+  dplyr::left_join(dplyr::tbl(con, "v_site_enrollment"),
+                   by = c("study_id", "study_site_id", "site_number", "site_name")) |>
+  dplyr::select(site_number, visit_type, stage, enrolled, target_enrollment) |>
+  dplyr::collect()
+```
