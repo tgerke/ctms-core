@@ -12,15 +12,15 @@ validation effort inherits architecture instead of retrofit.
 
 | Requirement | Mechanism | Where |
 | --- | --- | --- |
-| §11.10(a) validation of systems | **Not claimed.** Automated tests cover the audit, immutability, and signature mechanisms; formal CSV is future work | `packages/*/test` |
+| §11.10(a) validation of systems | **Not claimed**, but the raw material is generated, not hand-written: `pnpm validation:iq` checks a live environment's controls (15 checks, sign-off report), `pnpm validation:artifacts` emits an OQ run report and a requirement→test traceability matrix from a live suite run. Formal CSV (GAMP 5, SOPs, training) remains an organizational program | `tools/validation-artifacts.ts`, `packages/db/src/iq.ts`, `docs/validation/` |
 | §11.10(b) accurate and complete copies | Every version's bytes are content-addressed (sha256) and immutable; API serves originals at `/files/{sha256}` | `document_version`, blob store |
 | §11.10(c) record protection & retention | Versions, signatures, and audit events reject UPDATE/DELETE via database triggers, for every role | `ctms_forbid_mutation()` in migration 0001 |
-| §11.10(d) limited system access | Bearer-token auth resolving to a person; all data routes require it. Dev-grade — a real IdP is a non-goal of this phase | `apps/api/src/auth.ts` |
+| §11.10(d) limited system access | OIDC/SSO (`AUTH_MODE=oidc`): JWTs validated against the IdP's issuer, audience, and JWKS; the verified email claim resolves to a person, or the request is refused — never a fallback actor. The API runs as a least-privilege DB role (`ctms_app`: DML only, no TRUNCATE/DDL, no direct audit writes). A dev-token mode remains for the demo and is not a Part 11 posture | `apps/api/src/auth.ts`, migration 0004, ADR-0008 |
 | §11.10(e) audit trails | Computer-generated, timestamped `audit_event` rows written by AFTER-triggers on every domain-table mutation; append-only; prior values preserved as full row images; **hash-chained** so retroactive edits are detectable (`ctms_verify_audit_chain()`) | `ctms_audit()` in migration 0001, ADR-0003 |
-| §11.10(g) authority checks | Actor identity bound per transaction (`ctms.actor_id`); signing requires a person-linked token | `withActor()`, sign route |
+| §11.10(g) authority checks | Role-based grants (`access_grant`: admin / trial_ops / monitor / read_only → read / upload / sign / approve / administer, scoped to study or site) enforced per route; grant changes are themselves audited and revocation is a fact, not a delete. Actor identity bound per transaction (`ctms.actor_id`) | `packages/core/src/authz.ts`, ADR-0008 |
 | §11.50 signature manifestation | `signature` rows carry signer, timestamp, and meaning (author/review/approval); UI displays all three | `signature` table, document page |
 | §11.70 signature/record linking | Signature stores a copy of the signed version's content hash; binding is verifiable independently of the version row | `signed_sha256` column |
-| §11.200 signature components | **Partial.** Signature is tied to an authenticated identity but re-authentication at signing (password challenge) is stubbed | future work |
+| §11.200 signature components | Signing requires re-authentication: in OIDC mode a freshly issued token for the same subject with `auth_time` inside a short window (default 300 s); method and time are recorded on the signature row, and a DB CHECK requires them on every new signature. The dev-mode stub restates the bearer token — API-shape parity, not a credential challenge | sign route, `verifyReauth()`, migration 0003 |
 
 ## ICH E6(R3) — essential records
 
@@ -34,13 +34,23 @@ validation effort inherits architecture instead of retrofit.
 
 ## Honest gaps (current phase)
 
-1. **No validation dossier** — the largest gap between this and a marketable
-   claim; the mechanisms above are its raw material.
-2. **Authentication is a dev stub** — SSO/IdP with per-user credentials and
-   signing re-challenge is required for a real Part 11 posture.
-3. **TRUNCATE is not blocked** — dev seeding truncates tables. A production
-   role simply would not hold TRUNCATE/DDL privileges; the migration role would.
-4. **Blob store is a local directory** — production needs S3-class storage with
-   object lock (WORM) to extend immutability to the bytes themselves.
+1. **The validation *program* is not performed** — the software now generates
+   its raw material (traceability matrix, IQ and OQ reports), but a CSV dossier
+   also needs SOPs, risk assessment, training records, and a QMS to live in.
+   That is organizational work no repository can contain.
+2. **Dev mode still exists** — `AUTH_MODE=dev` and the dev-grade role passwords
+   (`ctms_app`, `ctms_readonly`) are demo affordances. A production deployment
+   must run `AUTH_MODE=oidc` and rotate the DB role credentials
+   (`docs/05-deployment.md`); nothing in the code forces that choice.
+3. **WORM depends on deployment** — the s3 driver with Object Lock extends
+   immutability to the bytes; the default local-directory driver does not.
+   `pnpm validation:iq` flags which one an environment is running.
+4. **Single tenant** — one deployment per customer. Multi-tenancy hardening
+   (isolation, per-tenant keys) remains a non-goal of this phase.
 5. **`expected_document` churn is unaudited by design** — placeholders are
    derived state (ADR-0004); the ground truth they derive from is fully audited.
+
+Resolved since the first draft of this document: dev-token-only auth (now
+OIDC + RBAC, ADR-0008), stubbed signing re-authentication (§11.200 row above),
+unblocked TRUNCATE (least-privilege `ctms_app` role, migration 0004), and the
+40-artifact taxonomy ceiling (verbatim CDISC importer, `pnpm db:import-tmf`).

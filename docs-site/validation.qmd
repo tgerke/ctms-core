@@ -1,0 +1,19 @@
+---
+title: "Validation artifacts"
+---
+
+The validation raw material is generated, never hand-written (ADR-0010):
+
+- `pnpm validation:iq` — Installation Qualification: checks a live
+  environment's installed controls (migrations, triggers, role privilege
+  ceilings, audit-chain integrity, storage WORM posture) and emits a
+  sign-off-able report.
+- `pnpm validation:artifacts` — runs the real test suite and emits the
+  Operational Qualification run report plus the requirement traceability
+  matrix below. The join key is the requirement token appearing verbatim in
+  test names, so the matrix cannot drift from the suite without showing it.
+
+These artifacts are the raw material a formal CSV program would consume —
+§11.10(a) remains **not claimed**; see the [compliance mapping](compliance.qmd).
+
+{{< include ../docs/validation/traceability.md >}}

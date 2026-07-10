@@ -19,7 +19,8 @@ review. Here they are one `GET` (or one `SELECT`). See [docs/01-vision.md](docs/
 
 | Path | What |
 | --- | --- |
-| `docs/` | Design docs: vision, data model, compliance mapping, API guide + ADR log |
+| `docs/` | Design docs: vision, data model, compliance mapping, API guide, deployment + ADR log |
+| `docs/validation/` | Generated IQ/OQ reports and requirement→test traceability matrix |
 | `packages/db` | Postgres schema (Drizzle), migrations, audit-trail enforcement, seed |
 | `packages/core` | Domain logic: audited mutations, requirement engine, completeness |
 | `apps/api` | OpenAPI 3.1 REST API (Hono), spec at `/openapi.json`, docs at `/docs` |
@@ -41,11 +42,18 @@ pnpm dev          # API on :8787, web on :5173
 Then open http://localhost:5173 (dashboard) and http://localhost:8787/docs (API reference).
 
 ```sh
-pnpm test         # includes DB-level audit-immutability tests
+pnpm test                   # includes DB-level audit-immutability + WORM tests
+pnpm validation:iq          # installation qualification against the live env
+pnpm validation:artifacts   # OQ report + requirement traceability matrix
 ```
 
 ## Status
 
-Working vertical slice / design probe. Not validated software — see
-[docs/03-compliance.md](docs/03-compliance.md) for what "compliant-by-design" does and
-does not claim.
+Working vertical slice, hardened toward a single-tenant pilot: OIDC/SSO with
+role-based grants, signing re-authentication (§11.200), WORM-capable object
+storage, least-privilege DB roles, a verbatim CDISC TMF Reference Model importer
+(`pnpm db:import-tmf`), and generated validation artifacts. Not validated
+software — the formal CSV program is organizational work; see
+[docs/03-compliance.md](docs/03-compliance.md) for what "compliant-by-design"
+does and does not claim, and [docs/05-deployment.md](docs/05-deployment.md) for
+the pilot checklist.

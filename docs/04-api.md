@@ -18,8 +18,19 @@ at `http://localhost:8787/docs`.
 4. **Auditability is an endpoint** — `/audit-events`, `/documents/{id}/audit`,
    and `/audit-chain/verify` expose the trail and its integrity check.
 
-Auth: `Authorization: Bearer <token>`; dev tokens in `.env.example`
-(`dev-admin-token`, `dev-monitor-token`) map to seeded people.
+Auth: `Authorization: Bearer <token>`. Two modes, selected by `AUTH_MODE`:
+
+- **`dev`** — static tokens from `.env.example` (`dev-admin-token`,
+  `dev-monitor-token`) map to seeded people. Demo only.
+- **`oidc`** — the token is a JWT from your identity provider
+  (`OIDC_ISSUER`/`OIDC_AUDIENCE`); its verified email claim resolves to a
+  person record. Any OIDC-compliant IdP works (Okta, Entra ID, Auth0,
+  Keycloak).
+
+Either way the identity must hold an `access_grant` row: roles
+(`admin`, `trial_ops`, `monitor`, `read_only`) map to operations
+(read / upload / sign / approve / administer), optionally scoped to one study
+or study-site (ADR-0008). Denials are 403 and name the missing permission.
 
 ## The monitor's morning, from R
 
@@ -77,11 +88,13 @@ request("http://localhost:8787/documents") |>
   ) |>
   req_perform()
 
-# Approve: Part 11 signature bound to the version's content hash
+# Approve: Part 11 signature bound to the version's content hash.
+# §11.200: signing requires re-authentication — in dev mode the bearer token
+# restated; in oidc mode a freshly issued token (auth_time within 5 minutes).
 request("http://localhost:8787") |>
   req_url_path_append("document-versions", version_id, "sign") |>
   req_auth_bearer_token("dev-admin-token") |>
-  req_body_json(list(meaning = "approval")) |>
+  req_body_json(list(meaning = "approval", reauth_token = "dev-admin-token")) |>
   req_perform()
 ```
 

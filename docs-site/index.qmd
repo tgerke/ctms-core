@@ -79,11 +79,13 @@ Honesty about scope is part of the design:
 - **Not an EDC.** Enrollment data is site-reported aggregates only;
   subject-level clinical data stays in your EDC. This is a firm boundary, not a
   roadmap gap.
-- **Not the full TMF Reference Model.** The seed ships an illustrative subset of
-  roughly 40 artifacts using official numbering; the complete CDISC model can be
-  imported later without schema changes.
-- **Dev-grade authentication.** Bearer tokens map to seeded people; a real
-  identity provider is future work.
+- **Not the full TMF Reference Model out of the box.** The seed ships an
+  illustrative subset of roughly 40 artifacts using official numbering;
+  `pnpm db:import-tmf` loads the complete CDISC model verbatim from the
+  official spreadsheet, with no schema changes.
+- **Dev-grade authentication by default.** The demo uses bearer tokens mapped
+  to seeded people; a pilot runs `AUTH_MODE=oidc` against a real identity
+  provider (Okta, Entra ID, Auth0, Keycloak) with role-based access grants.
 
 ## Where to go next
 

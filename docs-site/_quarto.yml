@@ -32,6 +32,7 @@ website:
           - data-model.qmd
           - operations.qmd
           - compliance.qmd
+          - validation.qmd
       - section: "Cookbook"
         contents:
           - cookbook.qmd

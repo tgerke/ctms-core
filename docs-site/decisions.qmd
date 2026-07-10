@@ -79,8 +79,36 @@ checked against the actual route definitions and views, not written from memory 
 and any page can opt into executed chunks later if a live-CI setup becomes worth
 its cost.
 
+## ADR-0008 — Provider-agnostic OIDC for identity; grants in the data model for authorization
+
+Authentication is standard OIDC JWT validation — any compliant identity
+provider works via three environment variables, no provider SDK. Authorization
+is `access_grant` rows (role + optional study/site scope) with the
+role-to-operation map in one place, so access reviews are a query and every
+grant change is in the audit trail. Signing re-authentication (§11.200) is a
+freshly issued token for the same subject inside a short freshness window,
+recorded on the signature row and required by a database CHECK.
+
+## ADR-0009 — Blob storage behind a driver interface; WORM via S3 Object Lock
+
+The content-addressed blob store is a three-method driver interface. The `s3`
+driver, pointed at a bucket created with Object Lock in COMPLIANCE mode,
+extends the database's trigger-enforced immutability to the document bytes: a
+contract test proves a locked version cannot be deleted even by the root
+credential. The `local` driver remains the dev default.
+
+## ADR-0010 — Validation artifacts are generated from live runs, never hand-written
+
+`pnpm validation:iq` checks a live environment's installed controls and emits
+a sign-off-able Installation Qualification report; `pnpm validation:artifacts`
+runs the real test suite and emits the OQ report and the
+[requirement traceability matrix](validation.qmd), joined on requirement
+tokens appearing verbatim in test names. A hand-maintained matrix drifts
+silently — the same failure mode as a stored status column, which this project
+exists to reject (ADR-0004, applied to evidence).
+
 ---
 
-Two of these — ADR-0004 and ADR-0006 — are the same idea applied twice, and it
-is the idea the whole system rests on: **state that can be computed is never
-stored.** If you take one thing from this log, take that.
+Three of these — ADR-0004, ADR-0006, and ADR-0010 — are the same idea applied
+again and again, and it is the idea the whole system rests on: **state that can
+be computed is never stored.** If you take one thing from this log, take that.

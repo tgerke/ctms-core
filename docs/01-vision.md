@@ -57,14 +57,21 @@ dashboard.
 
 ## Non-goals (current phase)
 
-Real identity provider / SSO, formal computer system validation (GAMP 5, IQ/OQ/PQ),
-eConsent, EDC/EHR integration, site payments and budgeting, multi-tenancy hardening,
-production deployment. The operational CTMS layer (monitoring visits, enrollment
-metrics) gets designed-for space in the data model but no UI yet.
+The formal computer system validation *program* (GAMP 5 categorization, SOPs,
+training, QMS — the software generates its raw material, see docs/03-compliance.md),
+eConsent, EDC/EHR integration, site payments and budgeting, multi-tenancy hardening
+(pilots deploy single-tenant per docs/05-deployment.md), blinded-role privacy
+scoping. Formerly on this list, since built: OIDC/SSO with RBAC (ADR-0008), WORM
+object storage (ADR-0009), the full-taxonomy importer (ADR-0005), and the
+operational CTMS layer with UI (ADR-0006).
 
 ## What "worth building" would look like
 
 The vertical slice in this repo is the test: if the completeness grid, per-person gap
 lists, and audit timelines fall out of the schema as plain queries — and the same
-queries are one `httr2` call from R — the thesis holds, and the remaining work is
-breadth (full TMF taxonomy, auth, validation dossier), not architecture.
+queries are one `httr2` call from R — the thesis holds. That bet has held so far:
+SSO/RBAC, signing re-authentication, WORM storage, least-privilege roles, the
+taxonomy importer, and generated IQ/OQ/traceability artifacts all landed as breadth
+on the same schema, not architecture changes. What remains before a marketable
+compliance claim is the organizational half of validation (docs/03-compliance.md,
+honest gap #1).
