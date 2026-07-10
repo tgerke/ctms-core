@@ -23,11 +23,15 @@ const daysAgo = (n: number) => {
   d.setDate(d.getDate() - n);
   return iso(d);
 };
+const daysFromNow = (n: number) => daysAgo(-n);
+const monthsFromNow = (n: number) => monthsAgo(-n);
 
 // Attribute all seed writes in the audit trail.
 await sql`SELECT set_config('ctms.actor_label', 'seed', false)`;
 
 await sql`TRUNCATE audit_event, signature, document_version, expected_document,
+  monitoring_visit_document, visit_action_item, issue, monitoring_visit,
+  enrollment_report, study_milestone,
   document, requirement_rule, study_site_role, study_site, protocol_version,
   requirement_rule, person, site, study, organization,
   tmf_artifact, tmf_section, tmf_zone RESTART IDENTITY CASCADE`;
@@ -90,12 +94,13 @@ interface SiteSpec {
   state: string;
   status: "pending" | "active";
   activated: string | null;
+  target: number;
 }
 const siteSpecs: SiteSpec[] = [
-  { number: "001", org: "University Medical Center", name: "University Medical Center", city: "Portland", state: "OR", status: "active", activated: monthsAgo(8) },
-  { number: "002", org: "Lakeside Cancer Institute", name: "Lakeside Cancer Institute", city: "Chicago", state: "IL", status: "active", activated: monthsAgo(7) },
-  { number: "003", org: "Harbor View Regional Hospital", name: "Harbor View Regional Hospital", city: "Charleston", state: "SC", status: "active", activated: monthsAgo(5) },
-  { number: "004", org: "Prairie Regional Medical Center", name: "Prairie Regional Medical Center", city: "Fargo", state: "ND", status: "pending", activated: null },
+  { number: "001", org: "University Medical Center", name: "University Medical Center", city: "Portland", state: "OR", status: "active", activated: monthsAgo(8), target: 12 },
+  { number: "002", org: "Lakeside Cancer Institute", name: "Lakeside Cancer Institute", city: "Chicago", state: "IL", status: "active", activated: monthsAgo(7), target: 10 },
+  { number: "003", org: "Harbor View Regional Hospital", name: "Harbor View Regional Hospital", city: "Charleston", state: "SC", status: "active", activated: monthsAgo(5), target: 8 },
+  { number: "004", org: "Prairie Regional Medical Center", name: "Prairie Regional Medical Center", city: "Fargo", state: "ND", status: "pending", activated: null, target: 6 },
 ];
 
 const studySiteId = new Map<string, string>();
@@ -116,6 +121,7 @@ for (const spec of siteSpecs) {
       siteNumber: spec.number,
       status: spec.status,
       activatedAt: spec.activated,
+      targetEnrollment: spec.target,
     })
     .returning();
   studySiteId.set(spec.number, ss!.id);
@@ -369,6 +375,215 @@ await addDoc({ artifact: "05.01.04", title: "Clinical Trial Agreement — Site 0
 await addDoc({ artifact: "04.01.02", title: "IRB Approval — Site 004", site: "004", effective: daysAgo(10) });
 await addDoc({ artifact: "05.02.01", title: "CV — Olaf Bergstrom, MD", site: "004", person: "bergstrom", effective: daysAgo(15) });
 
+// --- Operational layer: monitoring visits ------------------------------------
+// One visit per derived stage so v_monitoring_visit_status tells a story:
+// complete, follow_up, report_pending_review, awaiting_report, overdue, scheduled.
+
+interface VisitSpec {
+  key: string;
+  site: string;
+  type: "pre_study" | "initiation" | "interim" | "close_out";
+  scheduled: string;
+  conducted?: string;
+  monitor?: string;
+  summary?: string;
+  report?: { title: string; status?: "pending_review" | "effective"; approve?: boolean };
+  actionItems?: { description: string; due?: string; resolved?: string; note?: string }[];
+}
+const visitSpecs: VisitSpec[] = [
+  {
+    key: "v001-init", site: "001", type: "initiation",
+    scheduled: monthsAgo(8), conducted: monthsAgo(8), monitor: "patel",
+    summary: "Site initiation completed; pharmacy and regulatory binders verified.",
+    report: { title: "Initiation Visit Trip Report — Site 001", approve: true },
+    actionItems: [
+      { description: "Provide updated pharmacy temperature log SOP", due: monthsAgo(7), resolved: monthsAgo(7), note: "SOP v3 filed" },
+    ],
+  },
+  {
+    key: "v001-int1", site: "001", type: "interim",
+    scheduled: monthsAgo(2), conducted: monthsAgo(2), monitor: "patel",
+    summary: "Interim monitoring: informed consent review clean; two staff-file gaps.",
+    report: { title: "Interim Visit 1 Trip Report — Site 001", approve: true },
+    actionItems: [
+      { description: "Renew Dr. Webb's Oregon medical license and file copy", due: daysAgo(14) },
+      { description: "Collect updated CV for coordinator Dana Kim", due: daysFromNow(21) },
+      { description: "Correct subject 001-004 visit-window deviation note", due: monthsAgo(1), resolved: daysAgo(20), note: "Note-to-file signed by PI" },
+    ],
+  },
+  {
+    key: "v002-int1", site: "002", type: "interim",
+    scheduled: daysAgo(12), conducted: daysAgo(10), monitor: "patel",
+    summary: "Interim monitoring: IRB continuing-review lapse window reviewed.",
+    report: { title: "Interim Visit 1 Trip Report — Site 002", status: "pending_review" },
+    actionItems: [
+      { description: "Submit IRB continuing-review approval once issued", due: daysFromNow(14) },
+    ],
+  },
+  {
+    key: "v002-int2", site: "002", type: "interim",
+    scheduled: daysFromNow(30), monitor: "patel",
+  },
+  {
+    key: "v003-int1", site: "003", type: "interim",
+    scheduled: daysAgo(5), conducted: daysAgo(3), monitor: "patel",
+    summary: "Visit conducted; trip report in preparation.",
+  },
+  {
+    key: "v003-init", site: "003", type: "initiation",
+    scheduled: daysAgo(45), monitor: "patel", // never conducted -> overdue
+  },
+  {
+    key: "v004-psv", site: "004", type: "pre_study",
+    scheduled: daysFromNow(10), monitor: "patel",
+  },
+];
+
+const visitId = new Map<string, string>();
+for (const v of visitSpecs) {
+  const [mv] = await db
+    .insert(s.monitoringVisit)
+    .values({
+      studySiteId: studySiteId.get(v.site)!,
+      visitType: v.type,
+      scheduledDate: v.scheduled,
+      visitDate: v.conducted ?? null,
+      monitorPersonId: v.monitor ? personId.get(v.monitor)! : null,
+      summary: v.summary ?? null,
+    })
+    .returning();
+  visitId.set(v.key, mv!.id);
+
+  if (v.report) {
+    const doc = await addDoc({
+      artifact: "01.03.01",
+      title: v.report.title,
+      site: v.site,
+      status: v.report.status ?? "effective",
+      effective: v.report.status === "pending_review" ? undefined : v.conducted,
+      uploadedBy: "patel",
+      sign: v.report.approve ? { by: "feld", meaning: "approval" } : undefined,
+    });
+    await db.insert(s.monitoringVisitDocument).values({
+      monitoringVisitId: mv!.id,
+      documentId: doc.id,
+      linkKind: "trip_report",
+    });
+  }
+  for (const ai of v.actionItems ?? []) {
+    await db.insert(s.visitActionItem).values({
+      monitoringVisitId: mv!.id,
+      description: ai.description,
+      dueDate: ai.due ?? null,
+      resolvedAt: ai.resolved ?? null,
+      resolvedBy: ai.resolved ? personId.get("patel")! : null,
+      resolutionNote: ai.note ?? null,
+    });
+  }
+}
+
+// --- Operational layer: issues ------------------------------------------------
+const issueSpecs: {
+  site?: string;
+  visit?: string;
+  category: "protocol_deviation" | "monitoring_finding" | "safety" | "data_quality" | "other";
+  severity: "minor" | "major" | "critical";
+  title: string;
+  description?: string;
+  identified: string;
+  identifiedBy?: string;
+  due?: string;
+  resolved?: string;
+  note?: string;
+}[] = [
+  {
+    site: "001", visit: "v001-int1", category: "protocol_deviation", severity: "minor",
+    title: "Subject 001-004 visit outside protocol window",
+    description: "Cycle 3 visit occurred 3 days outside the ±5-day window.",
+    identified: monthsAgo(2), identifiedBy: "patel", due: monthsAgo(1),
+    resolved: daysAgo(20), note: "Note-to-file signed by PI; no impact on safety or efficacy data.",
+  },
+  {
+    site: "002", visit: "v002-int1", category: "monitoring_finding", severity: "major",
+    title: "IRB continuing review not completed before anniversary date",
+    description: "Continuing-review approval still pending at IRB; enrollment paused on-site.",
+    identified: daysAgo(10), identifiedBy: "patel", due: daysAgo(2),
+  },
+  {
+    site: "002", category: "protocol_deviation", severity: "major",
+    title: "IP dispensed without current accountability log entry",
+    identified: daysAgo(8), identifiedBy: "patel", due: daysFromNow(14),
+  },
+  {
+    site: "003", category: "safety", severity: "critical",
+    title: "SAE reported to sponsor outside 24-hour window",
+    description: "Grade 3 event reported 4 days after site awareness.",
+    identified: daysAgo(6), identifiedBy: "feld", due: daysFromNow(7),
+  },
+  {
+    category: "data_quality", severity: "minor",
+    title: "eCRF query aging exceeds 30 days across sites",
+    identified: daysAgo(15), identifiedBy: "feld", due: daysFromNow(30),
+  },
+];
+for (const i of issueSpecs) {
+  await db.insert(s.issue).values({
+    studyId,
+    studySiteId: i.site ? studySiteId.get(i.site)! : null,
+    monitoringVisitId: i.visit ? visitId.get(i.visit)! : null,
+    category: i.category,
+    severity: i.severity,
+    title: i.title,
+    description: i.description ?? null,
+    identifiedDate: i.identified,
+    identifiedBy: i.identifiedBy ? personId.get(i.identifiedBy)! : null,
+    dueDate: i.due ?? null,
+    resolvedAt: i.resolved ?? null,
+    resolvedBy: i.resolved ? personId.get("feld")! : null,
+    resolutionNote: i.note ?? null,
+  });
+}
+
+// --- Operational layer: enrollment reports ------------------------------------
+// Aggregates as reported by sites (EDC owns subject-level data; see ADR-0006).
+const enrollmentSpecs: { site: string; asOf: string; screened: number; enrolled: number; withdrawn: number; completed: number }[] = [
+  { site: "001", asOf: monthsAgo(1), screened: 14, enrolled: 9, withdrawn: 1, completed: 2 },
+  { site: "001", asOf: daysAgo(7), screened: 16, enrolled: 11, withdrawn: 1, completed: 3 },
+  { site: "002", asOf: monthsAgo(1), screened: 6, enrolled: 3, withdrawn: 0, completed: 0 },
+  { site: "002", asOf: daysAgo(7), screened: 7, enrolled: 3, withdrawn: 1, completed: 0 },
+  { site: "003", asOf: daysAgo(14), screened: 9, enrolled: 5, withdrawn: 0, completed: 1 },
+];
+for (const e of enrollmentSpecs) {
+  await db.insert(s.enrollmentReport).values({
+    studySiteId: studySiteId.get(e.site)!,
+    asOfDate: e.asOf,
+    screened: e.screened,
+    enrolled: e.enrolled,
+    withdrawn: e.withdrawn,
+    completed: e.completed,
+    reportedBy: personId.get("feld")!,
+  });
+}
+
+// --- Operational layer: study milestones ---------------------------------------
+const milestoneSpecs: { site?: string; name: string; planned: string; actual?: string }[] = [
+  { name: "First site activated", planned: monthsAgo(9), actual: monthsAgo(8) },
+  { name: "First participant enrolled", planned: monthsAgo(7), actual: monthsAgo(6) },
+  { name: "50% enrollment", planned: monthsAgo(1) }, // overdue
+  { name: "Last participant enrolled", planned: monthsFromNow(6) },
+  { name: "Database lock", planned: monthsFromNow(12) },
+  { site: "004", name: "Site activation", planned: daysAgo(15) }, // overdue
+];
+for (const m of milestoneSpecs) {
+  await db.insert(s.studyMilestone).values({
+    studyId,
+    studySiteId: m.site ? studySiteId.get(m.site)! : null,
+    name: m.name,
+    plannedDate: m.planned,
+    actualDate: m.actual ?? null,
+  });
+}
+
 // --- Summary -----------------------------------------------------------------
 const summary = await sql`
   SELECT status, count(*)::int AS n
@@ -376,6 +591,13 @@ const summary = await sql`
   GROUP BY status ORDER BY n DESC`;
 console.log("expected-document status mix:");
 for (const row of summary) console.log(`  ${row.status}: ${row.n}`);
+
+const stages = await sql`
+  SELECT stage, count(*)::int AS n
+  FROM v_monitoring_visit_status
+  GROUP BY stage ORDER BY n DESC`;
+console.log("monitoring visit stage mix:");
+for (const row of stages) console.log(`  ${row.stage}: ${row.n}`);
 
 const chain = await sql`SELECT count(*)::int AS n FROM ctms_verify_audit_chain()`;
 console.log(`audit chain problems: ${chain[0]!.n}`);

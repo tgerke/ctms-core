@@ -36,6 +36,25 @@ export const documentStatus = pgEnum("document_status", [
 ]);
 export const signatureMeaning = pgEnum("signature_meaning", ["author", "review", "approval"]);
 export const scopeLevel = pgEnum("scope_level", ["study", "study_site", "person_role"]);
+export const visitType = pgEnum("visit_type", [
+  "pre_study",
+  "initiation",
+  "interim",
+  "close_out",
+]);
+export const visitDocumentLink = pgEnum("visit_document_link", [
+  "trip_report",
+  "confirmation_letter",
+  "follow_up_letter",
+]);
+export const issueCategory = pgEnum("issue_category", [
+  "protocol_deviation",
+  "monitoring_finding",
+  "safety",
+  "data_quality",
+  "other",
+]);
+export const issueSeverity = pgEnum("issue_severity", ["minor", "major", "critical"]);
 
 // ---------------------------------------------------------------------------
 // TMF Reference Model taxonomy (zones > sections > artifacts)
@@ -134,6 +153,7 @@ export const studySite = pgTable(
     siteNumber: text("site_number").notNull(),
     status: studySiteStatus("status").notNull().default("pending"),
     activatedAt: date("activated_at"),
+    targetEnrollment: integer("target_enrollment"),
   },
   (t) => [
     uniqueIndex("study_site_pair_idx").on(t.studyId, t.siteId),
@@ -269,6 +289,122 @@ export const expectedDocument = pgTable(
   // UNIQUE NULLS NOT DISTINCT (rule_id, study_site_id, person_id) added in SQL
   // migration — drizzle can't express NULLS NOT DISTINCT.
   (t) => [index("expected_document_site_idx").on(t.studySiteId)],
+);
+
+// ---------------------------------------------------------------------------
+// Operational layer: monitoring visits, issues, enrollment, milestones.
+// Lifecycle stages are never stored — they are derived by views in the SQL
+// migration (v_monitoring_visit_status, v_issue_status, v_site_enrollment,
+// v_milestone_status) from the dated facts below. See ADR-0006.
+// ---------------------------------------------------------------------------
+
+export const monitoringVisit = pgTable(
+  "monitoring_visit",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    studySiteId: uuid("study_site_id")
+      .notNull()
+      .references(() => studySite.id),
+    visitType: visitType("visit_type").notNull(),
+    scheduledDate: date("scheduled_date").notNull(),
+    visitDate: date("visit_date"), // null until the visit is conducted
+    monitorPersonId: uuid("monitor_person_id").references(() => person.id),
+    summary: text("summary"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("monitoring_visit_site_idx").on(t.studySiteId)],
+);
+
+export const monitoringVisitDocument = pgTable(
+  "monitoring_visit_document",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    monitoringVisitId: uuid("monitoring_visit_id")
+      .notNull()
+      .references(() => monitoringVisit.id),
+    documentId: uuid("document_id")
+      .notNull()
+      .references(() => document.id),
+    linkKind: visitDocumentLink("link_kind").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("monitoring_visit_document_idx").on(t.monitoringVisitId, t.documentId)],
+);
+
+export const visitActionItem = pgTable(
+  "visit_action_item",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    monitoringVisitId: uuid("monitoring_visit_id")
+      .notNull()
+      .references(() => monitoringVisit.id),
+    description: text("description").notNull(),
+    dueDate: date("due_date"),
+    resolvedAt: date("resolved_at"),
+    resolvedBy: uuid("resolved_by").references(() => person.id),
+    resolutionNote: text("resolution_note"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("visit_action_item_visit_idx").on(t.monitoringVisitId)],
+);
+
+export const issue = pgTable(
+  "issue",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    studyId: uuid("study_id")
+      .notNull()
+      .references(() => study.id),
+    studySiteId: uuid("study_site_id").references(() => studySite.id), // null = study-level
+    monitoringVisitId: uuid("monitoring_visit_id").references(() => monitoringVisit.id),
+    category: issueCategory("category").notNull(),
+    severity: issueSeverity("severity").notNull(),
+    title: text("title").notNull(),
+    description: text("description"),
+    identifiedDate: date("identified_date").notNull(),
+    identifiedBy: uuid("identified_by").references(() => person.id),
+    dueDate: date("due_date"),
+    resolvedAt: date("resolved_at"),
+    resolvedBy: uuid("resolved_by").references(() => person.id),
+    resolutionNote: text("resolution_note"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("issue_study_idx").on(t.studyId), index("issue_site_idx").on(t.studySiteId)],
+);
+
+export const enrollmentReport = pgTable(
+  "enrollment_report",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    studySiteId: uuid("study_site_id")
+      .notNull()
+      .references(() => studySite.id),
+    asOfDate: date("as_of_date").notNull(),
+    screened: integer("screened").notNull().default(0),
+    enrolled: integer("enrolled").notNull().default(0),
+    withdrawn: integer("withdrawn").notNull().default(0),
+    completed: integer("completed").notNull().default(0),
+    reportedBy: uuid("reported_by").references(() => person.id),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("enrollment_report_site_date_idx").on(t.studySiteId, t.asOfDate)],
+);
+
+export const studyMilestone = pgTable(
+  "study_milestone",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    studyId: uuid("study_id")
+      .notNull()
+      .references(() => study.id),
+    studySiteId: uuid("study_site_id").references(() => studySite.id), // null = study-level
+    name: text("name").notNull(),
+    plannedDate: date("planned_date").notNull(),
+    actualDate: date("actual_date"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  // UNIQUE NULLS NOT DISTINCT (study_id, study_site_id, name) added in SQL migration.
+  (t) => [index("study_milestone_study_idx").on(t.studyId)],
 );
 
 // ---------------------------------------------------------------------------
