@@ -84,11 +84,13 @@ request("http://localhost:8787/documents") |>
   ) |>
   req_perform()
 
-# Approve: a Part 11 signature bound to the version's content hash
+# Approve: a Part 11 signature bound to the version's content hash.
+# Signing requires re-authentication (§11.200): in dev mode the bearer token
+# restated; in oidc mode a freshly issued token from the identity provider.
 request("http://localhost:8787") |>
   req_url_path_append("document-versions", version_id, "sign") |>
   req_auth_bearer_token("dev-admin-token") |>
-  req_body_json(list(meaning = "approval")) |>
+  req_body_json(list(meaning = "approval", reauth_token = "dev-admin-token")) |>
   req_perform()
 ```
 

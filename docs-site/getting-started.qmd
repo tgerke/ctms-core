@@ -91,11 +91,14 @@ lifecycles, and the audit chain.
 ## Tests and resets
 
 ```sh
-pnpm test         # includes DB-level audit-immutability tests
+pnpm test                   # includes DB-level audit-immutability + WORM tests
+pnpm validation:iq          # installation qualification against the live env
+pnpm validation:artifacts   # OQ report + requirement traceability matrix
 ```
 
 Re-running `pnpm db:seed` resets the demo data. Two things to know:
 
 - Seeding regenerates person UUIDs — don't cache ids across reseeds.
-- The blob store for uploaded files is a local `storage/` directory,
-  content-addressed by sha256.
+- The blob store for uploaded files defaults to a local `storage/` directory,
+  content-addressed by sha256 (`STORAGE_DRIVER=local`); the `s3` driver adds
+  Object Lock WORM for a pilot (see `.env.example`).

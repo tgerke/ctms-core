@@ -23,6 +23,9 @@ erDiagram
     document ||--o{ document_version : versions
     document_version ||--o{ signature : signs
     person ||--o{ signature : signer
+    person ||--o{ access_grant : authorizes
+    study o|--o{ access_grant : scopes
+    study_site o|--o{ access_grant : scopes
     tmf_artifact ||--o{ requirement_rule : requires
     study ||--o{ requirement_rule : configures
     requirement_rule ||--o{ expected_document : materializes
@@ -42,9 +45,10 @@ erDiagram
 - **tmf_zone / tmf_section / tmf_artifact** — the CDISC TMF Reference Model v3.x
   hierarchy (11 zones → 48 sections → 249 artifacts in the official model). We seed an
   **illustrative subset** (~40 artifacts across Trial Management, Regulatory, IRB/IEC,
-  Site Management, IP, Safety zones), flagged in the seed; the official CDISC
-  spreadsheet is importable later without schema change. Artifacts carry their model
-  number (e.g. `03.01.02`) as a stable business key.
+  Site Management, IP, Safety zones), flagged in the seed; `pnpm db:import-tmf`
+  loads the official CDISC spreadsheet verbatim, upserting by artifact number with
+  no schema change (ADR-0005). Artifacts carry their model number (e.g. `03.01.02`)
+  as a stable business key.
 
 ## Organizational spine
 
@@ -60,6 +64,13 @@ erDiagram
 - **study_site_role** — a person holding a role (PI, sub-investigator, coordinator,
   pharmacist, research nurse) at a study-site, with start/end dates. Role assignments
   are auditable facts and the anchor for person-scoped requirements.
+- **access_grant** — API authorization (ADR-0008): a person holds a role
+  (`admin | trial_ops | monitor | read_only`), optionally scoped to one study or one
+  study-site. Roles map to operations (read / upload / sign / approve / administer)
+  in `packages/core/src/authz.ts`. Revocation is a `revoked_at` timestamp, never a
+  delete, and grant changes are audited like any other row. Distinct from
+  `study_site_role` on purpose: that table records regulated staffing facts;
+  this one records system access.
 
 ## Documents
 
@@ -70,12 +81,15 @@ erDiagram
   `effective_date` / `expires_at` (licenses, approvals, training certificates).
 - **document_version** — **immutable** (DB triggers reject UPDATE/DELETE): version
   number, `sha256` of content, filename, MIME type, size, uploader, timestamp. File
-  bytes live in a content-addressed store (`storage/<sha256>` in dev; S3-compatible
-  later); the database holds metadata and the hash.
+  bytes live in a content-addressed store behind a driver interface
+  (`STORAGE_DRIVER=local` directory for dev, `s3` with Object Lock for WORM bytes —
+  ADR-0009); the database holds metadata and the hash.
 - **signature** — Part 11 e-signature record: signer, `meaning`
   (`author | review | approval`), timestamp, and `signed_sha256` — a copy of the
   version's content hash taken at signing, making the record↔signature binding
-  (§11.70) verifiable independently of the version row. Immutable like versions.
+  (§11.70) verifiable independently of the version row. Also records
+  `reauth_method` and `reauth_at` — the §11.200 re-authentication that produced
+  the signature — required by a DB CHECK on every new row. Immutable like versions.
 
 ## Requirement engine
 

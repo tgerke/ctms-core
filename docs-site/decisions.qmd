@@ -52,8 +52,8 @@ Model's major zones, labeled as an illustrative subset, rather than attempting
 to reproduce the full 249-artifact model from an LLM's memory. Reproducing the
 official taxonomy from model memory risks hallucinated artifact numbers and
 names — unacceptable in a regulated-domain tool. Numbering follows the official
-scheme, so the free CDISC download can be imported verbatim later without
-migration.
+scheme, and `pnpm db:import-tmf` now loads the CDISC download verbatim without
+migration — the follow-through this decision planned for.
 
 (This decision is logged as part of the project's LLM-practice transparency
 policy: it is a deliberate hallucination-risk mitigation, documented so the

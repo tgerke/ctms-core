@@ -24,6 +24,9 @@ erDiagram
     document ||--o{ document_version : versions
     document_version ||--o{ signature : signs
     person ||--o{ signature : signer
+    person ||--o{ access_grant : authorizes
+    study o|--o{ access_grant : scopes
+    study_site o|--o{ access_grant : scopes
     tmf_artifact ||--o{ requirement_rule : requires
     study ||--o{ requirement_rule : configures
     requirement_rule ||--o{ expected_document : materializes
@@ -48,8 +51,10 @@ hierarchy (11 zones → 48 sections → 249 artifacts in the official model).
 The seed contains roughly 40 hand-checked artifacts across the major zones
 (Trial Management, Regulatory, IRB/IEC, Site Management, IP, Safety) — enough to
 exercise every mechanism, deliberately not a reproduction of the full model.
-Artifact numbering follows the official scheme (e.g. `03.01.02`), so the
-complete CDISC spreadsheet can be imported later without any schema change.
+Artifact numbering follows the official scheme (e.g. `03.01.02`), and
+`pnpm db:import-tmf` loads the complete CDISC spreadsheet verbatim — download it
+from CDISC yourself (licensing) and the importer upserts by artifact number,
+no schema change.
 :::
 
 ## Organizational spine
@@ -68,6 +73,12 @@ complete CDISC spreadsheet can be imported later without any schema change.
   for person-scoped requirements. These are *persons*, not "users" — login
   identity maps onto persons at the API layer, so the identity provider is
   swappable without touching the regulated facts.
+- **access_grant** — what a person may *do* through the API: a role
+  (`admin | trial_ops | monitor | read_only`), optionally scoped to one study
+  or one study-site, mapping to operations (read / upload / sign / approve /
+  administer). Revocation is a timestamp, never a delete, and every grant
+  change lands in the audit trail — an access review is a query. Deliberately
+  separate from `study_site_role`, which records regulated staffing facts.
 
 ## Documents
 
@@ -79,13 +90,15 @@ complete CDISC spreadsheet can be imported later without any schema change.
 - **document_version** — **immutable**: the database rejects UPDATE and DELETE
   for every role. Each version records number, sha256 of the content, filename,
   MIME type, size, uploader, and timestamp. File bytes live in a
-  content-addressed store keyed by that hash; duplicate uploads deduplicate for
-  free.
+  content-addressed store keyed by that hash — a local directory in dev, or S3
+  with Object Lock so the bytes are WORM (ADR-0009); duplicate uploads
+  deduplicate for free.
 - **signature** — a Part 11 e-signature record: signer, meaning
   (`author | review | approval`), timestamp, and `signed_sha256` — a copy of
   the version's content hash taken at signing, so the signature↔record binding
-  (§11.70) is verifiable independently of the version row. Immutable, like
-  versions.
+  (§11.70) is verifiable independently of the version row. Each signature also
+  records how and when the signer re-authenticated (§11.200) — a database CHECK
+  requires it on every new row. Immutable, like versions.
 
 ## The requirement engine
 

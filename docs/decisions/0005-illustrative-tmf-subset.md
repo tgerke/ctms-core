@@ -20,3 +20,8 @@ mitigation.)
 
 Zone/section/artifact numbering follows the official scheme so real data can replace
 the subset without migration; demo rules and documents reference only seeded artifacts.
+
+**Follow-through (2026-07-10)**: the verbatim importer landed as
+`pnpm db:import-tmf` (`packages/db/src/import-tmf.ts`) — it parses the official
+CDISC Excel and upserts by artifact number; per this ADR, no taxonomy content is
+ever generated from model memory.
