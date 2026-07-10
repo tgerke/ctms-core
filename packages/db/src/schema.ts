@@ -35,6 +35,16 @@ export const documentStatus = pgEnum("document_status", [
   "superseded",
 ]);
 export const signatureMeaning = pgEnum("signature_meaning", ["author", "review", "approval"]);
+// System-access roles (who may call which API operations) — distinct from
+// study_site_role, which records site staffing facts. See ADR-0008.
+export const accessRole = pgEnum("access_role", ["admin", "trial_ops", "monitor", "read_only"]);
+// How the signer re-authenticated at signing time (§11.200). seed_fixture marks
+// demo signatures fabricated by the seed, not a real signing ceremony.
+export const reauthMethod = pgEnum("reauth_method", [
+  "oidc_fresh_token",
+  "dev_token",
+  "seed_fixture",
+]);
 export const scopeLevel = pgEnum("scope_level", ["study", "study_site", "person_role"]);
 export const visitType = pgEnum("visit_type", [
   "pre_study",
@@ -187,6 +197,28 @@ export const studySiteRole = pgTable(
   (t) => [index("study_site_role_person_idx").on(t.personId)],
 );
 
+// System access: which person may perform which API operations, optionally
+// scoped to one study or one study-site. Site vs. sponsor is a permission
+// scope, not a different data model (ADR-0001). Revocation is a fact
+// (revoked_at), never a delete, so grants stay reconstructable from history.
+export const accessGrant = pgTable(
+  "access_grant",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    personId: uuid("person_id")
+      .notNull()
+      .references(() => person.id),
+    role: accessRole("role").notNull(),
+    // Narrowest set scope wins: studySiteId = that site only; else studyId =
+    // that study; else all studies.
+    studyId: uuid("study_id").references(() => study.id),
+    studySiteId: uuid("study_site_id").references(() => studySite.id),
+    grantedAt: timestamp("granted_at", { withTimezone: true }).notNull().defaultNow(),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  },
+  (t) => [index("access_grant_person_idx").on(t.personId)],
+);
+
 // ---------------------------------------------------------------------------
 // Documents
 // ---------------------------------------------------------------------------
@@ -249,6 +281,11 @@ export const signature = pgTable("signature", {
   // record<->signature binding, verifiable independently of the version row.
   signedSha256: char("signed_sha256", { length: 64 }).notNull(),
   signedAt: timestamp("signed_at", { withTimezone: true }).notNull().defaultNow(),
+  // §11.200: how and when the signer re-authenticated at signing. Required for
+  // new rows via a NOT VALID CHECK in the SQL migration (pre-existing rows are
+  // exempt — the columns state the honest truth about them).
+  reauthMethod: reauthMethod("reauth_method"),
+  reauthAt: timestamp("reauth_at", { withTimezone: true }),
 });
 
 // ---------------------------------------------------------------------------

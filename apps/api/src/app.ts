@@ -27,14 +27,21 @@ import {
   uploadDocument,
   verifyAuditChain,
   visitDetail,
-  type Actor,
+  permits,
   type ExpectedStatus,
   type IssueStatus,
   type VisitStage,
 } from "@ctms/core";
 import { blobPath, hasBlob, type Db, type Sql } from "@ctms/db";
 import { readFile } from "node:fs/promises";
-import { authMiddleware, configureTokens } from "./auth.js";
+import {
+  authMiddleware,
+  authMode,
+  configureTokens,
+  requirePermission,
+  verifyReauth,
+  type Env,
+} from "./auth.js";
 import {
   ActionItemSchema,
   AuditEventSchema,
@@ -58,8 +65,6 @@ import {
   VisitTypeSchema,
 } from "./schemas.js";
 
-type Env = { Variables: { actor: Actor } };
-
 const security = [{ bearerAuth: [] }];
 const json = <T extends z.ZodTypeAny>(schema: T, description: string) => ({
   content: { "application/json": { schema } },
@@ -67,14 +72,18 @@ const json = <T extends z.ZodTypeAny>(schema: T, description: string) => ({
 });
 
 export function buildApp(db: Db, sql: Sql) {
-  configureTokens();
+  const mode = authMode();
+  if (mode === "dev") configureTokens();
   const app = new OpenAPIHono<Env>();
   app.use("*", cors());
 
   app.openAPIRegistry.registerComponent("securitySchemes", "bearerAuth", {
     type: "http",
     scheme: "bearer",
-    description: "Dev tokens: see .env.example (API_TOKEN_ADMIN / API_TOKEN_MONITOR).",
+    description:
+      mode === "oidc"
+        ? "OIDC access token from the configured identity provider (OIDC_ISSUER)."
+        : "Dev tokens: see .env.example (API_TOKEN_ADMIN / API_TOKEN_MONITOR).",
   });
 
   // Public: spec + interactive reference.
@@ -94,17 +103,75 @@ export function buildApp(db: Db, sql: Sql) {
 </body></html>`),
   );
 
-  app.use("/studies/*", authMiddleware(sql));
-  app.use("/study-sites/*", authMiddleware(sql));
-  app.use("/documents/*", authMiddleware(sql));
-  app.use("/document-versions/*", authMiddleware(sql));
-  app.use("/audit-events", authMiddleware(sql));
-  app.use("/audit-chain/*", authMiddleware(sql));
-  app.use("/files/*", authMiddleware(sql));
-  app.use("/monitoring-visits/*", authMiddleware(sql));
-  app.use("/action-items/*", authMiddleware(sql));
-  app.use("/issues/*", authMiddleware(sql));
-  app.use("/milestones/*", authMiddleware(sql));
+  // Authentication resolves the credential to a person + active grants; the
+  // permission gate then matches the operation (GET = read, mutation = upload,
+  // with sign/approve/administer carved out) against the grant scopes, resolved
+  // from the path parameter. ADR-0008.
+  const auth = authMiddleware(sql);
+  const readOrUpload = (c: { req: { method: string } }) =>
+    c.req.method === "GET" ? ("read" as const) : ("upload" as const);
+
+  app.use("/studies", auth, requirePermission(sql, "read"));
+  app.use(
+    "/studies/:studyId/sync-expected-documents",
+    auth,
+    requirePermission(sql, "administer", "studyId"),
+  );
+  app.use("/studies/:studyId/*", auth, requirePermission(sql, readOrUpload, "studyId"));
+  app.use(
+    "/study-sites/:studySiteId/*",
+    auth,
+    requirePermission(sql, readOrUpload, "studySiteId"),
+  );
+  // POST /documents carries its study/site scope in the multipart body; the
+  // handler completes the scope check after parsing.
+  app.use("/documents", auth, requirePermission(sql, "upload"));
+  app.use("/documents/:documentId", auth, requirePermission(sql, readOrUpload, "documentId"));
+  app.use(
+    "/documents/:documentId/*",
+    auth,
+    requirePermission(sql, readOrUpload, "documentId"),
+  );
+  app.use(
+    "/document-versions/:versionId/sign",
+    auth,
+    requirePermission(
+      sql,
+      async (c) => {
+        try {
+          const body = (await c.req.json()) as { meaning?: string };
+          return body?.meaning === "approval" ? "approve" : "sign";
+        } catch {
+          return "sign"; // malformed body: the route validator answers with 400
+        }
+      },
+      "versionId",
+    ),
+  );
+  app.use("/audit-events", auth, requirePermission(sql, "read"));
+  app.use("/audit-chain/*", auth, requirePermission(sql, "read"));
+  app.use("/files/*", auth, requirePermission(sql, "read"));
+  app.use(
+    "/monitoring-visits/:visitId",
+    auth,
+    requirePermission(sql, readOrUpload, "visitId"),
+  );
+  app.use(
+    "/monitoring-visits/:visitId/*",
+    auth,
+    requirePermission(sql, readOrUpload, "visitId"),
+  );
+  app.use(
+    "/action-items/:actionItemId",
+    auth,
+    requirePermission(sql, readOrUpload, "actionItemId"),
+  );
+  app.use("/issues/:issueId", auth, requirePermission(sql, readOrUpload, "issueId"));
+  app.use(
+    "/milestones/:milestoneId",
+    auth,
+    requirePermission(sql, readOrUpload, "milestoneId"),
+  );
 
   app.openapi(
     createRoute({
@@ -224,10 +291,17 @@ export function buildApp(db: Db, sql: Sql) {
           "Created",
         ),
         400: json(ErrorSchema, "Invalid input"),
+        403: json(ErrorSchema, "Forbidden"),
       },
     }),
     async (c) => {
       const form = c.req.valid("form");
+      // Scope arrives in the body, so the route middleware could only gate the
+      // operation; the scope half of the check happens here.
+      const scope = { studyId: form.study_id, studySiteId: form.study_site_id };
+      if (!permits(c.get("grants"), "upload", scope)) {
+        return c.json({ error: "requires 'upload' permission for this resource" }, 403);
+      }
       const bytes = new Uint8Array(await form.file.arrayBuffer());
       const result = await uploadDocument(db, c.get("actor"), {
         tmfArtifactId: form.tmf_artifact_id,
@@ -293,7 +367,7 @@ export function buildApp(db: Db, sql: Sql) {
       security,
       summary: "Apply a Part 11 e-signature to a document version",
       description:
-        "Records signer, meaning, timestamp, and the version's content hash (§11.70 binding). meaning=approval promotes the document to effective and supersedes siblings of the same artifact + scope.",
+        "Records signer, meaning, timestamp, and the version's content hash (§11.70 binding). meaning=approval promotes the document to effective and supersedes siblings of the same artifact + scope. §11.200: the request must carry proof of re-authentication (reauth_token) — in OIDC mode a freshly issued token for the same subject, in dev mode the bearer token restated.",
       request: {
         params: z.object({ versionId: z.string().uuid() }),
         body: {
@@ -301,6 +375,7 @@ export function buildApp(db: Db, sql: Sql) {
             "application/json": {
               schema: z.object({
                 meaning: z.enum(["author", "review", "approval"]),
+                reauth_token: z.string().min(1),
                 effective_date: z.string().date().optional(),
                 expires_at: z.string().date().optional(),
               }),
@@ -314,6 +389,7 @@ export function buildApp(db: Db, sql: Sql) {
           "Signed",
         ),
         400: json(ErrorSchema, "Invalid input"),
+        403: json(ErrorSchema, "Re-authentication failed"),
       },
     }),
     async (c) => {
@@ -322,10 +398,14 @@ export function buildApp(db: Db, sql: Sql) {
         return c.json({ error: "signing requires a person-linked token" }, 400);
       }
       const body = c.req.valid("json");
+      const reauth = await verifyReauth(c, body.reauth_token);
+      if (!reauth.ok) return c.json({ error: reauth.error }, 403);
       const sig = await signDocumentVersion(db, actor, {
         documentVersionId: c.req.valid("param").versionId,
         signerPersonId: actor.personId,
         meaning: body.meaning,
+        reauthMethod: reauth.method,
+        reauthAt: reauth.at,
         effectiveDate: body.effective_date,
         expiresAt: body.expires_at,
       });

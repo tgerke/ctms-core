@@ -1,4 +1,14 @@
 export { withActor, type Actor, type Tx } from "./actor.js";
+export {
+  grantsFor,
+  permits,
+  resolveScope,
+  type AccessRole,
+  type Grant,
+  type Operation,
+  type ResourceScope,
+  type ScopeParam,
+} from "./authz.js";
 export { uploadDocument, signDocumentVersion, sha256Hex, type UploadInput } from "./documents.js";
 export {
   achieveMilestone,

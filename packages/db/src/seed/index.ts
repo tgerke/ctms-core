@@ -31,7 +31,7 @@ await sql`SELECT set_config('ctms.actor_label', 'seed', false)`;
 
 await sql`TRUNCATE audit_event, signature, document_version, expected_document,
   monitoring_visit_document, visit_action_item, issue, monitoring_visit,
-  enrollment_report, study_milestone,
+  enrollment_report, study_milestone, access_grant,
   document, requirement_rule, study_site_role, study_site, protocol_version,
   requirement_rule, person, site, study, organization,
   tmf_artifact, tmf_section, tmf_zone RESTART IDENTITY CASCADE`;
@@ -184,6 +184,14 @@ for (const spec of personSpecs) {
   }
 }
 
+// --- System access grants (ADR-0008) ------------------------------------------
+// Feld runs trial operations end to end (admin covers sync-expected); Patel
+// monitors — reads, uploads, and non-approval signatures, no approvals.
+await db.insert(s.accessGrant).values([
+  { personId: personId.get("feld")!, role: "admin" },
+  { personId: personId.get("patel")!, role: "monitor" },
+]);
+
 // --- Requirement rules -------------------------------------------------------
 type ScopeLevel = "study" | "study_site" | "person_role";
 interface RuleSpec {
@@ -291,6 +299,9 @@ async function addDoc(spec: DocSpec) {
       signerPersonId: personId.get(spec.sign.by)!,
       meaning: spec.sign.meaning,
       signedSha256: lastSha,
+      // Demo fixtures: no real §11.200 ceremony happened, and the value says so.
+      reauthMethod: "seed_fixture",
+      reauthAt: new Date(),
     });
   }
   return doc!;

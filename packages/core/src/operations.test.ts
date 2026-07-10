@@ -112,6 +112,8 @@ describe("monitoring visit lifecycle (derived, never stored)", () => {
       documentVersionId: uploaded.version.id,
       signerPersonId: personId,
       meaning: "approval",
+      reauthMethod: "dev_token",
+      reauthAt: new Date(),
     });
     expect(await stageOf(visit.id)).toBe("follow_up");
 
@@ -169,6 +171,8 @@ describe("monitoring visit lifecycle (derived, never stored)", () => {
       documentVersionId: uploaded.version.id,
       signerPersonId: personId,
       meaning: "approval",
+      reauthMethod: "dev_token",
+      reauthAt: new Date(),
     });
 
     // Every previously-effective visit-linked report is still effective

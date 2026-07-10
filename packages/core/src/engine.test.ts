@@ -142,6 +142,8 @@ describe("upload -> sign lifecycle", () => {
       documentVersionId: uploaded.version.id,
       signerPersonId: actor.personId,
       meaning: "approval",
+      reauthMethod: "dev_token",
+      reauthAt: new Date(),
     });
     expect(sig.signedSha256).toBe(uploaded.sha256); // §11.70 binding
 

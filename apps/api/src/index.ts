@@ -1,8 +1,10 @@
 import { serve } from "@hono/node-server";
 import { createDb, loadEnv } from "@ctms/db";
 import { buildApp } from "./app.js";
+import { assertAuthConfig } from "./auth.js";
 
 loadEnv();
+assertAuthConfig();
 const { db, sql } = createDb();
 const app = buildApp(db, sql);
 const port = Number(process.env.API_PORT ?? 8787);

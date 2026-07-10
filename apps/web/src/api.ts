@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { authMode, beginLogin, getReauthToken, token } from "./auth";
 
 export type ExpectedStatus =
   | "missing"
@@ -215,16 +216,17 @@ export interface VisitDetail {
   issues: Issue[];
 }
 
-const token = () => localStorage.getItem("ctms_token") ?? "dev-admin-token";
-
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`/api${path}`, {
     ...init,
     headers: {
-      Authorization: `Bearer ${token()}`,
+      Authorization: `Bearer ${token() ?? ""}`,
       ...(init?.headers ?? {}),
     },
   });
+  if (res.status === 401 && authMode === "oidc") {
+    await beginLogin(); // session expired: round-trip through the IdP
+  }
   if (!res.ok) throw new Error(`API ${res.status}: ${await res.text()}`);
   return res.json() as Promise<T>;
 }
@@ -546,15 +548,20 @@ export function useSign() {
       versionId: string;
       meaning: "author" | "review" | "approval";
       expiresAt?: string;
-    }) =>
-      api<{ signature_id: string }>(`/document-versions/${input.versionId}/sign`, {
+    }) => {
+      // §11.200: signing requires fresh proof of identity, obtained here
+      // (IdP popup in oidc mode; restated dev token otherwise).
+      const reauthToken = await getReauthToken();
+      return api<{ signature_id: string }>(`/document-versions/${input.versionId}/sign`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           meaning: input.meaning,
+          reauth_token: reauthToken,
           ...(input.expiresAt ? { expires_at: input.expiresAt } : {}),
         }),
-      }),
+      });
+    },
     onSuccess: () => qc.invalidateQueries(),
   });
 }

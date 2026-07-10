@@ -107,6 +107,10 @@ export async function signDocumentVersion(
     documentVersionId: string;
     signerPersonId: string;
     meaning: "author" | "review" | "approval";
+    // §11.200: how and when the signer re-authenticated. The API layer
+    // verifies the ceremony; this layer records it (DB CHECK requires it).
+    reauthMethod: "oidc_fresh_token" | "dev_token" | "seed_fixture";
+    reauthAt: Date;
     effectiveDate?: string;
     expiresAt?: string;
   },
@@ -127,6 +131,8 @@ export async function signDocumentVersion(
         signerPersonId: input.signerPersonId,
         meaning: input.meaning,
         signedSha256: version.sha256,
+        reauthMethod: input.reauthMethod,
+        reauthAt: input.reauthAt,
       })
       .returning();
 
