@@ -119,6 +119,22 @@ reference client is [edc-core](https://github.com/tgerke/edc-core), this
 project's AGPL sibling on the data-capture side; the boundary holds: documents
 and aggregates come in, subject-level clinical data never does.
 
+## ADR-0012 — Regulatory specifics are verified against source texts, never written from model memory
+
+Every regulation-specific claim in these docs — a GAMP 5 appendix, a Part 11
+section, an ICH expectation, a CDISC definition — is checked against the full
+source text before it lands, and cites the section it relies on. The texts are
+licensed, so the library lives outside the repo (the same reason the CDISC
+spreadsheet is never vendored, ADR-0005). The rule exists because its failure
+mode was observed here: an LLM-drafted GAMP categorization claim read like
+standard validation vocabulary and was subtly out of step with the Second
+Edition's actual text — plausible prose is precisely what model memory
+produces, and only the source caught it.
+
+(Like ADR-0005 and ADR-0010, this is logged as part of the project's
+LLM-practice transparency policy: where ground truth exists in an
+authoritative source, content comes from the source.)
+
 ---
 
 Three of these — ADR-0004, ADR-0006, and ADR-0010 — are the same idea applied

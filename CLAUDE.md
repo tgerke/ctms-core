@@ -42,7 +42,7 @@ API :8787, web :5173, Postgres :5433, MinIO :9000 (docker compose).
   vendored into the repo.
 - **Never hand-edit `docs/validation/`** (ADR-0010) — those files are generated
   by `pnpm validation:artifacts` / `validation:iq` from live runs.
-- **Never write regulatory specifics from model memory.** Any GAMP 5, Part 11,
+- **Never write regulatory specifics from model memory** (ADR-0012). Any GAMP 5, Part 11,
   ICH, or CDISC-specific claim in docs must be verified against the full texts
   in `~/claude-clinical-skills/sources/`, citing the section (e.g. GAMP 5
   2nd ed. Appendix M4). A plausible from-memory GAMP claim has already been
