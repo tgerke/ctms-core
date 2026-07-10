@@ -43,7 +43,9 @@ format:
     theme:
       light: flatly
       dark: darkly
+    css: styles.css
     toc: true
     toc-depth: 3
     code-copy: true
     code-overflow: wrap
+    lightbox: true

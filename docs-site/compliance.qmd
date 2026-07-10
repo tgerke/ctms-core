@@ -44,6 +44,15 @@ folders-of-PDFs.
 | Control of records, prevention of premature destruction | Database-level immutability; deletes of domain rows are themselves audited events |
 | Protection of blinding / privacy when sharing | Out of scope this phase (single-tenant demo; no blinded roles yet) |
 
+## What this looks like in the product
+
+Every document page shows the three mechanisms side by side: immutable
+versions with their content hashes, signatures displaying signer, meaning, and
+timestamp (§11.50) with the hash they are bound to (§11.70), and the
+trigger-written audit trail with each event's link in the hash chain.
+
+![A document page: content-addressed versions, a hash-bound approval signature, and the append-only audit trail — each event showing its position in the hash chain.](images/document-page.png){.screenshot fig-alt="Protocol document page showing two immutable versions with sha256 hashes, an approval signature bound to a content hash, and audit trail events with hash chain links"}
+
 ## Try the mechanisms yourself
 
 The claims above are testable from a terminal:

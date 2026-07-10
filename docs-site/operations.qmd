@@ -34,6 +34,8 @@ the dates, the linked trip report's document status, and open action items:
 The stage machine is fixed in the view, deliberately: new stages are a
 migration, not a per-customer workflow configuration.
 
+![The dashboard's visit list, with stage badges computed by `v_monitoring_visit_status` and one-click stage filters (URL-addressable, like everything else).](images/monitoring-visits.png){.screenshot fig-alt="Monitoring visits list showing visits at four sites with derived stage badges: scheduled, awaiting report, report in review, overdue, follow-up, and complete"}
+
 ### Trip reports are documents, not a parallel review system
 
 Visit documents — trip reports, confirmation letters, follow-up letters — are
@@ -56,6 +58,8 @@ and resolution fields (`resolved_at`, resolver, note). Open action items hold
 the visit in `follow_up` even after the report is approved — closing them out
 is what completes the visit.
 
+![A visit in `follow_up`: the trip report is effective, but one action item is overdue and another open — resolving them is what moves the visit to `complete`.](images/visit-page.png){.screenshot fig-alt="Interim monitoring visit page showing a follow-up stage badge, an effective trip report, three action items (one overdue, one open, one resolved), and a resolved issue raised at the visit"}
+
 ## Issues and deviations
 
 An `issue` is a protocol deviation or finding, scoped to the study or to a
@@ -66,6 +70,8 @@ resolution date and note.
 `v_issue_status` derives `open | overdue | resolved` from the dates. An issue
 past its due date without a resolution is overdue — nobody has to remember to
 flip a flag.
+
+![Issues on the dashboard, with severity and derived status; recording a new deviation is a form on the same page (or one `POST`).](images/issues.png){.screenshot fig-alt="Issues and deviations list showing severity badges (minor, major, critical) and derived status badges (open, overdue, resolved) with a form for recording a new issue"}
 
 ## Enrollment
 
@@ -82,11 +88,15 @@ operational aggregates for oversight; the EDC owns the clinical record.
 Corrections to a report are audited UPDATEs — the audit trail preserves full
 before/after row images — rather than new rows or silent overwrites.
 
+![Enrollment vs target per site, from `v_site_enrollment`: the latest report against `study_site.target_enrollment`.](images/enrollment.png){.screenshot fig-alt="Enrollment vs target section showing progress bars for four sites with enrolled counts against targets and as-of dates"}
+
 ## Milestones
 
 `study_milestone` rows carry planned and actual dates, scoped to the study or a
 site. `v_milestone_status` derives `achieved | overdue | upcoming`, which makes
 drift between plan and reality a query.
+
+![Milestones on the dashboard: green achieved, red overdue, grey upcoming — all from `v_milestone_status`.](images/milestones.png){.screenshot fig-alt="Milestone chips showing achieved milestones in green, an overdue 50% enrollment milestone in red, and upcoming milestones in grey"}
 
 ## Corrections and the audit trail
 

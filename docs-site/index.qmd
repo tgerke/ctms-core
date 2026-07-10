@@ -48,6 +48,8 @@ deviations, enrollment reporting, and milestones are dated facts in tables, with
 lifecycle stages (overdue, awaiting report, resolved, achieved) derived by views.
 See the [operational layer guide](operations.qmd).
 
+![The study dashboard: completeness counts, milestones, and enrollment vs target — every number computed by a view at read time.](images/dashboard.png){.screenshot fig-alt="ctms-core study dashboard showing expected document counts, percent current, milestone chips, and enrollment progress bars per site"}
+
 ## The API is the product
 
 The web dashboard consumes only the public REST API — no private endpoints, no

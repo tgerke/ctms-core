@@ -13,6 +13,8 @@ share), then condensed in [Python](#the-same-story-in-python) and
 [curl](#curl-one-liners). No client library is required in any language — it's
 plain HTTP with a bearer token.
 
+![The interactive reference at `/docs`, generated from the same schemas that validate requests — every endpoint with a try-it panel and client snippets.](images/api-docs.png){.screenshot fig-alt="OpenAPI reference for the ctms-core API showing the endpoint list, authentication panel, and a curl example for listing studies"}
+
 ## Setup
 
 A four-line helper turns any GET endpoint into a tibble:

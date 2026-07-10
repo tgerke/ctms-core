@@ -41,6 +41,8 @@ numbers (see [the data model](data-model.qmd#reference-taxonomy)).
 The seed also creates a read-only SQL role (`ctms_readonly`) so you can point R
 or Python straight at the database — see [direct SQL access](sql-access.qmd).
 
+![A site detail page from the seed: Site 004 is newly pending, so its gap list has plenty to say — staff open items, a scheduled pre-study visit, and missing documents by TMF section.](images/site-detail.png){.screenshot fig-alt="Site 004 detail page showing 21.4% of expected documents current, staff with open items, a scheduled pre-study visit, and per-artifact document status"}
+
 ## Your first query
 
 Two dev bearer tokens map to seeded people: `dev-admin-token` and

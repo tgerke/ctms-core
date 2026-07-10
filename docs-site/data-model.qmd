@@ -109,6 +109,8 @@ Because no stored status exists, completeness is computed from ground truth on
 every read. It cannot drift from the documents — the failure mode this project
 exists to fix.
 
+![The dashboard's site document matrix is one `SELECT` from `v_expected_document_status`: requirements down, sites across, every cell a derived status.](images/site-document-matrix.png){.screenshot fig-alt="Site document matrix showing requirements as rows, four sites as columns, and status icons for current, missing, expired, expiring soon, and pending review in each cell"}
+
 ## The operational layer
 
 Monitoring visits, issues, enrollment, and milestones follow the same rule:
