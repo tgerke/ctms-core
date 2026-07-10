@@ -1,8 +1,17 @@
 ---
-title: "Validation artifacts"
+title: "Validating ctms-core"
 ---
 
-The validation raw material is generated, never hand-written (ADR-0010):
+"Validated software" is not something a repository can ship. Under GAMP 5,
+validation is the responsibility of the regulated organization that deploys a
+system: the claim attaches to a specific installation, a specific
+configuration, and the procedures that operate it — never to source code in
+the abstract. That is true of every eTMF and CTMS on the market; vendors sell
+validation *packages*, not validated software.
+
+What software can decide is whether your program starts from evidence or from
+a blank binder. ctms-core generates its technical raw material, never
+hand-written (ADR-0010):
 
 - `pnpm validation:iq` — Installation Qualification: checks a live
   environment's installed controls (migrations, triggers, role privilege
@@ -13,7 +22,47 @@ The validation raw material is generated, never hand-written (ADR-0010):
   matrix below. The join key is the requirement token appearing verbatim in
   test names, so the matrix cannot drift from the suite without showing it.
 
-These artifacts are the raw material a formal CSV program would consume —
-§11.10(a) remains **not claimed**; see the [compliance mapping](compliance.qmd).
+## Running the program
+
+The GAMP 5 shape of a pilot validation, and who owns each step:
+
+1. **Categorization and risk assessment** — yours. Categorize ctms-core per
+   your SOPs (as open source you configure and could extend, GAMP category 4
+   or 5 — your QA decides). The [compliance mapping](compliance.qmd) is the
+   inventory to assess against: each Part 11 / E6(R3) requirement mapped to
+   its mechanism and the code that enforces it, so risk assessment starts from
+   requirement → mechanism instead of a blank spreadsheet.
+2. **Requirements and traceability** — generated. The traceability matrix
+   below keys each requirement to the automated tests that exercise it, from
+   a live suite run. Adopt it as the technical requirements baseline and add
+   your organization's process requirements on top.
+3. **Installation Qualification** — generated, run by you. Deploy per the
+   pilot checklist in the repo's `docs/05-deployment.md` (OIDC against your
+   identity provider, rotated role credentials, Object Lock storage), then
+   run `pnpm validation:iq --report iq-$(date +%F).md` against that
+   environment and file the report. IQ verifies the controls are actually
+   installed where you deployed, not where we developed.
+4. **Operational Qualification** — generated, run by you. Run
+   `pnpm validation:artifacts` in the qualified environment and file the OQ
+   run report and matrix alongside the IQ report.
+5. **Performance Qualification / UAT** — yours. Script your own users'
+   scenarios against your configuration: your studies, your requirement
+   rules, your access grants. The [cookbook](cookbook.qmd) workflows (the
+   monitor's morning, the CRA's week) are ready-made scenario templates.
+6. **SOPs, training, and the QMS** — yours. Operating procedures, training
+   records, and the quality system the dossier lives in are organizational by
+   nature; no repository can contain them. The deployment doc's backup,
+   restore-verification, and continuous audit-chain checks are the technical
+   hooks your SOPs point at.
+7. **Change control and periodic review** — shared. Pin the commit you
+   deployed; on every upgrade, re-run IQ and OQ and file the fresh reports —
+   requalification is two commands, which is the point. Between upgrades,
+   schedule `GET /audit-chain/verify` so tamper-evidence is exercised
+   continuously, not just available.
+
+Until an organization performs these steps for its deployment, §11.10(a)
+remains **not claimed** — the [compliance mapping](compliance.qmd) keeps that
+ledger. The gap is not in the software; it is the half of validation that is
+yours by regulation, with the technical half already generated below.
 
 {{< include ../docs/validation/traceability.md >}}

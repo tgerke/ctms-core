@@ -68,23 +68,29 @@ df_expected |>
   select(site_number, person_family_name, artifact_name, effective_expiry)
 ```
 
-## What ctms-core is not (yet)
+## Boundaries, by design
 
-Honesty about scope is part of the design:
+Honesty about scope is part of the design. Two boundaries are permanent, and
+neither is a gap in the software:
 
-- **Not validated software.** The repo generates its own validation raw
-  material — IQ checks against the live environment, an OQ report, and a
-  requirement→test traceability matrix (`pnpm validation:iq` /
-  `pnpm validation:artifacts`) — but the validation *program* (GAMP 5 SOPs,
-  risk assessment, training records, a QMS) is organizational work that has
-  not been performed. The [compliance mapping](compliance.qmd) states exactly
+- **Validation is a program you run, not a property software ships with.**
+  Under GAMP 5 the validation claim belongs to the deploying organization and
+  attaches to a specific installation and its operating procedures — that is
+  true of every eTMF on the market. ctms-core generates the technical half for
+  you: IQ checks against your live environment, an OQ run report, and a
+  requirement→test traceability matrix. The [validation guide](validation.qmd)
+  walks the whole program, step by step, marking what is generated and what
+  remains yours; the [compliance mapping](compliance.qmd) keeps the ledger of
   what is and isn't claimed.
-- **Not an EDC.** Enrollment data is site-reported aggregates only;
-  subject-level clinical data stays in your EDC. This is a firm boundary, not a
-  roadmap gap — though your EDC can *file into* the TMF through the documented
-  upload API as a machine identity with provenance (ADR-0011): documents and
-  aggregates come in, subject data never does.
-Formerly on this list, since built:
+- **Subject-level clinical data belongs in your EDC.** ctms-core holds
+  regulatory documents and site-reported aggregates; the subject-data boundary
+  is GCP architecture, not a missing feature. Your EDC files *into* the TMF
+  through the documented upload API as a machine identity with provenance
+  (ADR-0011) — documents and aggregates come in, subject data never does. The
+  reference client is [edc-core](https://github.com/tgerke/edc-core), this
+  project's AGPL sibling on the data-capture side: the two are designed to
+  hold that boundary between them, not to grow into each other.
+This section once listed genuine gaps; two have since been closed in code:
 
 - **The full TMF Reference Model.** `pnpm db:import-tmf` loads the complete
   CDISC model verbatim from the official spreadsheet, with no schema changes.
