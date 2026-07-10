@@ -97,6 +97,15 @@ export default function DocumentPage() {
                   : ""}
                 {fmtTime(v.uploaded_at)}
               </span>
+              {v.source_system && (
+                <span
+                  className="rounded-full border px-2 py-0.5 text-xs font-medium"
+                  style={{ color: "var(--info)", borderColor: "var(--ring)" }}
+                  title={v.source_ref ? `source ref: ${v.source_ref}` : undefined}
+                >
+                  filed by {v.source_system}
+                </span>
+              )}
               <span className="mono ml-auto text-xs text-muted" title={`sha256 ${v.sha256}`}>
                 {v.sha256.slice(0, 12)}…
               </span>
