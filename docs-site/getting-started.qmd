@@ -1,0 +1,96 @@
+---
+title: "Getting started"
+---
+
+ctms-core runs locally with Node and Docker. The whole stack — Postgres, REST
+API, and web dashboard — comes up in a few minutes with a seeded demo study.
+
+## Prerequisites
+
+- Node 22+ and [pnpm](https://pnpm.io)
+- Docker (for Postgres 16)
+
+## Run it
+
+```sh
+cp .env.example .env
+pnpm install
+pnpm db:up        # Postgres 16 in Docker, on port 5433
+pnpm db:migrate
+pnpm db:seed      # demo study: 4 sites, 12 staff, realistic gaps
+pnpm dev          # API on :8787, web on :5173
+```
+
+Then open:
+
+- <http://localhost:5173> — the dashboard: completeness grid, site detail,
+  visit lifecycle, audit timelines
+- <http://localhost:8787/docs> — interactive API reference, generated from the
+  OpenAPI 3.1 spec at `/openapi.json`
+
+## What the seed gives you
+
+A four-site oncology study with twelve staff across PI, sub-investigator,
+coordinator, pharmacist, and research nurse roles; requirement rules for the
+usual site- and person-scoped essentials; and deliberately realistic gaps — a
+missing IRB approval here, a GCP certificate expiring soon there — so the
+completeness views have something to say. The TMF taxonomy is an illustrative
+~40-artifact subset of the CDISC TMF Reference Model, using official artifact
+numbers (see [the data model](data-model.qmd#reference-taxonomy)).
+
+The seed also creates a read-only SQL role (`ctms_readonly`) so you can point R
+or Python straight at the database — see [direct SQL access](sql-access.qmd).
+
+## Your first query
+
+Two dev bearer tokens map to seeded people: `dev-admin-token` and
+`dev-monitor-token` (see `.env.example`). Every request needs one.
+
+::: {.panel-tabset}
+
+## curl
+
+```sh
+curl -s http://localhost:8787/studies \
+  -H "Authorization: Bearer dev-monitor-token" | jq
+```
+
+## R
+
+```r
+library(httr2)
+
+request("http://localhost:8787/studies") |>
+  req_auth_bearer_token("dev-monitor-token") |>
+  req_perform() |>
+  resp_body_json(simplifyVector = TRUE)
+```
+
+## Python
+
+```python
+import httpx
+
+httpx.get(
+    "http://localhost:8787/studies",
+    headers={"Authorization": "Bearer dev-monitor-token"},
+).json()
+```
+
+:::
+
+From there, the [cookbook](cookbook.qmd) builds up the queries this system
+exists for: expected-vs-actual across every site, expiring credentials, visit
+lifecycles, and the audit chain.
+
+## Tests and resets
+
+```sh
+pnpm test         # includes DB-level audit-immutability tests
+```
+
+Re-running `pnpm db:seed` resets the demo data. Two things to know:
+
+- Seeding regenerates person UUIDs — don't cache ids across reseeds.
+- The blob store for uploaded files is a local `storage/` directory,
+  content-addressed by sha256.

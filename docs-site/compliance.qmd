@@ -1,0 +1,76 @@
+---
+title: "Compliance"
+---
+
+What "compliant-by-design" means here: the mechanisms 21 CFR Part 11 and ICH
+E6(R3) require are properties of the database schema, enforced below the
+application layer. What it does **not** mean: that this software is validated.
+
+::: {.callout-warning}
+## Not validated software
+Formal computer system validation — GAMP 5 categorization, risk assessment,
+IQ/OQ/PQ, SOPs, training records — is a separate, deliberate program that has
+not been performed. This page maps requirement → mechanism so that a future
+validation effort inherits architecture instead of retrofit. Read the claims
+below with that framing.
+:::
+
+## 21 CFR Part 11 — electronic records
+
+| Requirement | Mechanism |
+| --- | --- |
+| §11.10(a) validation of systems | **Not claimed.** Automated tests cover the audit, immutability, and signature mechanisms; formal CSV is future work |
+| §11.10(b) accurate and complete copies | Every version's bytes are content-addressed (sha256) and immutable; the API serves originals at `/files/{sha256}` |
+| §11.10(c) record protection & retention | Versions, signatures, and audit events reject UPDATE/DELETE via database triggers, for every role |
+| §11.10(d) limited system access | Bearer-token auth resolving to a person; all data routes require it. Dev-grade — a real identity provider is a non-goal of this phase |
+| §11.10(e) audit trails | Computer-generated, timestamped `audit_event` rows written by AFTER-triggers on every domain-table mutation; append-only; prior values preserved as full row images; hash-chained so retroactive edits are detectable |
+| §11.10(g) authority checks | Actor identity bound per transaction; signing requires a person-linked token |
+| §11.50 signature manifestation | Signature rows carry signer, timestamp, and meaning (author/review/approval); the UI displays all three |
+| §11.70 signature/record linking | Each signature stores a copy of the signed version's content hash, so the binding is verifiable independently of the version row |
+| §11.200 signature components | **Partial.** Signatures are tied to an authenticated identity, but re-authentication at signing (a password challenge) is stubbed |
+
+## ICH E6(R3) — essential records
+
+E6(R3) (final January 2025) reframes "essential documents" as "essential
+records," with explicit expectations of version control, identifiability, and
+accessibility — language that favors a records-as-data design over
+folders-of-PDFs.
+
+| Expectation | Mechanism |
+| --- | --- |
+| Records identifiable, version-controlled | Typed by TMF RM artifact + scoped identity; monotonic immutable versions |
+| Completeness of essential records | Requirement rules + `v_expected_document_status`: expected-vs-actual is continuously computed, per site and per person |
+| Access, availability, readability | Relational queries + a documented API; records retrievable by identity, not folder-path memory |
+| Control of records, prevention of premature destruction | Database-level immutability; deletes of domain rows are themselves audited events |
+| Protection of blinding / privacy when sharing | Out of scope this phase (single-tenant demo; no blinded roles yet) |
+
+## Try the mechanisms yourself
+
+The claims above are testable from a terminal:
+
+```sh
+# Walk the hash chain end-to-end
+curl -s http://localhost:8787/audit-chain/verify \
+  -H "Authorization: Bearer dev-admin-token" | jq
+
+# Try to rewrite history (the database refuses, regardless of role)
+docker exec -i ctms-core-db-1 psql -U postgres -d ctms \
+  -c "UPDATE audit_event SET action = 'nothing happened' WHERE id = 1;"
+# ERROR: audit_event is append-only
+```
+
+The automated test suite includes DB-level immutability tests that attempt
+exactly these mutations and assert they fail.
+
+## Honest gaps (current phase)
+
+1. **No validation dossier** — the largest gap between this and a marketable
+   claim; the mechanisms above are its raw material.
+2. **Authentication is a dev stub** — SSO/IdP with per-user credentials and a
+   signing re-challenge is required for a real Part 11 posture.
+3. **TRUNCATE is not blocked** — dev seeding truncates tables. A production
+   role simply would not hold TRUNCATE/DDL privileges; the migration role would.
+4. **The blob store is a local directory** — production needs S3-class storage
+   with object lock (WORM) to extend immutability to the bytes themselves.
+5. **`expected_document` churn is unaudited by design** — placeholders are
+   derived state; the ground truth they derive from is fully audited.

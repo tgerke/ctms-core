@@ -1,0 +1,77 @@
+---
+title: "Design decisions"
+---
+
+The project keeps a numbered decision log (`docs/decisions/` in the
+repository). These records exist so that adopters, auditors, and future
+maintainers can see *why* the system is shaped the way it is — not just what it
+does. Summaries below; the full records carry rationale and consequences.
+
+## ADR-0001 — Build for the sponsor/CRO oversight seat
+
+The system's center of gravity is sponsor/CRO-side oversight across many sites,
+not the site coordinator's day-to-day binder. The relational questions that
+motivate the product (cross-site completeness, gaps, expirations) live in the
+oversight seat, and site-side eISF is a crowded, commoditizing market.
+Site-facing workflows exist but are minimal; a future site-facing surface would
+reuse the same schema, because site vs. sponsor is a permission scope, not a
+different data model.
+
+## ADR-0002 — TypeScript + Postgres; R is a client, not the implementation
+
+Postgres 16 is the system of record; the backend and frontend are TypeScript
+end-to-end (Hono + Drizzle; Vite + React). R — the analysis stack of the teams
+this is built for — consumes the OpenAPI-documented REST API. Keeping R out of
+the implementation but first-class at the API boundary is deliberate: the API
+must be good enough that a data-science team never needs a backdoor. The
+[cookbook](cookbook.qmd) is that claim's acceptance test.
+
+## ADR-0003 — Audit trail written and guarded by the database
+
+`audit_event` rows are produced by AFTER-triggers on every domain table, with
+the acting person bound per transaction. An application-layer audit writer is
+one forgotten code path away from a gap; triggers make every write path — API,
+seed scripts, ad-hoc psql — leave the same trail. Events are hash-chained
+in-database, and UPDATE/DELETE on audit events, versions, and signatures raise
+an error for all roles. History rewrites require explicit, documented trigger
+disablement — loud on purpose.
+
+## ADR-0004 — Completeness status is derived by views, never stored
+
+`expected_document` stores no status and no fulfilled-by pointer; a view joins
+placeholders to fulfilling documents at query time. Stored status flags drift,
+and that drift is precisely the incumbent-system failure this project exists to
+fix. The cost is a join instead of an index lookup — nothing at realistic
+scale, and convertible to a materialized view later without changing any
+consumer.
+
+## ADR-0005 — Seed an illustrative TMF subset, not a from-memory copy
+
+The seed contains roughly 40 hand-checked artifacts across the TMF Reference
+Model's major zones, labeled as an illustrative subset, rather than attempting
+to reproduce the full 249-artifact model from an LLM's memory. Reproducing the
+official taxonomy from model memory risks hallucinated artifact numbers and
+names — unacceptable in a regulated-domain tool. Numbering follows the official
+scheme, so the free CDISC download can be imported verbatim later without
+migration.
+
+(This decision is logged as part of the project's LLM-practice transparency
+policy: it is a deliberate hallucination-risk mitigation, documented so the
+mitigation itself is auditable.)
+
+## ADR-0006 — Operational layer as facts + derived lifecycle views
+
+Monitoring visits, issues, enrollment, and milestones are dated facts in
+tables; lifecycle stages are computed by views, extending ADR-0004 from
+document completeness to operational workflows. Trip reports are ordinary
+documents with the same immutable versions and hash-bound signatures (per-visit
+records, exempt from sibling supersede). Enrollment is as-reported aggregates —
+the EDC owns subject-level data, as a firm boundary. No bespoke workflow
+modules: configuration is rows, lifecycles are SQL views, and the `v_*` views
+are documented public query surface.
+
+---
+
+Two of these — ADR-0004 and ADR-0006 — are the same idea applied twice, and it
+is the idea the whole system rests on: **state that can be computed is never
+stored.** If you take one thing from this log, take that.

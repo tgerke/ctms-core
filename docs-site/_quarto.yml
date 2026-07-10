@@ -1,0 +1,49 @@
+project:
+  type: website
+  output-dir: _site
+
+website:
+  title: "ctms-core"
+  description: "A regulatory-document backbone for clinical trials where completeness is a query, not a monitoring visit."
+  # Set site-url and repo-url once a GitHub remote exists, e.g.
+  # site-url: https://<org>.github.io/ctms-core/
+  # repo-url: https://github.com/<org>/ctms-core
+  page-navigation: true
+  navbar:
+    search: true
+    left:
+      - text: "Getting started"
+        href: getting-started.qmd
+      - text: "Guide"
+        href: data-model.qmd
+      - text: "Cookbook"
+        href: cookbook.qmd
+      - text: "Decisions"
+        href: decisions.qmd
+  sidebar:
+    style: docked
+    collapse-level: 2
+    contents:
+      - text: "Overview"
+        href: index.qmd
+      - getting-started.qmd
+      - section: "Guide"
+        contents:
+          - data-model.qmd
+          - operations.qmd
+          - compliance.qmd
+      - section: "Cookbook"
+        contents:
+          - cookbook.qmd
+          - sql-access.qmd
+      - decisions.qmd
+
+format:
+  html:
+    theme:
+      light: flatly
+      dark: darkly
+    toc: true
+    toc-depth: 3
+    code-copy: true
+    code-overflow: wrap

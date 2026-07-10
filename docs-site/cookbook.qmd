@@ -1,0 +1,250 @@
+---
+title: "API cookbook"
+---
+
+The API is the product, and this page is its acceptance test: if the questions
+a monitoring team asks aren't a few lines each, the design has failed. The
+examples run against the seeded demo study (`pnpm db:seed`) with the dev tokens
+from `.env.example`. The full interactive reference lives at
+<http://localhost:8787/docs>.
+
+Everything below is shown in R first (the stack these docs assume you might
+share), then condensed in [Python](#the-same-story-in-python) and
+[curl](#curl-one-liners). No client library is required in any language — it's
+plain HTTP with a bearer token.
+
+## Setup
+
+A four-line helper turns any GET endpoint into a tibble:
+
+```r
+library(httr2)
+library(dplyr)
+
+ctms <- function(path, ..., query = list()) {
+  request("http://localhost:8787") |>
+    req_url_path_append(path, ...) |>
+    req_url_query(!!!query) |>
+    req_auth_bearer_token("dev-monitor-token") |>
+    req_perform() |>
+    resp_body_json(simplifyVector = TRUE) |>
+    as_tibble()
+}
+
+df_studies <- ctms("studies")
+study <- df_studies$id[1]
+```
+
+## The monitor's morning
+
+Expected-vs-actual for the whole study, as one tidy data frame. Status is
+computed by the database view on every read — there is no stored flag to go
+stale.
+
+```r
+df_expected <- ctms("studies", study, "expected-documents")
+
+# Everything that needs attention, most urgent first
+df_expected |>
+  filter(status != "current") |>
+  arrange(factor(status, c("expired", "missing", "pending_review", "expiring_soon"))) |>
+  select(site_number, artifact_name, person_family_name, status, effective_expiry)
+
+# Completeness by site, one line each
+ctms("studies", study, "sites") |>
+  select(site_number, site_name, pct_current, missing_count, expired_count)
+
+# Credential expirations in the next 60 days — the report the binder systems can't run
+df_expected |>
+  filter(status == "expiring_soon", scope_level == "person_role") |>
+  select(site_number, person_family_name, artifact_name, effective_expiry)
+```
+
+No pagination-by-folder, no per-document round trips, no XML exports: the
+completeness of a four-site trial is three GETs.
+
+## Writing: upload and sign
+
+Mutations use the same API the dashboard does. Every write is attributed to the
+token's person and lands in the hash-chained audit trail.
+
+```r
+# Upload a missing GCP certificate (multipart; lands as pending_review)
+request("http://localhost:8787/documents") |>
+  req_auth_bearer_token("dev-admin-token") |>
+  req_body_multipart(
+    file            = curl::form_file("gcp_certificate.pdf"),
+    tmf_artifact_id = artifact_id,     # from the expected-documents row
+    study_id        = study,
+    study_site_id   = site_id,
+    person_id       = person_id,
+    title           = "GCP Certificate — Oduya"
+  ) |>
+  req_perform()
+
+# Approve: a Part 11 signature bound to the version's content hash
+request("http://localhost:8787") |>
+  req_url_path_append("document-versions", version_id, "sign") |>
+  req_auth_bearer_token("dev-admin-token") |>
+  req_body_json(list(meaning = "approval")) |>
+  req_perform()
+```
+
+Approval moves the document to `effective` and (outside of visit-linked
+documents) supersedes its predecessors — at which point the expected-document
+view flips from `pending_review` to `current` on its own, because it was never
+anything but a query.
+
+## The CRA's week {#the-cras-week}
+
+The [operational layer](operations.qmd) answers the questions a monitor plans a
+week around, with every lifecycle stage derived, never stored. List endpoints
+filter server-side.
+
+```r
+# Visits needing attention: overdue, or conducted without a trip report
+bind_rows(
+  ctms("studies", study, "monitoring-visits", query = list(stage = "overdue")),
+  ctms("studies", study, "monitoring-visits", query = list(stage = "awaiting_report"))
+) |>
+  select(site_number, visit_type, scheduled_date, visit_date, stage)
+
+# Open action items roll up on the same view the visit page uses
+ctms("studies", study, "monitoring-visits") |>
+  filter(open_action_items > 0) |>
+  select(site_number, visit_type, open_action_items, stage)
+
+# Unresolved major/critical issues, most urgent first
+ctms("studies", study, "issues") |>
+  filter(status != "resolved", severity %in% c("major", "critical")) |>
+  arrange(desc(status == "overdue"), due_date) |>
+  select(site_number, category, severity, title, due_date, status)
+
+# Enrollment vs target — which site gets the recruitment call
+ctms("studies", study, "enrollment") |>
+  select(site_number, enrolled, target_enrollment, pct_of_target, as_of_date)
+
+# Milestones: planned vs actual, drift visible
+ctms("studies", study, "milestones") |>
+  select(name, site_number, planned_date, actual_date, status)
+```
+
+Recording work is the same shape — schedule a visit, log a deviation, report
+counts:
+
+```r
+# Log a protocol deviation with a 14-day resolution window
+request("http://localhost:8787") |>
+  req_url_path_append("studies", study, "issues") |>
+  req_auth_bearer_token("dev-admin-token") |>
+  req_body_json(list(
+    study_site_id   = site_id,
+    category        = "protocol_deviation",
+    severity        = "major",
+    title           = "Dosing outside window, subject 002-011",
+    identified_date = as.character(Sys.Date()),
+    due_date        = as.character(Sys.Date() + 14)
+  )) |>
+  req_perform()
+
+# Report this week's enrollment counts for a site
+request("http://localhost:8787") |>
+  req_url_path_append("study-sites", site_id, "enrollment") |>
+  req_auth_bearer_token("dev-admin-token") |>
+  req_method("PUT") |>
+  req_body_json(list(
+    as_of_date = as.character(Sys.Date()),
+    screened = 14, enrolled = 9, withdrawn = 1, completed = 2
+  )) |>
+  req_perform()
+```
+
+## Auditability is an endpoint
+
+```r
+# Everything that ever happened to one document
+ctms("documents", document_id, "audit")
+
+# Verify the hash chain end-to-end
+ctms("audit-chain", "verify")
+```
+
+## The same story in Python {#the-same-story-in-python}
+
+```python
+import httpx
+import pandas as pd
+
+api = httpx.Client(
+    base_url="http://localhost:8787",
+    headers={"Authorization": "Bearer dev-monitor-token"},
+)
+
+def ctms(path, **params):
+    return pd.DataFrame(api.get(path, params=params).json())
+
+study = ctms("/studies")["id"][0]
+
+# Triage: everything not current, most urgent first
+expected = ctms(f"/studies/{study}/expected-documents")
+order = ["expired", "missing", "pending_review", "expiring_soon"]
+(expected[expected.status != "current"]
+    .assign(rank=lambda d: d.status.map(order.index))
+    .sort_values("rank")
+    [["site_number", "artifact_name", "person_family_name", "status"]])
+
+# Overdue visits, server-side filter
+ctms(f"/studies/{study}/monitoring-visits", stage="overdue")
+
+# Enrollment vs target
+ctms(f"/studies/{study}/enrollment")[
+    ["site_number", "enrolled", "target_enrollment", "pct_of_target"]]
+```
+
+Writes mirror the R examples — `api.post(...)` with a JSON body, using an
+admin token:
+
+```python
+admin = httpx.Client(
+    base_url="http://localhost:8787",
+    headers={"Authorization": "Bearer dev-admin-token"},
+)
+
+admin.post(f"/studies/{study}/issues", json={
+    "study_site_id": site_id,
+    "category": "protocol_deviation",
+    "severity": "major",
+    "title": "Dosing outside window, subject 002-011",
+    "identified_date": "2026-07-09",
+    "due_date": "2026-07-23",
+})
+```
+
+## curl one-liners {#curl-one-liners}
+
+```sh
+AUTH='Authorization: Bearer dev-monitor-token'
+BASE=http://localhost:8787
+STUDY=$(curl -s $BASE/studies -H "$AUTH" | jq -r '.[0].id')
+
+# Completeness by site
+curl -s "$BASE/studies/$STUDY/sites" -H "$AUTH" \
+  | jq -r '.[] | [.site_number, .pct_current, .missing_count] | @tsv'
+
+# What's missing or expired
+curl -s "$BASE/studies/$STUDY/expected-documents" -H "$AUTH" \
+  | jq '[.[] | select(.status == "missing" or .status == "expired")]'
+
+# Overdue monitoring visits
+curl -s "$BASE/studies/$STUDY/monitoring-visits?stage=overdue" -H "$AUTH" | jq
+
+# Verify the audit hash chain
+curl -s "$BASE/audit-chain/verify" -H "$AUTH" | jq
+```
+
+## Or skip the API entirely
+
+Every list endpoint above is a `SELECT` over a documented `v_*` view. With the
+seeded read-only role you can point `DBI`/`dbplyr` or `psycopg` straight at
+Postgres and compose against the same derived truth — see
+[direct SQL access](sql-access.qmd).
