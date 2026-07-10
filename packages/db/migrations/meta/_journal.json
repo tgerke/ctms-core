@@ -29,6 +29,20 @@
       "when": 1783696456069,
       "tag": "0003_auth_rbac",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1783697742971,
+      "tag": "0004_app_role",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1783698508572,
+      "tag": "0005_audit_taxonomy",
+      "breakpoints": true
     }
   ]
 }

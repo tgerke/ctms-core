@@ -67,7 +67,7 @@ describe("authentication (§11.10(d))", () => {
   });
 });
 
-describe("authorization (ADR-0008)", () => {
+describe("authorization (§11.10(g), ADR-0008)", () => {
   it("denies operations the role does not include, naming the permission", async () => {
     // monitor lacks 'administer'
     const res = await app.request(`/studies/${studyId}/sync-expected-documents`, {
@@ -140,6 +140,24 @@ describe("authorization (ADR-0008)", () => {
       .catch((e) => {
         if (e !== ROLLBACK) throw e;
       });
+  });
+});
+
+describe("accurate and complete copies (§11.10(b))", () => {
+  it("serves the original bytes at /files/{sha256}, verifiable against the hash", async () => {
+    const content = `copy fidelity probe ${Date.now()}`;
+    const form = uploadForm("Copy fidelity fixture");
+    form.set("file", new File([content], "fixture.pdf", { type: "application/pdf" }));
+    const up = await app.request("/documents", { method: "POST", headers: ADMIN, body: form });
+    expect(up.status).toBe(201);
+    const { sha256 } = (await up.json()) as { sha256: string };
+
+    const res = await app.request(`/files/${sha256}`, { headers: ADMIN });
+    expect(res.status).toBe(200);
+    const bytes = new Uint8Array(await res.arrayBuffer());
+    expect(new TextDecoder().decode(bytes)).toBe(content);
+    const { createHash } = await import("node:crypto");
+    expect(createHash("sha256").update(bytes).digest("hex")).toBe(sha256);
   });
 });
 

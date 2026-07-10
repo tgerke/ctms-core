@@ -10,10 +10,14 @@
     "generate": "drizzle-kit generate",
     "migrate": "tsx src/migrate.ts",
     "seed": "tsx src/seed/index.ts",
-    "typecheck": "tsc --noEmit"
+    "import-tmf": "tsx src/import-tmf.ts",
+    "typecheck": "tsc --noEmit",
+    "iq": "tsx src/iq.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1083.0",
     "drizzle-orm": "^0.36.4",
+    "exceljs": "^4.4.0",
     "postgres": "^3.4.5"
   },
   "devDependencies": {

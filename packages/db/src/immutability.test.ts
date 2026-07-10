@@ -17,7 +17,7 @@ async function inRollback(fn: (tx: typeof sql) => Promise<void>) {
     });
 }
 
-describe("append-only enforcement (Part 11 §11.10(c)/(e))", () => {
+describe("append-only enforcement (Part 11 §11.10(c) §11.10(e))", () => {
   it("rejects UPDATE on audit_event at the database level", async () => {
     await expect(
       sql`UPDATE audit_event SET actor_label = 'tampered' WHERE id = 1`,
@@ -45,7 +45,7 @@ describe("append-only enforcement (Part 11 §11.10(c)/(e))", () => {
   });
 });
 
-describe("audit trail", () => {
+describe("audit trail (§11.10(e))", () => {
   it("writes an attributed, chained event for every domain mutation", async () => {
     await inRollback(async (tx) => {
       await tx`SELECT set_config('ctms.actor_label', 'vitest', true)`;

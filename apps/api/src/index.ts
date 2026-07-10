@@ -1,11 +1,13 @@
 import { serve } from "@hono/node-server";
-import { createDb, loadEnv } from "@ctms/db";
+import { appDatabaseUrl, createDb, loadEnv } from "@ctms/db";
 import { buildApp } from "./app.js";
 import { assertAuthConfig } from "./auth.js";
 
 loadEnv();
 assertAuthConfig();
-const { db, sql } = createDb();
+// The API always runs as the least-privilege ctms_app role — dev included,
+// so privilege bugs surface before production.
+const { db, sql } = createDb(appDatabaseUrl());
 const app = buildApp(db, sql);
 const port = Number(process.env.API_PORT ?? 8787);
 

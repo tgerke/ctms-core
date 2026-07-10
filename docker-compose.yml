@@ -15,5 +15,26 @@ services:
       timeout: 2s
       retries: 15
 
+  # S3-compatible store for the s3 storage driver (WORM via Object Lock).
+  # Dev/test parity with production object storage; the local-directory driver
+  # remains the default (STORAGE_DRIVER=local).
+  minio:
+    image: minio/minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ctms
+      MINIO_ROOT_PASSWORD: ctms-minio
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - miniodata:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 2s
+      timeout: 2s
+      retries: 15
+
 volumes:
   pgdata:
+  miniodata:

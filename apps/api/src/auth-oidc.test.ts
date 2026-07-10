@@ -76,7 +76,7 @@ afterAll(async () => {
   await sql.end();
 });
 
-describe("OIDC authentication", () => {
+describe("OIDC authentication (§11.10(d))", () => {
   it("accepts a valid token and resolves the person by email claim", async () => {
     const res = await app.request("/studies", {
       headers: { Authorization: `Bearer ${await mint({})}` },

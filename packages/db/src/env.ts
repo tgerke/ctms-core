@@ -29,3 +29,18 @@ export function databaseUrl(): string {
   loadEnv();
   return process.env.DATABASE_URL ?? "postgres://ctms:ctms@localhost:5433/ctms";
 }
+
+/**
+ * Connection for the API runtime: the least-privilege ctms_app role
+ * (DML only — no TRUNCATE, no DDL, no trigger disablement, no direct
+ * audit_event writes). Migrations and seed keep the owning role via
+ * DATABASE_URL.
+ */
+export function appDatabaseUrl(): string {
+  loadEnv();
+  if (process.env.DATABASE_URL_APP) return process.env.DATABASE_URL_APP;
+  const url = new URL(databaseUrl());
+  url.username = "ctms_app";
+  url.password = process.env.CTMS_APP_PASSWORD ?? "ctms_app";
+  return url.toString();
+}

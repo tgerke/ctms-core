@@ -30,7 +30,7 @@ export interface UploadInput {
  * as pending_review; only an approval signature makes them effective.
  */
 export async function uploadDocument(db: Db, actor: Actor, input: UploadInput) {
-  const { sha256, sizeBytes } = putBlob(input.bytes);
+  const { sha256, sizeBytes } = await putBlob(input.bytes);
   return withActor(db, actor, async (tx) => {
     const scopeSite = input.studySiteId ?? null;
     const scopePerson = input.personId ?? null;

@@ -112,7 +112,7 @@ describe("derived status (ADR-0004)", () => {
 });
 
 describe("upload -> sign lifecycle", () => {
-  it("lands pending, becomes effective on approval, binds signature to hash", async () => {
+  it("lands pending, becomes effective on approval, binds signature to hash (§11.50 §11.70)", async () => {
     const sid = await studyId();
     const [ss] = await sql`SELECT id FROM study_site WHERE site_number = '001'`;
     // 05.03.02 Site Signature Sheet: no requirement rule references it, so the

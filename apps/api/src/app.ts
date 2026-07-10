@@ -32,8 +32,7 @@ import {
   type IssueStatus,
   type VisitStage,
 } from "@ctms/core";
-import { blobPath, hasBlob, type Db, type Sql } from "@ctms/db";
-import { readFile } from "node:fs/promises";
+import { getBlob, type Db, type Sql } from "@ctms/db";
 import {
   authMiddleware,
   authMode,
@@ -1027,10 +1026,8 @@ export function buildApp(db: Db, sql: Sql) {
   // Content-addressed file download (documented informally; binary response).
   app.get("/files/:sha256", async (c) => {
     const sha = c.req.param("sha256");
-    if (!/^[0-9a-f]{64}$/.test(sha) || !hasBlob(sha)) {
-      return c.json({ error: "file not found" }, 404);
-    }
-    const bytes = await readFile(blobPath(sha));
+    const bytes = /^[0-9a-f]{64}$/.test(sha) ? await getBlob(sha) : null;
+    if (!bytes) return c.json({ error: "file not found" }, 404);
     return c.body(new Uint8Array(bytes), 200, {
       "content-type": "application/pdf",
       "content-disposition": `inline; filename="${sha}.pdf"`,

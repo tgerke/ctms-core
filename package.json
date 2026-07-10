@@ -7,14 +7,18 @@
     "db:up": "docker compose up -d --wait",
     "db:migrate": "pnpm --filter @ctms/db migrate",
     "db:seed": "pnpm --filter @ctms/db seed",
+    "db:import-tmf": "pnpm --filter @ctms/db import-tmf",
     "db:reset": "docker compose down -v && docker compose up -d --wait && pnpm db:migrate && pnpm db:seed",
     "dev": "pnpm --parallel --filter @ctms/api --filter @ctms/web dev",
     "build": "pnpm -r build",
     "test": "vitest run",
+    "validation:iq": "pnpm --filter @ctms/db iq",
+    "validation:artifacts": "tsx tools/validation-artifacts.ts",
     "typecheck": "pnpm -r typecheck"
   },
   "devDependencies": {
     "@types/node": "^22.20.1",
+    "tsx": "^4.23.0",
     "typescript": "^5.6.0",
     "vitest": "^2.1.0"
   }
