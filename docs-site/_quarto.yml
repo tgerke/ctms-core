@@ -5,9 +5,8 @@ project:
 website:
   title: "ctms-core"
   description: "A regulatory-document backbone for clinical trials where completeness is a query, not a monitoring visit."
-  # Set site-url and repo-url once a GitHub remote exists, e.g.
-  # site-url: https://<org>.github.io/ctms-core/
-  # repo-url: https://github.com/<org>/ctms-core
+  site-url: https://tgerke.github.io/ctms-core/
+  repo-url: https://github.com/tgerke/ctms-core
   page-navigation: true
   navbar:
     search: true
