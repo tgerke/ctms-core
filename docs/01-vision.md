@@ -59,11 +59,13 @@ dashboard.
 
 The formal computer system validation *program* (GAMP 5 categorization, SOPs,
 training, QMS — the software generates its raw material, see docs/03-compliance.md),
-eConsent, EDC/EHR integration, site payments and budgeting, multi-tenancy hardening
-(pilots deploy single-tenant per docs/05-deployment.md), blinded-role privacy
-scoping. Formerly on this list, since built: OIDC/SSO with RBAC (ADR-0008), WORM
-object storage (ADR-0009), the full-taxonomy importer (ADR-0005), and the
-operational CTMS layer with UI (ADR-0006).
+eConsent, EDC/EHR integration beyond inbound document filing, site payments and
+budgeting, multi-tenancy hardening (pilots deploy single-tenant per
+docs/05-deployment.md), blinded-role privacy scoping. Formerly on this list, since
+built: OIDC/SSO with RBAC (ADR-0008), WORM object storage (ADR-0009), the
+full-taxonomy importer (ADR-0005), the operational CTMS layer with UI (ADR-0006),
+and the source-system filing interface — EDC and other systems file documents into
+the TMF as machine identities with provenance (ADR-0011).
 
 ## What "worth building" would look like
 

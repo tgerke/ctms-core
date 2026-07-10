@@ -84,13 +84,16 @@ Honesty about scope is part of the design:
   roadmap gap — though your EDC can *file into* the TMF through the documented
   upload API as a machine identity with provenance (ADR-0011): documents and
   aggregates come in, subject data never does.
-- **Not the full TMF Reference Model out of the box.** The seed ships an
-  illustrative subset of roughly 40 artifacts using official numbering;
-  `pnpm db:import-tmf` loads the complete CDISC model verbatim from the
-  official spreadsheet, with no schema changes.
-- **Dev-grade authentication by default.** The demo uses bearer tokens mapped
-  to seeded people; a pilot runs `AUTH_MODE=oidc` against a real identity
-  provider (Okta, Entra ID, Auth0, Keycloak) with role-based access grants.
+Formerly on this list, since built:
+
+- **The full TMF Reference Model.** `pnpm db:import-tmf` loads the complete
+  CDISC model verbatim from the official spreadsheet, with no schema changes.
+  The seed still ships an illustrative subset of roughly 40 artifacts, because
+  the licensed spreadsheet is never vendored into the repo (ADR-0005).
+- **Production authentication.** `AUTH_MODE=oidc` runs against a real identity
+  provider (Okta, Entra ID, Auth0, Keycloak) with role-based access grants
+  (ADR-0008). The demo's dev bearer tokens remain a demo affordance, not a
+  pilot configuration.
 
 ## Where to go next
 
