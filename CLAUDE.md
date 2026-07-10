@@ -1,0 +1,54 @@
+# ctms-core
+
+Sponsor/CRO-side regulatory-document backbone for clinical trials. Compliance
+(21 CFR Part 11) is enforced in the Postgres schema — triggers, immutability,
+hash-chained audit — not in app code. Design docs in `docs/`, decision log in
+`docs/decisions/` (read the ADRs before changing anything they cover).
+
+## Commands
+
+```sh
+pnpm db:up && pnpm db:migrate && pnpm db:seed && pnpm dev   # full stack
+pnpm test                    # vitest, needs Postgres (and MinIO for s3 tests)
+pnpm typecheck
+pnpm validation:iq           # installation qualification vs the live env
+pnpm validation:artifacts    # OQ report + traceability matrix (runs the suite)
+pnpm db:import-tmf -- file.xlsx   # official CDISC TMF RM spreadsheet, verbatim
+```
+
+API :8787, web :5173, Postgres :5433, MinIO :9000 (docker compose).
+
+## Constraints that will bite you
+
+- `.env` must set `AUTH_MODE` (`dev` or `oidc`) — the API refuses to boot
+  without it. Dev tokens `dev-admin-token` / `dev-monitor-token` map to seeded
+  people by email.
+- Re-seeding regenerates all UUIDs; never cache ids across seeds. `pnpm db:seed`
+  truncates — never run it against a real deployment.
+- Versions, signatures, and audit events are immutable at the DB level, so API
+  tests cannot clean up after themselves (by design). Tests use the dedicated
+  `99.99.99` fixture artifact; reset demo state with `pnpm db:seed`.
+- The API always connects as the DML-only `ctms_app` role (migration 0004).
+  If a runtime query needs DDL or TRUNCATE, the design is wrong.
+- Signing requires `reauth_token` in the request body (§11.200) — keep every
+  documented sign example consistent with this.
+- Per-visit document uploads must pass `forceNew`, and approval's
+  supersede-siblings step exempts visit-linked documents (see ADR-0006).
+
+## LLM-practice rules (these are logged ADRs, not preferences)
+
+- **Never generate TMF taxonomy content from model memory** (ADR-0005). The
+  importer loads the official CDISC Excel verbatim; the licensed file is never
+  vendored into the repo.
+- **Never hand-edit `docs/validation/`** (ADR-0010) — those files are generated
+  by `pnpm validation:artifacts` / `validation:iq` from live runs.
+- Compliance claims in docs must never run ahead of the code. When a control
+  ships, update `docs/03-compliance.md` and its mirror
+  `docs-site/compliance.qmd` together, and keep the "honest gaps" list honest.
+
+## Docs
+
+`docs/*.md` and `docs-site/*.qmd` deliberately overlap; a change to one usually
+needs the other. Rebuild the site with `quarto render` in `docs-site/`
+(rendered `_site/` is gitignored). Screenshots regenerate via
+`docs-site/screenshots.mjs` against a freshly seeded stack (ADR-0007).
