@@ -1,32 +1,61 @@
 import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { cors } from "hono/cors";
 import {
+  achieveMilestone,
   auditEvents,
+  createActionItem,
+  createIssue,
+  createMilestone,
   documentAuditTrail,
   documentDetail,
   expectedDocuments,
+  linkVisitDocument,
   listStudies,
+  reportEnrollment,
+  resolveActionItem,
+  resolveIssue,
+  scheduleVisit,
   signDocumentVersion,
   siteStaff,
+  studyEnrollment,
+  studyIssues,
+  studyMilestones,
   studySites,
+  studyVisits,
   syncExpectedDocuments,
+  updateVisit,
   uploadDocument,
   verifyAuditChain,
+  visitDetail,
   type Actor,
   type ExpectedStatus,
+  type IssueStatus,
+  type VisitStage,
 } from "@ctms/core";
 import { blobPath, hasBlob, type Db, type Sql } from "@ctms/db";
 import { readFile } from "node:fs/promises";
 import { authMiddleware, configureTokens } from "./auth.js";
 import {
+  ActionItemSchema,
   AuditEventSchema,
   DocumentDetailSchema,
   ErrorSchema,
   ExpectedDocumentSchema,
   ExpectedStatusSchema,
+  IssueCategorySchema,
+  IssueSchema,
+  IssueSeveritySchema,
+  IssueStatusSchema,
+  MilestoneSchema,
+  MonitoringVisitSchema,
   SiteCompletenessSchema,
+  SiteEnrollmentSchema,
   StaffMemberSchema,
   StudySchema,
+  VisitDetailSchema,
+  VisitDocumentLinkSchema,
+  VisitStageSchema,
+  VisitTypeSchema,
 } from "./schemas.js";
 
 type Env = { Variables: { actor: Actor } };
@@ -72,6 +101,10 @@ export function buildApp(db: Db, sql: Sql) {
   app.use("/audit-events", authMiddleware(sql));
   app.use("/audit-chain/*", authMiddleware(sql));
   app.use("/files/*", authMiddleware(sql));
+  app.use("/monitoring-visits/*", authMiddleware(sql));
+  app.use("/action-items/*", authMiddleware(sql));
+  app.use("/issues/*", authMiddleware(sql));
+  app.use("/milestones/*", authMiddleware(sql));
 
   app.openapi(
     createRoute({
@@ -351,6 +384,555 @@ export function buildApp(db: Db, sql: Sql) {
         { events, valid: problems.length === 0, problems: [...problems] },
         200,
       );
+    },
+  );
+
+  // --- Operational layer (ADR-0006): monitoring visits ----------------------
+
+  app.openapi(
+    createRoute({
+      method: "get",
+      path: "/studies/{studyId}/monitoring-visits",
+      security,
+      summary: "Monitoring visits with derived lifecycle stage",
+      description:
+        "Stage is derived by v_monitoring_visit_status from dated facts, the linked trip report's document status, and open action items — never stored.",
+      request: {
+        params: z.object({ studyId: z.string().uuid() }),
+        query: z.object({
+          study_site_id: z.string().uuid().optional(),
+          stage: VisitStageSchema.optional(),
+        }),
+      },
+      responses: { 200: json(z.array(MonitoringVisitSchema), "Visits") },
+    }),
+    async (c) => {
+      const q = c.req.valid("query");
+      const rows = await studyVisits(sql, {
+        studyId: c.req.valid("param").studyId,
+        studySiteId: q.study_site_id,
+        stage: q.stage as VisitStage | undefined,
+      });
+      return c.json(rows as never, 200);
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: "post",
+      path: "/studies/{studyId}/monitoring-visits",
+      security,
+      summary: "Schedule a monitoring visit",
+      request: {
+        params: z.object({ studyId: z.string().uuid() }),
+        body: {
+          content: {
+            "application/json": {
+              schema: z.object({
+                study_site_id: z.string().uuid(),
+                visit_type: VisitTypeSchema,
+                scheduled_date: z.string().date(),
+                monitor_person_id: z.string().uuid().optional(),
+              }),
+            },
+          },
+        },
+      },
+      responses: { 201: json(z.object({ id: z.string().uuid() }), "Scheduled") },
+    }),
+    async (c) => {
+      const body = c.req.valid("json");
+      const visit = await scheduleVisit(db, c.get("actor"), {
+        studySiteId: body.study_site_id,
+        visitType: body.visit_type,
+        scheduledDate: body.scheduled_date,
+        monitorPersonId: body.monitor_person_id ?? null,
+      });
+      return c.json({ id: visit.id }, 201);
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: "get",
+      path: "/monitoring-visits/{visitId}",
+      security,
+      summary: "Visit detail: stage, linked documents, action items, issues",
+      request: { params: z.object({ visitId: z.string().uuid() }) },
+      responses: {
+        200: json(VisitDetailSchema, "Visit detail"),
+        404: json(ErrorSchema, "Not found"),
+      },
+    }),
+    async (c) => {
+      const detail = await visitDetail(sql, c.req.valid("param").visitId);
+      if (!detail) return c.json({ error: "monitoring visit not found" }, 404);
+      return c.json(detail as never, 200);
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: "patch",
+      path: "/monitoring-visits/{visitId}",
+      security,
+      summary: "Record visit facts (conducted date, monitor, summary)",
+      description:
+        "Setting visit_date marks the visit conducted; the stage advances by derivation, not by a status write.",
+      request: {
+        params: z.object({ visitId: z.string().uuid() }),
+        body: {
+          content: {
+            "application/json": {
+              schema: z.object({
+                scheduled_date: z.string().date().optional(),
+                visit_date: z.string().date().nullable().optional(),
+                monitor_person_id: z.string().uuid().nullable().optional(),
+                summary: z.string().nullable().optional(),
+              }),
+            },
+          },
+        },
+      },
+      responses: {
+        200: json(z.object({ id: z.string().uuid() }), "Updated"),
+        404: json(ErrorSchema, "Not found"),
+      },
+    }),
+    async (c) => {
+      const body = c.req.valid("json");
+      const visit = await updateVisit(db, c.get("actor"), {
+        monitoringVisitId: c.req.valid("param").visitId,
+        scheduledDate: body.scheduled_date,
+        visitDate: body.visit_date,
+        monitorPersonId: body.monitor_person_id,
+        summary: body.summary,
+      });
+      return c.json({ id: visit.id }, 200);
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: "post",
+      path: "/monitoring-visits/{visitId}/documents",
+      security,
+      summary: "Upload a visit document (trip report, letters) and link it",
+      description:
+        "Creates a fresh document scoped to the visit's site (each visit's report is its own record, never a version of another visit's) and links it with the given kind. Approval-signing a linked trip report advances the visit stage.",
+      request: {
+        params: z.object({ visitId: z.string().uuid() }),
+        body: {
+          content: {
+            "multipart/form-data": {
+              schema: z.object({
+                file: z.custom<File>((v) => v instanceof File, "file required"),
+                tmf_artifact_id: z.coerce.number().int(),
+                title: z.string().min(1),
+                link_kind: VisitDocumentLinkSchema,
+              }),
+            },
+          },
+        },
+      },
+      responses: {
+        201: json(
+          z.object({
+            document_id: z.string().uuid(),
+            version_id: z.string().uuid(),
+            sha256: z.string().length(64),
+          }),
+          "Uploaded and linked",
+        ),
+        404: json(ErrorSchema, "Not found"),
+      },
+    }),
+    async (c) => {
+      const visitId = c.req.valid("param").visitId;
+      const [visit] = await sql`
+        SELECT mv.id, mv.study_site_id, ss.study_id
+        FROM monitoring_visit mv
+        JOIN study_site ss ON ss.id = mv.study_site_id
+        WHERE mv.id = ${visitId}`;
+      if (!visit) return c.json({ error: "monitoring visit not found" }, 404);
+      const form = c.req.valid("form");
+      const actor = c.get("actor");
+      const result = await uploadDocument(db, actor, {
+        tmfArtifactId: form.tmf_artifact_id,
+        studyId: visit.study_id,
+        studySiteId: visit.study_site_id,
+        personId: null,
+        title: form.title,
+        fileName: form.file.name,
+        mimeType: form.file.type || "application/octet-stream",
+        bytes: new Uint8Array(await form.file.arrayBuffer()),
+        forceNew: true,
+      });
+      await linkVisitDocument(db, actor, {
+        monitoringVisitId: visitId,
+        documentId: result.document.id,
+        linkKind: form.link_kind,
+      });
+      return c.json(
+        { document_id: result.document.id, version_id: result.version.id, sha256: result.sha256 },
+        201,
+      );
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: "post",
+      path: "/monitoring-visits/{visitId}/document-links",
+      security,
+      summary: "Link an existing document to a visit",
+      request: {
+        params: z.object({ visitId: z.string().uuid() }),
+        body: {
+          content: {
+            "application/json": {
+              schema: z.object({
+                document_id: z.string().uuid(),
+                link_kind: VisitDocumentLinkSchema,
+              }),
+            },
+          },
+        },
+      },
+      responses: { 201: json(z.object({ id: z.string().uuid() }), "Linked") },
+    }),
+    async (c) => {
+      const body = c.req.valid("json");
+      const link = await linkVisitDocument(db, c.get("actor"), {
+        monitoringVisitId: c.req.valid("param").visitId,
+        documentId: body.document_id,
+        linkKind: body.link_kind,
+      });
+      return c.json({ id: link.id }, 201);
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: "post",
+      path: "/monitoring-visits/{visitId}/action-items",
+      security,
+      summary: "Raise a visit action item",
+      request: {
+        params: z.object({ visitId: z.string().uuid() }),
+        body: {
+          content: {
+            "application/json": {
+              schema: z.object({
+                description: z.string().min(1),
+                due_date: z.string().date().optional(),
+              }),
+            },
+          },
+        },
+      },
+      responses: { 201: json(z.object({ id: z.string().uuid() }), "Created") },
+    }),
+    async (c) => {
+      const body = c.req.valid("json");
+      const item = await createActionItem(db, c.get("actor"), {
+        monitoringVisitId: c.req.valid("param").visitId,
+        description: body.description,
+        dueDate: body.due_date ?? null,
+      });
+      return c.json({ id: item.id }, 201);
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: "patch",
+      path: "/action-items/{actionItemId}",
+      security,
+      summary: "Resolve an action item",
+      request: {
+        params: z.object({ actionItemId: z.string().uuid() }),
+        body: {
+          content: {
+            "application/json": {
+              schema: z.object({
+                resolution_note: z.string().optional(),
+                resolved_at: z.string().date().optional(),
+              }),
+            },
+          },
+        },
+      },
+      responses: {
+        200: json(z.object({ id: z.string().uuid() }), "Resolved"),
+        400: json(ErrorSchema, "Invalid input"),
+      },
+    }),
+    async (c) => {
+      const actor = c.get("actor");
+      if (!actor.personId) {
+        return c.json({ error: "resolving requires a person-linked token" }, 400);
+      }
+      const body = c.req.valid("json");
+      const item = await resolveActionItem(db, actor, {
+        actionItemId: c.req.valid("param").actionItemId,
+        resolvedBy: actor.personId,
+        resolvedAt: body.resolved_at,
+        resolutionNote: body.resolution_note ?? null,
+      });
+      return c.json({ id: item.id }, 200);
+    },
+  );
+
+  // --- Operational layer: issues --------------------------------------------
+
+  app.openapi(
+    createRoute({
+      method: "get",
+      path: "/studies/{studyId}/issues",
+      security,
+      summary: "Issues and deviations with derived status",
+      request: {
+        params: z.object({ studyId: z.string().uuid() }),
+        query: z.object({
+          study_site_id: z.string().uuid().optional(),
+          status: IssueStatusSchema.optional(),
+          category: IssueCategorySchema.optional(),
+          severity: IssueSeveritySchema.optional(),
+        }),
+      },
+      responses: { 200: json(z.array(IssueSchema), "Issues") },
+    }),
+    async (c) => {
+      const q = c.req.valid("query");
+      const rows = await studyIssues(sql, {
+        studyId: c.req.valid("param").studyId,
+        studySiteId: q.study_site_id,
+        status: q.status as IssueStatus | undefined,
+        category: q.category,
+        severity: q.severity,
+      });
+      return c.json(rows as never, 200);
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: "post",
+      path: "/studies/{studyId}/issues",
+      security,
+      summary: "Record an issue or protocol deviation",
+      request: {
+        params: z.object({ studyId: z.string().uuid() }),
+        body: {
+          content: {
+            "application/json": {
+              schema: z.object({
+                study_site_id: z.string().uuid().optional(),
+                monitoring_visit_id: z.string().uuid().optional(),
+                category: IssueCategorySchema,
+                severity: IssueSeveritySchema,
+                title: z.string().min(1),
+                description: z.string().optional(),
+                identified_date: z.string().date(),
+                due_date: z.string().date().optional(),
+              }),
+            },
+          },
+        },
+      },
+      responses: { 201: json(z.object({ id: z.string().uuid() }), "Created") },
+    }),
+    async (c) => {
+      const body = c.req.valid("json");
+      const actor = c.get("actor");
+      const created = await createIssue(db, actor, {
+        studyId: c.req.valid("param").studyId,
+        studySiteId: body.study_site_id ?? null,
+        monitoringVisitId: body.monitoring_visit_id ?? null,
+        category: body.category,
+        severity: body.severity,
+        title: body.title,
+        description: body.description ?? null,
+        identifiedDate: body.identified_date,
+        identifiedBy: actor.personId ?? null,
+        dueDate: body.due_date ?? null,
+      });
+      return c.json({ id: created.id }, 201);
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: "patch",
+      path: "/issues/{issueId}",
+      security,
+      summary: "Resolve an issue",
+      request: {
+        params: z.object({ issueId: z.string().uuid() }),
+        body: {
+          content: {
+            "application/json": {
+              schema: z.object({
+                resolution_note: z.string().optional(),
+                resolved_at: z.string().date().optional(),
+              }),
+            },
+          },
+        },
+      },
+      responses: {
+        200: json(z.object({ id: z.string().uuid() }), "Resolved"),
+        400: json(ErrorSchema, "Invalid input"),
+      },
+    }),
+    async (c) => {
+      const actor = c.get("actor");
+      if (!actor.personId) {
+        return c.json({ error: "resolving requires a person-linked token" }, 400);
+      }
+      const body = c.req.valid("json");
+      const resolved = await resolveIssue(db, actor, {
+        issueId: c.req.valid("param").issueId,
+        resolvedBy: actor.personId,
+        resolvedAt: body.resolved_at,
+        resolutionNote: body.resolution_note ?? null,
+      });
+      return c.json({ id: resolved.id }, 200);
+    },
+  );
+
+  // --- Operational layer: enrollment and milestones --------------------------
+
+  app.openapi(
+    createRoute({
+      method: "get",
+      path: "/studies/{studyId}/enrollment",
+      security,
+      summary: "Latest as-reported enrollment per site vs target",
+      description:
+        "Operational aggregates as reported by sites — never subject-level clinical data (EDC owns that; ADR-0006).",
+      request: { params: z.object({ studyId: z.string().uuid() }) },
+      responses: { 200: json(z.array(SiteEnrollmentSchema), "Per-site enrollment") },
+    }),
+    async (c) =>
+      c.json((await studyEnrollment(sql, c.req.valid("param").studyId)) as never, 200),
+  );
+
+  app.openapi(
+    createRoute({
+      method: "put",
+      path: "/study-sites/{studySiteId}/enrollment",
+      security,
+      summary: "Report enrollment counts as of a date (upsert)",
+      description:
+        "One row per (site, as_of_date); re-submitting the same date is an audited correction with before/after row images.",
+      request: {
+        params: z.object({ studySiteId: z.string().uuid() }),
+        body: {
+          content: {
+            "application/json": {
+              schema: z.object({
+                as_of_date: z.string().date(),
+                screened: z.number().int().min(0),
+                enrolled: z.number().int().min(0),
+                withdrawn: z.number().int().min(0),
+                completed: z.number().int().min(0),
+              }),
+            },
+          },
+        },
+      },
+      responses: { 200: json(z.object({ id: z.string().uuid() }), "Reported") },
+    }),
+    async (c) => {
+      const body = c.req.valid("json");
+      const actor = c.get("actor");
+      const row = await reportEnrollment(db, actor, {
+        studySiteId: c.req.valid("param").studySiteId,
+        asOfDate: body.as_of_date,
+        screened: body.screened,
+        enrolled: body.enrolled,
+        withdrawn: body.withdrawn,
+        completed: body.completed,
+        reportedBy: actor.personId ?? null,
+      });
+      return c.json({ id: row.id }, 200);
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: "get",
+      path: "/studies/{studyId}/milestones",
+      security,
+      summary: "Study and site milestones, planned vs actual",
+      request: { params: z.object({ studyId: z.string().uuid() }) },
+      responses: { 200: json(z.array(MilestoneSchema), "Milestones") },
+    }),
+    async (c) =>
+      c.json((await studyMilestones(sql, c.req.valid("param").studyId)) as never, 200),
+  );
+
+  app.openapi(
+    createRoute({
+      method: "post",
+      path: "/studies/{studyId}/milestones",
+      security,
+      summary: "Create a milestone",
+      request: {
+        params: z.object({ studyId: z.string().uuid() }),
+        body: {
+          content: {
+            "application/json": {
+              schema: z.object({
+                study_site_id: z.string().uuid().optional(),
+                name: z.string().min(1),
+                planned_date: z.string().date(),
+              }),
+            },
+          },
+        },
+      },
+      responses: { 201: json(z.object({ id: z.string().uuid() }), "Created") },
+    }),
+    async (c) => {
+      const body = c.req.valid("json");
+      const created = await createMilestone(db, c.get("actor"), {
+        studyId: c.req.valid("param").studyId,
+        studySiteId: body.study_site_id ?? null,
+        name: body.name,
+        plannedDate: body.planned_date,
+      });
+      return c.json({ id: created.id }, 201);
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: "patch",
+      path: "/milestones/{milestoneId}",
+      security,
+      summary: "Record a milestone as achieved",
+      request: {
+        params: z.object({ milestoneId: z.string().uuid() }),
+        body: {
+          content: {
+            "application/json": {
+              schema: z.object({ actual_date: z.string().date().optional() }),
+            },
+          },
+        },
+      },
+      responses: { 200: json(z.object({ id: z.string().uuid() }), "Achieved") },
+    }),
+    async (c) => {
+      const body = c.req.valid("json");
+      const updated = await achieveMilestone(db, c.get("actor"), {
+        milestoneId: c.req.valid("param").milestoneId,
+        actualDate: body.actual_date,
+      });
+      return c.json({ id: updated.id }, 200);
     },
   );
 

@@ -107,3 +107,142 @@ export const DocumentDetailSchema = z
 export const ErrorSchema = z
   .object({ error: z.string() })
   .openapi("Error");
+
+// --- Operational layer -------------------------------------------------------
+
+export const VisitTypeSchema = z
+  .enum(["pre_study", "initiation", "interim", "close_out"])
+  .openapi("VisitType");
+
+export const VisitStageSchema = z
+  .enum([
+    "scheduled",
+    "overdue",
+    "awaiting_report",
+    "report_pending_review",
+    "follow_up",
+    "complete",
+  ])
+  .openapi("VisitStage");
+
+export const VisitDocumentLinkSchema = z
+  .enum(["trip_report", "confirmation_letter", "follow_up_letter"])
+  .openapi("VisitDocumentLink");
+
+export const MonitoringVisitSchema = z
+  .object({
+    monitoring_visit_id: z.string().uuid(),
+    study_id: z.string().uuid(),
+    study_site_id: z.string().uuid(),
+    site_number: z.string(),
+    site_name: z.string(),
+    visit_type: VisitTypeSchema,
+    scheduled_date: z.string(),
+    visit_date: z.string().nullable(),
+    monitor_person_id: z.string().uuid().nullable(),
+    monitor_given_name: z.string().nullable(),
+    monitor_family_name: z.string().nullable(),
+    summary: z.string().nullable(),
+    trip_report_document_id: z.string().uuid().nullable(),
+    trip_report_status: z.string().nullable(),
+    open_action_items: z.number().int(),
+    total_action_items: z.number().int(),
+    stage: VisitStageSchema,
+  })
+  .openapi("MonitoringVisit");
+
+export const ActionItemSchema = z
+  .object({
+    id: z.string().uuid(),
+    monitoring_visit_id: z.string().uuid(),
+    description: z.string(),
+    due_date: z.string().nullable(),
+    resolved_at: z.string().nullable(),
+    resolved_by: z.string().uuid().nullable(),
+    resolved_by_given_name: z.string().nullable(),
+    resolved_by_family_name: z.string().nullable(),
+    resolution_note: z.string().nullable(),
+    created_at: z.string(),
+    status: z.enum(["open", "overdue", "resolved"]),
+  })
+  .openapi("ActionItem");
+
+export const IssueCategorySchema = z
+  .enum(["protocol_deviation", "monitoring_finding", "safety", "data_quality", "other"])
+  .openapi("IssueCategory");
+
+export const IssueSeveritySchema = z.enum(["minor", "major", "critical"]).openapi("IssueSeverity");
+
+export const IssueStatusSchema = z.enum(["open", "overdue", "resolved"]).openapi("IssueStatus");
+
+export const IssueSchema = z
+  .object({
+    id: z.string().uuid(),
+    study_id: z.string().uuid(),
+    study_site_id: z.string().uuid().nullable(),
+    monitoring_visit_id: z.string().uuid().nullable(),
+    site_number: z.string().nullable(),
+    site_name: z.string().nullable(),
+    category: IssueCategorySchema,
+    severity: IssueSeveritySchema,
+    title: z.string(),
+    description: z.string().nullable(),
+    identified_date: z.string(),
+    identified_by: z.string().uuid().nullable(),
+    identified_by_given_name: z.string().nullable().optional(),
+    identified_by_family_name: z.string().nullable().optional(),
+    due_date: z.string().nullable(),
+    resolved_at: z.string().nullable(),
+    resolved_by: z.string().uuid().nullable(),
+    resolution_note: z.string().nullable(),
+    created_at: z.string(),
+    status: IssueStatusSchema,
+  })
+  .openapi("Issue");
+
+export const SiteEnrollmentSchema = z
+  .object({
+    study_id: z.string().uuid(),
+    study_site_id: z.string().uuid(),
+    site_number: z.string(),
+    site_name: z.string(),
+    target_enrollment: z.number().int().nullable(),
+    as_of_date: z.string().nullable(),
+    screened: z.number().int().nullable(),
+    enrolled: z.number().int().nullable(),
+    withdrawn: z.number().int().nullable(),
+    completed: z.number().int().nullable(),
+    pct_of_target: z.union([z.number(), z.string()]).nullable(),
+  })
+  .openapi("SiteEnrollment");
+
+export const MilestoneSchema = z
+  .object({
+    id: z.string().uuid(),
+    study_id: z.string().uuid(),
+    study_site_id: z.string().uuid().nullable(),
+    site_number: z.string().nullable(),
+    name: z.string(),
+    planned_date: z.string(),
+    actual_date: z.string().nullable(),
+    created_at: z.string(),
+    status: z.enum(["achieved", "overdue", "upcoming"]),
+  })
+  .openapi("Milestone");
+
+export const VisitDetailSchema = z
+  .object({
+    visit: MonitoringVisitSchema,
+    documents: z.array(
+      z.object({
+        link_kind: VisitDocumentLinkSchema,
+        document_id: z.string().uuid(),
+        title: z.string(),
+        status: z.string(),
+        effective_date: z.string().nullable(),
+      }),
+    ),
+    actionItems: z.array(ActionItemSchema),
+    issues: z.array(IssueSchema),
+  })
+  .openapi("VisitDetail");
