@@ -42,6 +42,11 @@ API :8787, web :5173, Postgres :5433, MinIO :9000 (docker compose).
   vendored into the repo.
 - **Never hand-edit `docs/validation/`** (ADR-0010) — those files are generated
   by `pnpm validation:artifacts` / `validation:iq` from live runs.
+- **Never write regulatory specifics from model memory.** Any GAMP 5, Part 11,
+  ICH, or CDISC-specific claim in docs must be verified against the full texts
+  in `~/claude-clinical-skills/sources/`, citing the section (e.g. GAMP 5
+  2nd ed. Appendix M4). A plausible from-memory GAMP claim has already been
+  caught subtly wrong once.
 - Compliance claims in docs must never run ahead of the code. When a control
   ships, update `docs/03-compliance.md` and its mirror
   `docs-site/compliance.qmd` together, and keep the "honest gaps" list honest.
