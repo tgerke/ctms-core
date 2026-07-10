@@ -57,3 +57,10 @@ software — the formal CSV program is organizational work; see
 [docs/03-compliance.md](docs/03-compliance.md) for what "compliant-by-design"
 does and does not claim, and [docs/05-deployment.md](docs/05-deployment.md) for
 the pilot checklist.
+
+## License
+
+[AGPL-3.0](LICENSE). Same license as its sibling project
+[edc-core](https://github.com/tgerke/edc-core), for the same reason: anyone can
+run, study, and improve this, and nobody can take it closed and sell it back to
+the sites and sponsors it serves.
