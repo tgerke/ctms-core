@@ -100,8 +100,17 @@ request("http://localhost:8787") |>
   req_perform()
 ```
 
+`approval` is one of three signature meanings — `author` and `review` record
+attestations without changing status; only `approval` makes a version
+effective and supersedes its non-visit-linked predecessors. The upload accepts
+two optional provenance fields, `source_system` and `source_ref`, for
+source-system filing (ADR-0011): filed versions land as `pending_review` like
+any upload and show a "filed by" chip in the UI.
+
 Both calls leave hash-chained audit events attributed to the token's person;
-`GET /audit-chain/verify` confirms the chain end-to-end.
+`GET /audit-chain/verify` confirms the chain end-to-end, and
+`GET /files/{sha256}` returns the exact bytes a signature covers — storage is
+content-addressed, so the hash on the signature row is also the retrieval key.
 
 ## The CRA's week, from R
 
@@ -152,6 +161,15 @@ request("http://localhost:8787") |>
   )) |>
   req_perform()
 ```
+
+Visit facts (conducted date, monitor, summary, a new scheduled date) are
+`PATCH /monitoring-visits/{id}` — the derived stage recomputes.
+`POST /monitoring-visits/{id}/document-links` attaches an already-filed
+document to a visit (`link_kind`: `trip_report`, `confirmation_letter`,
+`follow_up_letter`). When requirement rules or role assignments change, an
+admin re-runs `POST /studies/{id}/sync-expected-documents` — idempotent:
+inserts what's newly expected, prunes unfulfilled placeholders that no longer
+apply.
 
 ## Skip the API entirely: the views are the contract
 

@@ -100,6 +100,27 @@ documents) supersedes its predecessors — at which point the expected-document
 view flips from `pending_review` to `current` on its own, because it was never
 anything but a query.
 
+`approval` is one of three signature meanings. `author` and `review` record
+attestations on a version without changing its status; only `approval` makes
+it effective. All three are Part 11 signatures — signer, timestamp, meaning,
+bound to the content hash.
+
+### Filing from another system
+
+Source systems — an EDC first — file documents through the same endpoint,
+with two optional provenance fields:
+
+```r
+# ... the same multipart upload, plus:
+    source_system = "edc-core",
+    source_ref    = "casebook 002-011"
+```
+
+The version lands as `pending_review` like any upload (a human still
+approves), and its row on the document page carries a "filed by edc-core"
+chip. Machine identities hold the `ingest` role — read and upload, never
+sign (see [ADR-0011](decisions.qmd#adr-0011-a-generic-source-system-filing-interface-edc-integration-stays-outside-the-data-boundary)).
+
 ## The CRA's week {#the-cras-week}
 
 The [operational layer](operations.qmd) answers the questions a monitor plans a
@@ -162,6 +183,39 @@ request("http://localhost:8787") |>
     screened = 14, enrolled = 9, withdrawn = 1, completed = 2
   )) |>
   req_perform()
+
+# Reschedule an overdue visit — PATCH the fact, the stage recomputes
+request("http://localhost:8787") |>
+  req_url_path_append("monitoring-visits", visit_id) |>
+  req_auth_bearer_token("dev-admin-token") |>
+  req_method("PATCH") |>
+  req_body_json(list(scheduled_date = as.character(Sys.Date() + 21))) |>
+  req_perform()
+
+# Attach an already-filed document to a visit (confirmation or follow-up letter)
+request("http://localhost:8787") |>
+  req_url_path_append("monitoring-visits", visit_id, "document-links") |>
+  req_auth_bearer_token("dev-admin-token") |>
+  req_body_json(list(document_id = document_id, link_kind = "follow_up_letter")) |>
+  req_perform()
+```
+
+The same `PATCH` records the visit's conducted date, monitor, and summary;
+`link_kind` is `trip_report`, `confirmation_letter`, or `follow_up_letter`.
+
+## The admin corner
+
+When requirement rules or staff role assignments change (today that means
+SQL — see the [roadmap](roadmap.qmd)), an admin re-materializes the
+expected-document placeholders. The sync is idempotent: it inserts what's
+newly expected and prunes unfulfilled placeholders that no longer apply.
+
+```r
+request("http://localhost:8787") |>
+  req_url_path_append("studies", study, "sync-expected-documents") |>
+  req_auth_bearer_token("dev-admin-token") |>
+  req_method("POST") |>
+  req_perform()
 ```
 
 ## Auditability is an endpoint
@@ -172,7 +226,19 @@ ctms("documents", document_id, "audit")
 
 # Verify the hash chain end-to-end
 ctms("audit-chain", "verify")
+
+# Retrieve the exact bytes a signature covers, by content hash
+request("http://localhost:8787") |>
+  req_url_path_append("files", sha256) |>
+  req_auth_bearer_token("dev-monitor-token") |>
+  req_perform() |>
+  resp_body_raw() |>
+  writeBin("signed_version.pdf")
 ```
+
+Storage is content-addressed: `GET /files/{sha256}` returns the version whose
+hash that is, so "give me the file this signature signed" needs nothing but
+the hash recorded on the signature row.
 
 ## The same story in Python {#the-same-story-in-python}
 

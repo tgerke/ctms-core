@@ -73,6 +73,20 @@ Two things you won't find, on purpose:
   visit; each visit's report is its own record, uploaded from the
   [visit page](monitoring-visits.qmd).
 
+## Documents filed by other systems
+
+Not every upload comes from a person. Connected systems — an electronic data
+capture system, for example — can file documents into the binder
+automatically. A version filed this way looks like any other in the Versions
+card, with one addition: a small chip reading **filed by** and the system's
+name, so the file's origin is never a mystery.
+
+Automated filings get no special treatment. They land in **Pending review**
+exactly like a hand upload, and a person with approval authority still reads
+and signs before anything counts as current. The connected system itself
+can never sign or approve — see
+[who can do what](index.qmd#who-can-do-what).
+
 ## The audit trail, briefly
 
 Every document page ends with its audit trail: every insert, update, and

@@ -10,7 +10,7 @@ just to do the next thing; the stage follows.
 | When you see… | It means… | The next step is… |
 | --- | --- | --- |
 | **Scheduled** | The visit date is still ahead | Nothing — until the visit happens |
-| **Overdue** | The scheduled date passed with no visit recorded | Conduct the visit, or reschedule it |
+| **Overdue** | The scheduled date passed with no visit recorded | Conduct the visit and record it |
 | **Awaiting report** | Conducted, but no trip report yet | Upload the trip report |
 | **Report in review** | Report uploaded, not yet approved | Review and approve the report |
 | **Follow-up** | Report approved, action items still open | Resolve the action items |
@@ -26,6 +26,10 @@ site page and the dashboard as **Scheduled**.
 
 If the scheduled date passes without a visit being recorded, the stage flips
 to **Overdue** on its own — nobody has to notice.
+
+There's no reschedule button yet: if a visit date genuinely needs to move,
+that's currently an API change your data team can make in one call (see the
+[cookbook](../cookbook.qmd#the-cras-week)).
 
 ## Recording the visit
 
