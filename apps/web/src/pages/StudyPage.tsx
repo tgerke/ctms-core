@@ -6,13 +6,22 @@ import {
   useIssues,
   useMilestones,
   useSites,
+  useStudies,
   useVisits,
   type ExpectedDocument,
   type IssueStatus,
   type Study,
   type VisitStage,
 } from "../api";
-import { EnrollmentBars, IssueListItem, MilestoneStrip, VisitListItem } from "../ops";
+import {
+  AddMilestoneForm,
+  EnrollmentBars,
+  IssueListItem,
+  MilestoneStrip,
+  NewIssueForm,
+  PageState,
+  VisitListItem,
+} from "../ops";
 import {
   ISSUE_STATUS,
   SpecChip,
@@ -43,6 +52,8 @@ function StatTile({
 }
 
 export default function StudyPage({ study }: { study: Study | undefined }) {
+  // Same cached query App uses to pick the study; here only for load/error state.
+  const studiesQuery = useStudies();
   const { data: sites } = useSites(study?.id);
   const { data: expected } = useExpected(study?.id);
   const navigate = useNavigate();
@@ -108,7 +119,7 @@ export default function StudyPage({ study }: { study: Study | undefined }) {
     return { grid: ruleIndex, zones, studyLevel, stats };
   }, [expected]);
 
-  if (!study) return <div className="text-ink2">Loading study…</div>;
+  if (!study) return <PageState query={studiesQuery} label="study" />;
 
   return (
     <div className="space-y-6">
@@ -140,7 +151,10 @@ export default function StudyPage({ study }: { study: Study | undefined }) {
           <span className="text-xs font-normal text-muted">planned vs actual — derived</span>
         </h2>
         <div className="px-4 py-3">
-          <MilestoneStrip milestones={milestones ?? []} />
+          <MilestoneStrip milestones={milestones ?? []} achievable />
+        </div>
+        <div className="border-t border-hairline px-4 py-3">
+          <AddMilestoneForm studyId={study.id} sites={sites ?? []} />
         </div>
       </section>
 
@@ -206,6 +220,9 @@ export default function StudyPage({ study }: { study: Study | undefined }) {
             ))}
           </ul>
         )}
+        <div className="border-t border-hairline px-4 py-3">
+          <NewIssueForm studyId={study.id} />
+        </div>
       </section>
 
       {/* Completeness grid: requirements × sites */}

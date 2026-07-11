@@ -14,7 +14,10 @@ import {
 } from "../api";
 import {
   EnrollmentBars,
+  ErrorNote,
   IssueListItem,
+  NewIssueForm,
+  PageState,
   ReportEnrollmentForm,
   ScheduleVisitForm,
   VisitListItem,
@@ -31,7 +34,8 @@ const ROLE_LABEL: Record<string, string> = {
 
 export default function SitePage({ study }: { study: Study | undefined }) {
   const { studySiteId } = useParams();
-  const { data: sites } = useSites(study?.id);
+  const sitesQuery = useSites(study?.id);
+  const sites = sitesQuery.data;
   const site = sites?.find((s) => s.study_site_id === studySiteId);
   const { data: expected } = useExpected(study?.id, { studySiteId });
   const { data: staff } = useStaff(studySiteId);
@@ -49,7 +53,7 @@ export default function SitePage({ study }: { study: Study | undefined }) {
     return zones;
   }, [expected]);
 
-  if (!study || !site) return <div className="text-ink2">Loading site…</div>;
+  if (!study || !site) return <PageState query={sitesQuery} label="site" />;
 
   return (
     <div className="space-y-6">
@@ -129,6 +133,9 @@ export default function SitePage({ study }: { study: Study | undefined }) {
             ))}
           </ul>
         )}
+        <div className="border-t border-hairline px-4 py-3">
+          <NewIssueForm studyId={study.id} studySiteId={site.study_site_id} />
+        </div>
       </section>
 
       <section className="card">
@@ -166,7 +173,7 @@ export default function SitePage({ study }: { study: Study | undefined }) {
 function ExpectedRow({ row }: { row: ExpectedDocument }) {
   const upload = useUpload();
   const fileRef = useRef<HTMLInputElement>(null);
-  const [err, setErr] = useState<string | null>(null);
+  const [err, setErr] = useState<unknown>(null);
 
   const person =
     row.person_id && `${row.person_given_name} ${row.person_family_name}`;
@@ -210,7 +217,7 @@ function ExpectedRow({ row }: { row: ExpectedDocument }) {
                       ? `${row.artifact_name} — ${person}`
                       : `${row.artifact_name} — Site ${row.site_number}`,
                   },
-                  { onError: (e) => setErr(String(e)) },
+                  { onError: (e) => setErr(e) },
                 );
                 e.target.value = "";
               }}
@@ -227,7 +234,7 @@ function ExpectedRow({ row }: { row: ExpectedDocument }) {
         )}
         <StatusChip status={row.status} />
       </div>
-      {err && <div className="w-full text-xs" style={{ color: "var(--status-critical)" }}>{err}</div>}
+      <ErrorNote error={err} className="w-full" />
     </li>
   );
 }

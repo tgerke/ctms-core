@@ -106,7 +106,9 @@ export async function documentDetail(sql: Sql, documentId: string) {
   const docs = await sql`
     SELECT d.*, ta.code AS artifact_code, ta.name AS artifact_name,
            ss.site_number, si.name AS site_name,
-           p.given_name AS person_given_name, p.family_name AS person_family_name
+           p.given_name AS person_given_name, p.family_name AS person_family_name,
+           EXISTS (SELECT 1 FROM monitoring_visit_document mvd
+                   WHERE mvd.document_id = d.id) AS visit_linked
     FROM document d
     JOIN tmf_artifact ta ON ta.id = d.tmf_artifact_id
     LEFT JOIN study_site ss ON ss.id = d.study_site_id

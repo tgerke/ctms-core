@@ -1,18 +1,24 @@
-import { ArrowLeft, Download, Link2, PenLine } from "lucide-react";
-import { useState } from "react";
+import { ArrowLeft, Download, Link2, PenLine, Upload } from "lucide-react";
+import { useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { fileUrl, useDocument, useDocumentAudit, useSign } from "../api";
+import { fileUrl, useDocument, useDocumentAudit, useSign, useUpload } from "../api";
+import { AuditEventList } from "../audit";
+import { ErrorNote, PageState } from "../ops";
 
 const fmtTime = (t: string) => new Date(t).toLocaleString();
 
 export default function DocumentPage() {
   const { documentId } = useParams();
-  const { data: detail } = useDocument(documentId);
+  const documentQuery = useDocument(documentId);
+  const detail = documentQuery.data;
   const { data: audit } = useDocumentAudit(documentId);
   const sign = useSign();
-  const [err, setErr] = useState<string | null>(null);
+  const upload = useUpload();
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [confirming, setConfirming] = useState(false);
+  const [err, setErr] = useState<unknown>(null);
 
-  if (!detail) return <div className="text-ink2">Loading document…</div>;
+  if (!detail) return <PageState query={documentQuery} label="document" />;
   const doc = detail.document;
   const latest = detail.versions[0];
   const statusColor =
@@ -21,6 +27,9 @@ export default function DocumentPage() {
       : doc.status === "pending_review"
         ? "var(--info)"
         : "var(--muted)";
+  // POST /documents matches by artifact + scope, which is ambiguous for
+  // visit-linked documents (two trip reports share both) — no re-version button there.
+  const canUploadVersion = doc.status !== "superseded" && !doc.visit_linked;
 
   return (
     <div className="space-y-6">
@@ -52,29 +61,87 @@ export default function DocumentPage() {
       <section className="card">
         <div className="flex items-center border-b border-hairline px-4 py-3">
           <h2 className="font-medium">Versions</h2>
-          {doc.status === "pending_review" && latest && (
-            <button
-              onClick={() => {
-                setErr(null);
-                sign.mutate(
-                  { versionId: latest.id, meaning: "approval" },
-                  { onError: (e) => setErr(String(e)) },
-                );
-              }}
-              disabled={sign.isPending}
-              className="ml-auto inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50"
-              style={{ background: "var(--info)" }}
-            >
-              <PenLine size={13} aria-hidden />
-              {sign.isPending ? "Signing…" : "Approve & make effective"}
-            </button>
-          )}
+          <div className="ml-auto flex items-center gap-2">
+            {canUploadVersion && (
+              <>
+                <input
+                  ref={fileRef}
+                  type="file"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    setErr(null);
+                    upload.mutate(
+                      {
+                        file,
+                        tmfArtifactId: doc.tmf_artifact_id,
+                        studyId: doc.study_id,
+                        studySiteId: doc.study_site_id,
+                        personId: doc.person_id,
+                        title: doc.title,
+                      },
+                      { onError: (e) => setErr(e) },
+                    );
+                    e.target.value = "";
+                  }}
+                />
+                <button
+                  onClick={() => fileRef.current?.click()}
+                  disabled={upload.isPending}
+                  className="inline-flex items-center gap-1.5 rounded-md border border-hairline px-2 py-1 text-xs text-ink2 hover:bg-page disabled:opacity-50"
+                >
+                  <Upload size={12} aria-hidden />
+                  {upload.isPending ? "Uploading…" : "Upload new version"}
+                </button>
+              </>
+            )}
+            {doc.status === "pending_review" && latest && !confirming && (
+              <button
+                onClick={() => setConfirming(true)}
+                disabled={sign.isPending}
+                className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50"
+                style={{ background: "var(--info)" }}
+              >
+                <PenLine size={13} aria-hidden />
+                {sign.isPending ? "Signing…" : "Approve & make effective"}
+              </button>
+            )}
+          </div>
         </div>
-        {err && (
-          <div className="px-4 py-2 text-xs" style={{ color: "var(--status-critical)" }}>
-            {err}
+        {confirming && latest && (
+          <div className="border-b border-hairline bg-page px-4 py-3 text-sm">
+            <p className="text-ink2">
+              Signing records your name, the date and time, and the meaning
+              "approval", bound to this exact version of the file. You'll be
+              asked to confirm your identity before the signature is applied.
+            </p>
+            <div className="mt-2 flex items-center gap-2">
+              <button
+                onClick={() => {
+                  setConfirming(false);
+                  setErr(null);
+                  sign.mutate(
+                    { versionId: latest.id, meaning: "approval" },
+                    { onError: (e) => setErr(e) },
+                  );
+                }}
+                className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium text-white"
+                style={{ background: "var(--info)" }}
+              >
+                <PenLine size={13} aria-hidden />
+                Confirm & sign
+              </button>
+              <button
+                onClick={() => setConfirming(false)}
+                className="rounded-md border border-hairline px-3 py-1.5 text-xs text-ink2 hover:bg-surface"
+              >
+                Cancel
+              </button>
+            </div>
           </div>
         )}
+        <ErrorNote error={err} className="px-4 py-2" />
         <ul className="divide-y divide-hairline">
           {detail.versions.map((v) => (
             <li key={v.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2.5 text-sm">
@@ -150,37 +217,7 @@ export default function DocumentPage() {
             append-only, hash-chained; written by database triggers
           </span>
         </h2>
-        <ol className="divide-y divide-hairline">
-          {audit?.map((e) => (
-            <li key={String(e.id)} className="px-4 py-2.5 text-sm">
-              <div className="flex flex-wrap items-center gap-x-3">
-                <span className="mono text-xs text-muted">#{e.id}</span>
-                <span className="rounded bg-page px-1.5 py-0.5 text-xs font-medium">
-                  {e.action}
-                </span>
-                <span className="text-xs text-ink2">
-                  {e.actor_given_name
-                    ? `${e.actor_given_name} ${e.actor_family_name}`
-                    : e.actor_label}
-                </span>
-                <span className="text-xs text-muted">{fmtTime(e.occurred_at)}</span>
-                <span className="mono ml-auto text-xs text-muted" title={`prev ${e.prev_hash}`}>
-                  {e.prev_hash.slice(0, 8)} → {e.hash.slice(0, 8)}
-                </span>
-              </div>
-              {(e.before || e.after) && (
-                <details className="mt-1">
-                  <summary className="cursor-pointer text-xs text-muted">
-                    row image
-                  </summary>
-                  <pre className="mono mt-1 overflow-x-auto rounded bg-page p-2 text-xs text-ink2">
-                    {JSON.stringify({ before: e.before, after: e.after }, null, 2)}
-                  </pre>
-                </details>
-              )}
-            </li>
-          ))}
-        </ol>
+        <AuditEventList events={audit} />
       </section>
     </div>
   );

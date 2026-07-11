@@ -216,6 +216,28 @@ export interface VisitDetail {
   issues: Issue[];
 }
 
+export class ApiError extends Error {
+  constructor(
+    public status: number,
+    public detail: string,
+  ) {
+    super(`API ${status}: ${detail}`);
+  }
+}
+
+/** Plain-language rendering of any error surfaced in the UI. */
+export function errorMessage(e: unknown): string {
+  if (e instanceof ApiError) {
+    if (e.status === 401) return "You're not signed in — refresh the page to sign in again.";
+    if (e.status === 403) return "You don't have permission to do this.";
+    if (e.status < 500 && e.detail) return e.detail;
+    return "Something went wrong on the server — please try again.";
+  }
+  if (e instanceof TypeError)
+    return "Couldn't reach the server — check your connection and try again.";
+  return "Something went wrong — please try again.";
+}
+
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`/api${path}`, {
     ...init,
@@ -227,7 +249,17 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
   if (res.status === 401 && authMode === "oidc") {
     await beginLogin(); // session expired: round-trip through the IdP
   }
-  if (!res.ok) throw new Error(`API ${res.status}: ${await res.text()}`);
+  if (!res.ok) {
+    const text = await res.text();
+    let detail = text;
+    try {
+      const parsed = JSON.parse(text);
+      if (typeof parsed?.error === "string") detail = parsed.error;
+    } catch {
+      // non-JSON body: keep the raw text as detail
+    }
+    throw new ApiError(res.status, detail);
+  }
   return res.json() as Promise<T>;
 }
 
@@ -375,6 +407,23 @@ export const useMilestones = (studyId: string | undefined) =>
     enabled: !!studyId,
   });
 
+export const useAuditEvents = (filter?: {
+  entityType?: string;
+  entityId?: string;
+  limit?: number;
+}) =>
+  useQuery({
+    queryKey: ["audit-events", filter],
+    queryFn: () => {
+      const params = new URLSearchParams();
+      if (filter?.entityType) params.set("entity_type", filter.entityType);
+      if (filter?.entityId) params.set("entity_id", filter.entityId);
+      if (filter?.limit) params.set("limit", String(filter.limit));
+      const qs = params.toString();
+      return api<AuditEvent[]>(`/audit-events${qs ? `?${qs}` : ""}`);
+    },
+  });
+
 const jsonInit = (method: string, body: unknown): RequestInit => ({
   method,
   headers: { "Content-Type": "application/json" },
@@ -510,6 +559,36 @@ export function useResolveIssue() {
         `/issues/${input.issueId}`,
         jsonInit("PATCH", {
           ...(input.resolutionNote ? { resolution_note: input.resolutionNote } : {}),
+        }),
+      ),
+    onSuccess: () => qc.invalidateQueries(),
+  });
+}
+
+export function useCreateMilestone(studyId: string | undefined) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { name: string; plannedDate: string; studySiteId?: string }) =>
+      api<{ id: string }>(
+        `/studies/${studyId}/milestones`,
+        jsonInit("POST", {
+          name: input.name,
+          planned_date: input.plannedDate,
+          ...(input.studySiteId ? { study_site_id: input.studySiteId } : {}),
+        }),
+      ),
+    onSuccess: () => qc.invalidateQueries(),
+  });
+}
+
+export function useAchieveMilestone() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { milestoneId: string; actualDate?: string }) =>
+      api<{ id: string }>(
+        `/milestones/${input.milestoneId}`,
+        jsonInit("PATCH", {
+          ...(input.actualDate ? { actual_date: input.actualDate } : {}),
         }),
       ),
     onSuccess: () => qc.invalidateQueries(),

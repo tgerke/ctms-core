@@ -2,6 +2,7 @@ import { FileCheck2, Moon, ShieldCheck, ShieldX, Sun } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, Route, Routes } from "react-router-dom";
 import { useChainStatus, useStudies } from "./api";
+import AuditPage from "./pages/AuditPage";
 import DocumentPage from "./pages/DocumentPage";
 import SitePage from "./pages/SitePage";
 import StudyPage from "./pages/StudyPage";
@@ -26,20 +27,21 @@ function ChainBadge() {
   if (!data) return null;
   const Icon = data.valid ? ShieldCheck : ShieldX;
   return (
-    <span
-      className="hidden items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs sm:inline-flex"
+    <Link
+      to="/audit"
+      className="hidden items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs hover:bg-surface sm:inline-flex"
       style={{
         color: data.valid ? "var(--status-good)" : "var(--status-critical)",
         borderColor: "var(--ring)",
       }}
-      title="Live verification of the append-only audit-trail hash chain"
+      title="Live verification of the append-only audit-trail hash chain — click to browse the audit trail"
     >
       <Icon size={13} aria-hidden />
       <span className="text-ink2">
         audit chain {data.valid ? "verified" : "BROKEN"} ·{" "}
         <span className="mono">{data.events}</span> events
       </span>
-    </span>
+    </Link>
   );
 }
 
@@ -63,6 +65,12 @@ export default function App() {
           )}
           <div className="ml-auto flex items-center gap-2">
             <ChainBadge />
+            <Link
+              to="/audit"
+              className="rounded-md px-2 py-1 text-sm text-ink2 hover:bg-surface"
+            >
+              Audit trail
+            </Link>
             <a
               href="/api/docs"
               target="_blank"
@@ -87,6 +95,7 @@ export default function App() {
           <Route path="/sites/:studySiteId" element={<SitePage study={study} />} />
           <Route path="/visits/:visitId" element={<VisitPage />} />
           <Route path="/documents/:documentId" element={<DocumentPage />} />
+          <Route path="/audit" element={<AuditPage />} />
         </Routes>
       </main>
     </div>

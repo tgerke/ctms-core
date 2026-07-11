@@ -10,15 +10,16 @@ import {
   useVisitUpload,
 } from "../api";
 import { ISSUE_SEVERITY, ISSUE_STATUS, SpecChip, VISIT_STAGE } from "../status";
-import { VISIT_TYPE_LABEL } from "../ops";
+import { ErrorNote, NewIssueForm, PageState, VISIT_TYPE_LABEL } from "../ops";
 
 export default function VisitPage() {
   const { visitId } = useParams();
-  const { data: detail } = useVisit(visitId);
+  const visitQuery = useVisit(visitId);
+  const detail = visitQuery.data;
   const update = useUpdateVisit();
-  const [err, setErr] = useState<string | null>(null);
+  const [err, setErr] = useState<unknown>(null);
 
-  if (!detail) return <div className="text-ink2">Loading visit…</div>;
+  if (!detail) return <PageState query={visitQuery} label="visit" />;
   const v = detail.visit;
   const tripReport = detail.documents.find((d) => d.link_kind === "trip_report");
 
@@ -51,7 +52,7 @@ export default function VisitPage() {
               setErr(null);
               update.mutate(
                 { visitId: v.monitoring_visit_id, visitDate: new Date().toISOString().slice(0, 10) },
-                { onError: (e) => setErr(String(e)) },
+                { onError: (e) => setErr(e) },
               );
             }}
             disabled={update.isPending}
@@ -61,7 +62,7 @@ export default function VisitPage() {
             {update.isPending ? "Recording…" : "Record as conducted today"}
           </button>
         )}
-        {err && <div className="mt-1 text-xs" style={{ color: "var(--status-critical)" }}>{err}</div>}
+        <ErrorNote error={err} className="mt-1" />
       </div>
 
       <section className="card">
@@ -143,6 +144,13 @@ export default function VisitPage() {
             ))}
           </ul>
         )}
+        <div className="border-t border-hairline px-4 py-3">
+          <NewIssueForm
+            studyId={v.study_id}
+            studySiteId={v.study_site_id}
+            monitoringVisitId={v.monitoring_visit_id}
+          />
+        </div>
       </section>
     </div>
   );
@@ -159,7 +167,7 @@ function TripReportUpload({
 }) {
   const upload = useVisitUpload();
   const fileRef = useRef<HTMLInputElement>(null);
-  const [err, setErr] = useState<string | null>(null);
+  const [err, setErr] = useState<unknown>(null);
   return (
     <div className="ml-auto">
       <input
@@ -177,7 +185,7 @@ function TripReportUpload({
               title: `${VISIT_TYPE_LABEL[visitType as keyof typeof VISIT_TYPE_LABEL]} Visit Trip Report — Site ${siteNumber}`,
               linkKind: "trip_report",
             },
-            { onError: (e) => setErr(String(e)) },
+            { onError: (e) => setErr(e) },
           );
           e.target.value = "";
         }}
@@ -190,7 +198,7 @@ function TripReportUpload({
         <FileUp size={12} aria-hidden />
         {upload.isPending ? "Uploading…" : "Upload trip report"}
       </button>
-      {err && <div className="text-xs" style={{ color: "var(--status-critical)" }}>{err}</div>}
+      <ErrorNote error={err} />
     </div>
   );
 }
@@ -199,7 +207,7 @@ function AddActionItemForm({ visitId }: { visitId: string }) {
   const create = useCreateActionItem();
   const [description, setDescription] = useState("");
   const [due, setDue] = useState("");
-  const [err, setErr] = useState<string | null>(null);
+  const [err, setErr] = useState<unknown>(null);
   return (
     <form
       className="flex flex-wrap items-center gap-2"
@@ -210,7 +218,7 @@ function AddActionItemForm({ visitId }: { visitId: string }) {
         create.mutate(
           { visitId, description, dueDate: due || undefined },
           {
-            onError: (e) => setErr(String(e)),
+            onError: (e) => setErr(e),
             onSuccess: () => {
               setDescription("");
               setDue("");
@@ -240,7 +248,7 @@ function AddActionItemForm({ visitId }: { visitId: string }) {
       >
         {create.isPending ? "Adding…" : "Add"}
       </button>
-      {err && <span className="text-xs" style={{ color: "var(--status-critical)" }}>{err}</span>}
+      <ErrorNote error={err} />
     </form>
   );
 }
@@ -260,7 +268,7 @@ function ActionItemRow({
   };
 }) {
   const resolve = useResolveActionItem();
-  const [err, setErr] = useState<string | null>(null);
+  const [err, setErr] = useState<unknown>(null);
   return (
     <li className="px-4 py-2.5">
       <div className="flex flex-wrap items-center gap-x-3">
@@ -272,7 +280,7 @@ function ActionItemRow({
                 setErr(null);
                 resolve.mutate(
                   { actionItemId: item.id },
-                  { onError: (e) => setErr(String(e)) },
+                  { onError: (e) => setErr(e) },
                 );
               }}
               disabled={resolve.isPending}
@@ -296,7 +304,7 @@ function ActionItemRow({
           : ""}
         {item.resolution_note ? ` — ${item.resolution_note}` : ""}
       </div>
-      {err && <div className="mt-1 text-xs" style={{ color: "var(--status-critical)" }}>{err}</div>}
+      <ErrorNote error={err} className="mt-1" />
     </li>
   );
 }
