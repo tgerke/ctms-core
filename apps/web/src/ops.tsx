@@ -26,6 +26,12 @@ export const VISIT_TYPE_LABEL: Record<VisitType, string> = {
   close_out: "Close-out",
 };
 
+/** Today as YYYY-MM-DD in the user's time zone — toISOString() is UTC and rolls to tomorrow in US evenings. */
+export function localToday(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 export const ISSUE_CATEGORY_LABEL: Record<IssueCategory, string> = {
   protocol_deviation: "Protocol deviation",
   monitoring_finding: "Monitoring finding",
@@ -295,7 +301,7 @@ export function NewIssueForm({
   monitoringVisitId?: string;
 }) {
   const create = useCreateIssue(studyId);
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localToday();
   const [category, setCategory] = useState<IssueCategory>("protocol_deviation");
   const [severity, setSeverity] = useState<IssueSeverity>("minor");
   const [title, setTitle] = useState("");
@@ -525,7 +531,7 @@ export function ReportEnrollmentForm({
         report.mutate(
           {
             studySiteId,
-            asOfDate: new Date().toISOString().slice(0, 10),
+            asOfDate: localToday(),
             ...counts,
           },
           { onError: (e) => setErr(e) },

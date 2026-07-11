@@ -10,7 +10,7 @@ import {
   useVisitUpload,
 } from "../api";
 import { ISSUE_SEVERITY, ISSUE_STATUS, SpecChip, VISIT_STAGE } from "../status";
-import { ErrorNote, NewIssueForm, PageState, VISIT_TYPE_LABEL } from "../ops";
+import { ErrorNote, NewIssueForm, PageState, VISIT_TYPE_LABEL, localToday } from "../ops";
 
 export default function VisitPage() {
   const { visitId } = useParams();
@@ -51,7 +51,7 @@ export default function VisitPage() {
             onClick={() => {
               setErr(null);
               update.mutate(
-                { visitId: v.monitoring_visit_id, visitDate: new Date().toISOString().slice(0, 10) },
+                { visitId: v.monitoring_visit_id, visitDate: localToday() },
                 { onError: (e) => setErr(e) },
               );
             }}
