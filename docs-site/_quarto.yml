@@ -42,6 +42,7 @@ website:
           - operations.qmd
           - compliance.qmd
           - validation.qmd
+          - roadmap.qmd
       - section: "Cookbook"
         contents:
           - cookbook.qmd

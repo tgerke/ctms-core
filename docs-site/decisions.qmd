@@ -146,6 +146,16 @@ motivating incident was a screenshot caption promising an issue-entry form
 before one existed; the form (and the rest of the point-and-click surface the
 guide needed) was built before the guide that describes it.
 
+## ADR-0014 — The docs carry a web-verified feature-gap roadmap
+
+The [roadmap](roadmap.qmd) records the honest distance to incumbent
+CTMS/eBinder systems: deliberate boundaries first, then genuine gaps, each
+"incumbents do X" claim verified against the vendor's or standards body's own
+public page and cited with an access date — ADR-0012's rule extended from
+regulatory texts to market claims. Gaps are not commitments, the page never
+claims a feature exists, and a gap moves off the page in the same change that
+ships it.
+
 ---
 
 Three of these — ADR-0004, ADR-0006, and ADR-0010 — are the same idea applied
