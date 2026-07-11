@@ -13,7 +13,9 @@ website:
     left:
       - text: "Getting started"
         href: getting-started.qmd
-      - text: "Guide"
+      - text: "User guide"
+        href: user-guide/index.qmd
+      - text: "Technical guide"
         href: data-model.qmd
       - text: "Cookbook"
         href: cookbook.qmd
@@ -26,7 +28,15 @@ website:
       - text: "Overview"
         href: index.qmd
       - getting-started.qmd
-      - section: "Guide"
+      - section: "User guide"
+        contents:
+          - user-guide/index.qmd
+          - user-guide/documents.qmd
+          - user-guide/monitoring-visits.qmd
+          - user-guide/issues.qmd
+          - user-guide/enrollment-milestones.qmd
+          - user-guide/statuses.qmd
+      - section: "Technical guide"
         contents:
           - data-model.qmd
           - operations.qmd
@@ -36,6 +46,7 @@ website:
         contents:
           - cookbook.qmd
           - sql-access.qmd
+      - glossary.qmd
       - decisions.qmd
 
 format:

@@ -6,7 +6,8 @@ The API is the product, and this page is its acceptance test: if the questions
 a monitoring team asks aren't a few lines each, the design has failed. The
 examples run against the seeded demo study (`pnpm db:seed`) with the dev tokens
 from `.env.example`. The full interactive reference lives at
-<http://localhost:8787/docs>.
+<http://localhost:8787/docs>. The point-and-click versions of these same tasks
+are in the [user guide](user-guide/index.qmd).
 
 Everything below is shown in R first (the stack these docs assume you might
 share), then condensed in [Python](#the-same-story-in-python) and

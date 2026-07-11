@@ -13,6 +13,13 @@ ctms-core builds the same features the other way around. **Tables store dated
 facts; views derive the lifecycle.** No table in this layer has a status column,
 so a stage can never be stale — it is never written, only computed.
 
+::: {.callout-note}
+## Prefer point and click?
+This page explains how the operational layer is built. The same workflows as
+step-by-step tasks in the app — scheduling visits, logging deviations,
+reporting enrollment — live in the [user guide](user-guide/index.qmd).
+:::
+
 ## Monitoring visits
 
 A `monitoring_visit` records the facts of a visit at a study-site: type
@@ -71,7 +78,7 @@ resolution date and note.
 past its due date without a resolution is overdue — nobody has to remember to
 flip a flag.
 
-![Issues on the dashboard, with severity and derived status; recording a new deviation is a form on the same page (or one `POST`).](images/issues.png){.screenshot fig-alt="Issues and deviations list showing severity badges (minor, major, critical) and derived status badges (open, overdue, resolved) with a form for recording a new issue"}
+![Issues on the dashboard, with severity and derived status; recording a new deviation is a form on the same page (or one `POST`) — the [user guide](user-guide/issues.qmd) walks it.](images/issues.png){.screenshot fig-alt="Issues and deviations list showing severity badges (minor, major, critical) and derived status badges (open, overdue, resolved) with a form for recording a new issue"}
 
 ## Enrollment
 

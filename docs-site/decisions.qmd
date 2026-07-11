@@ -135,6 +135,17 @@ produces, and only the source caught it.
 LLM-practice transparency policy: where ground truth exists in an
 authoritative source, content comes from the source.)
 
+## ADR-0013 — Documentation serves two audiences; the user guide lives only on the docs site
+
+The [user guide](user-guide/index.qmd) and [glossary](glossary.qmd) give
+clinical operations readers a task-based, code-free path through the app,
+alongside the technical material. The guide is screenshot-driven and gets no
+`docs/*.md` mirror — a deliberate waiver of the usual overlap convention. Its
+binding rule: guide content must never describe UI the app doesn't have. The
+motivating incident was a screenshot caption promising an issue-entry form
+before one existed; the form (and the rest of the point-and-click surface the
+guide needed) was built before the guide that describes it.
+
 ---
 
 Three of these — ADR-0004, ADR-0006, and ADR-0010 — are the same idea applied

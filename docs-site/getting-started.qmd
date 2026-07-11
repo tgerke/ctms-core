@@ -4,6 +4,8 @@ title: "Getting started"
 
 ctms-core runs locally with Node and Docker. The whole stack — Postgres, REST
 API, and web dashboard — comes up in a few minutes with a seeded demo study.
+Standing it up is a developer task; once it's running, the
+[user guide](user-guide/index.qmd) covers everything from there without code.
 
 ## Prerequisites
 

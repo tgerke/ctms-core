@@ -22,7 +22,15 @@ flat, folder-oriented, and frustrating for a data-science team.
 ## What ctms-core is
 
 ctms-core is a regulatory-document backbone built for the sponsor/CRO oversight
-seat — the team watching many sites at once. Three design commitments define it:
+seat — the team watching many sites at once.
+
+These docs serve two audiences. If you coordinate or monitor studies, start
+with the [user guide](user-guide/index.qmd) — every task, point and click, no
+code. If you script against the API or query the database, start with the
+[cookbook](cookbook.qmd). The rest of this page is the design argument, which
+you can skip.
+
+Three design commitments define the system:
 
 1. **A real relational core.** Documents are rows, typed by the CDISC TMF
    Reference Model taxonomy and scoped to a study, a study-site, or a person,
@@ -104,8 +112,11 @@ This section once listed genuine gaps; two have since been closed in code:
 ## Where to go next
 
 - [Getting started](getting-started.qmd) — running locally in five commands.
+- [User guide](user-guide/index.qmd) — the app, task by task, for clinical
+  operations teams.
 - [Data model](data-model.qmd) — the entities and the derived views.
 - [Cookbook](cookbook.qmd) — the monitor's morning and the CRA's week, from R,
   Python, and curl.
+- [Glossary](glossary.qmd) — trial and system terms, defined once.
 - [Design decisions](decisions.qmd) — why it's built this way, as a numbered
   ADR log.

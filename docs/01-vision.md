@@ -41,7 +41,9 @@ Three design commitments follow:
 
 The public API is the product; the web UI is its first customer and consumes nothing
 the API doesn't offer. A data-science team in R or Python gets the same power as the
-dashboard.
+dashboard. The documentation serves both seats: a task-based user guide for clinical
+operations staff on the docs site, and the schema/API/SQL material for the data team
+(ADR-0013).
 
 ## Wedge
 
