@@ -6,8 +6,8 @@
 // Then:  node docs-site/screenshots.mjs
 //
 // Entities are looked up via the API at runtime (seeding regenerates UUIDs, so
-// ids can never be hardcoded): the gappiest site, a visit in follow_up, and a
-// current signed document.
+// ids can never be hardcoded): the gappiest site, a visit in follow_up, a
+// scheduled visit, a current signed document, and a pending_review document.
 import { spawn } from "node:child_process";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { join, dirname } from "node:path";
@@ -50,16 +50,26 @@ const visit =
   visits.find((v) => v.visit_date);
 if (!visit) throw new Error("no conducted visit in seed data");
 
+const scheduledVisit = visits.find((v) => v.stage === "scheduled");
+if (!scheduledVisit) throw new Error("no scheduled visit in seed data");
+
 const expected = await api(`/studies/${study}/expected-documents`);
 const doc =
   expected.find((e) => e.artifact_name === "Protocol" && e.document_id) ??
   expected.find((e) => e.status === "current" && e.document_id);
 if (!doc) throw new Error("no fulfilled document in seed data");
 
+const pendingDoc = expected.find(
+  (e) => e.status === "pending_review" && e.document_id,
+);
+if (!pendingDoc) throw new Error("no pending_review document in seed data");
+
 console.log("subjects:", {
   site: `${gappySite.site_number} (${gappySite.pct_current}% current)`,
   visit: `${visit.visit_type} @ ${visit.site_number} (${visit.stage})`,
+  scheduledVisit: `${scheduledVisit.visit_type} @ ${scheduledVisit.site_number}`,
   document: doc.artifact_name,
+  pendingDocument: pendingDoc.artifact_name,
 });
 
 // --- CDP plumbing --------------------------------------------------------
@@ -142,6 +152,23 @@ async function shoot(name, clip) {
   console.log("saved", name);
 }
 
+// clip each section.card on the current page whose heading matches map
+async function shootSections(map) {
+  const sections = await evaluate(
+    `[...document.querySelectorAll('section.card')].map((s) => {
+       const r = s.getBoundingClientRect();
+       return { title: (s.querySelector('h1,h2,h3')?.textContent ?? '').trim(),
+                x: Math.max(0, r.x + scrollX - 8), y: Math.max(0, r.y + scrollY - 8),
+                width: Math.min(1440, r.width + 16), height: r.height + 16 };
+     })`
+  );
+  for (const s of sections) {
+    const file = Object.entries(map).find(([prefix]) => s.title.startsWith(prefix))?.[1];
+    if (!file) continue;
+    await shoot(file, { x: s.x, y: s.y, width: s.width, height: Math.min(s.height, 1400) });
+  }
+}
+
 // --- capture -------------------------------------------------------------
 // docs screenshots are light-theme; set before the app boots
 await navigate(WEB + "/", 500);
@@ -149,28 +176,33 @@ await evaluate("localStorage.setItem('ctms_theme', 'light'); true");
 
 await navigate(WEB + "/");
 await shoot("dashboard.png");
-const sections = await evaluate(
-  `[...document.querySelectorAll('section.card')].map((s) => {
-     const r = s.getBoundingClientRect();
-     return { title: (s.querySelector('h1,h2,h3')?.textContent ?? '').trim(),
-              x: Math.max(0, r.x + scrollX - 8), y: Math.max(0, r.y + scrollY - 8),
-              width: Math.min(1440, r.width + 16), height: r.height + 16 };
-   })`
-);
-for (const s of sections) {
-  const file = Object.entries(DASHBOARD_SECTIONS).find(([prefix]) => s.title.startsWith(prefix))?.[1];
-  if (!file) continue;
-  await shoot(file, { x: s.x, y: s.y, width: s.width, height: Math.min(s.height, 1400) });
-}
+await shootSections(DASHBOARD_SECTIONS);
 
 await navigate(`${WEB}/sites/${gappySite.study_site_id}`);
 await shoot("site-detail.png");
+await shootSections({ "Issues & deviations": "site-issues-form.png" });
 
 await navigate(`${WEB}/visits/${visit.monitoring_visit_id}`);
 await shoot("visit-page.png");
 
+await navigate(`${WEB}/visits/${scheduledVisit.monitoring_visit_id}`);
+await shoot("visit-scheduled.png");
+
 await navigate(`${WEB}/documents/${doc.document_id}`);
 await shoot("document-page.png");
+await shootSections({ Versions: "document-new-version.png" });
+
+// the signing confirmation panel, opened but never confirmed (no mutation)
+await navigate(`${WEB}/documents/${pendingDoc.document_id}`);
+await evaluate(
+  `[...document.querySelectorAll('button')]
+     .find((b) => b.textContent.includes('Approve & make effective')).click(); true`
+);
+await sleep(400);
+await shootSections({ Versions: "document-approve.png" });
+
+await navigate(`${WEB}/audit`);
+await shoot("audit-page.png");
 
 await navigate(`${API}/docs`, 3500);
 await shoot("api-docs.png");
