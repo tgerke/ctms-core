@@ -4,6 +4,7 @@ import { authMode, beginLogin, getReauthToken, token } from "./auth";
 export type ExpectedStatus =
   | "missing"
   | "pending_review"
+  | "returned"
   | "current"
   | "expiring_soon"
   | "expired"
@@ -31,6 +32,7 @@ export interface SiteCompleteness {
   current_count: number;
   expiring_soon_count: number;
   pending_review_count: number;
+  returned_count: number;
   expired_count: number;
   missing_count: number;
   pct_current: number;
@@ -97,6 +99,7 @@ export interface DocumentDetail {
   document: Record<string, any>;
   versions: Record<string, any>[];
   signatures: Record<string, any>[];
+  returns: Record<string, any>[];
 }
 
 // --- Operational layer --------------------------------------------------------
@@ -616,6 +619,20 @@ export function useReportEnrollment() {
           completed: input.completed,
         }),
       ),
+    onSuccess: () => qc.invalidateQueries(),
+  });
+}
+
+/** Return-for-correction: the review outcome besides approval (ADR-0015). */
+export function useReturn() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { versionId: string; reason: string }) =>
+      api<{ return_id: string }>(`/document-versions/${input.versionId}/return`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason: input.reason }),
+      }),
     onSuccess: () => qc.invalidateQueries(),
   });
 }

@@ -16,7 +16,8 @@ count tiles.
 | --- | --- | --- |
 | **Missing** (grey outline) | The requirement expects a document and none has been filed | Upload it from the site page |
 | **Expired** (red) | The document's validity period has ended | Upload the renewal |
-| **Pending review** (blue) | Uploaded, awaiting an approval signature | Review the file and approve it, or upload a corrected version |
+| **Pending review** (blue) | Uploaded, awaiting an approval signature | Review the file, then approve it or return it for correction |
+| **Returned** (orange) | A reviewer sent the latest version back, with a reason | Read the reason on the document page and upload a corrected version |
 | **Expiring soon** (amber) | Current, but inside its expiry warning window | Chase the renewal before it lapses |
 | **Current** (green) | Approved and in force | Nothing |
 | **Superseded** (grey) | Replaced by a newer sibling document | Nothing — it's history, kept forever |
@@ -30,7 +31,7 @@ The full lifecycle, with next steps, is walked through in
 | --- | --- |
 | **Scheduled** (grey outline) | Visit date still ahead |
 | **Overdue** (red) | Scheduled date passed, no visit recorded |
-| **Awaiting report** (amber) | Conducted, no trip report yet |
+| **Awaiting report** (amber) | Conducted, no trip report yet — or the report was returned for correction |
 | **Report in review** (blue) | Trip report uploaded, not yet approved |
 | **Follow-up** (amber) | Report approved, action items still open |
 | **Complete** (green) | Report approved, everything resolved |

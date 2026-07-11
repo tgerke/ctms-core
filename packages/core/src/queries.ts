@@ -3,6 +3,7 @@ import type { Sql } from "@ctms/db";
 export type ExpectedStatus =
   | "missing"
   | "pending_review"
+  | "returned"
   | "current"
   | "expiring_soon"
   | "expired"
@@ -53,6 +54,7 @@ export async function studySites(sql: Sql, studyId: string) {
            coalesce(c.current_count, 0)::int AS current_count,
            coalesce(c.expiring_soon_count, 0)::int AS expiring_soon_count,
            coalesce(c.pending_review_count, 0)::int AS pending_review_count,
+           coalesce(c.returned_count, 0)::int AS returned_count,
            coalesce(c.expired_count, 0)::int AS expired_count,
            coalesce(c.missing_count, 0)::int AS missing_count,
            coalesce(c.pct_current, 0)::float AS pct_current
@@ -130,7 +132,16 @@ export async function documentDetail(sql: Sql, documentId: string) {
     JOIN person p ON p.id = sg.signer_person_id
     WHERE dv.document_id = ${documentId}
     ORDER BY sg.signed_at DESC`;
-  return { document: docs[0], versions, signatures };
+  const returns = await sql`
+    SELECT dr.*, dv.version_number,
+           p.given_name AS returned_by_given_name,
+           p.family_name AS returned_by_family_name
+    FROM document_return dr
+    JOIN document_version dv ON dv.id = dr.document_version_id
+    JOIN person p ON p.id = dr.returned_by
+    WHERE dv.document_id = ${documentId}
+    ORDER BY dr.returned_at DESC`;
+  return { document: docs[0], versions, signatures, returns };
 }
 
 export async function auditEvents(
@@ -162,6 +173,10 @@ export async function documentAuditTrail(sql: Sql, documentId: string) {
        OR (ae.entity_type = 'signature' AND ae.entity_id IN (
             SELECT sg.id::text FROM signature sg
             JOIN document_version dv ON dv.id = sg.document_version_id
+            WHERE dv.document_id = ${documentId}))
+       OR (ae.entity_type = 'document_return' AND ae.entity_id IN (
+            SELECT dr.id::text FROM document_return dr
+            JOIN document_version dv ON dv.id = dr.document_version_id
             WHERE dv.document_id = ${documentId}))
     ORDER BY ae.id`;
 }

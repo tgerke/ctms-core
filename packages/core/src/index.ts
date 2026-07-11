@@ -9,7 +9,13 @@ export {
   type ResourceScope,
   type ScopeParam,
 } from "./authz.js";
-export { uploadDocument, signDocumentVersion, sha256Hex, type UploadInput } from "./documents.js";
+export {
+  uploadDocument,
+  signDocumentVersion,
+  returnDocumentVersion,
+  sha256Hex,
+  type UploadInput,
+} from "./documents.js";
 export {
   achieveMilestone,
   createActionItem,

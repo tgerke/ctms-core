@@ -105,6 +105,20 @@ attestations on a version without changing its status; only `approval` makes
 it effective. All three are Part 11 signatures — signer, timestamp, meaning,
 bound to the content hash.
 
+Review has a second outcome: return the version for correction with a
+documented reason (ADR-0015). The reason is an immutable fact row, the
+document shows `returned` until a corrected version arrives, and the returned
+version itself can never be approved. Returning takes the same `approve`
+permission as approving, but it isn't a signature — no re-authentication.
+
+```r
+request("http://localhost:8787") |>
+  req_url_path_append("document-versions", version_id, "return") |>
+  req_auth_bearer_token("dev-admin-token") |>
+  req_body_json(list(reason = "Unsigned copy — please upload the signed version.")) |>
+  req_perform()
+```
+
 ### Filing from another system
 
 Source systems — an EDC first — file documents through the same endpoint,

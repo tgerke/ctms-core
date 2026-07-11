@@ -77,6 +77,7 @@ export default function SitePage({ study }: { study: Study | undefined }) {
           {site.total} expected documents current · {site.missing_count} missing ·{" "}
           {site.expired_count} expired · {site.expiring_soon_count} expiring ·{" "}
           {site.pending_review_count} pending review
+          {site.returned_count > 0 ? ` · ${site.returned_count} returned` : ""}
         </div>
       </div>
 
@@ -196,7 +197,9 @@ function ExpectedRow({ row }: { row: ExpectedDocument }) {
         </div>
       </div>
       <div className="ml-auto flex items-center gap-2">
-        {(row.status === "missing" || row.status === "expired") && (
+        {(row.status === "missing" ||
+          row.status === "expired" ||
+          row.status === "returned") && (
           <>
             <input
               ref={fileRef}

@@ -85,7 +85,8 @@ no schema change.
 - **document** — one logical record: its TMF artifact type plus scope columns
   (`study_id` always; `study_site_id` for site-scoped; `person_id` for
   person-scoped, which requires site scope too — a CV is filed per site).
-  Lifecycle `status`: `pending_review → effective → superseded`, with optional
+  Lifecycle `status`: `pending_review → effective → superseded`, with a
+  `returned` detour when review sends a version back (ADR-0015), and optional
   effective and expiry dates for licenses, approvals, and training certificates.
 - **document_version** — **immutable**: the database rejects UPDATE and DELETE
   for every role. Each version records number, sha256 of the content, filename,
@@ -100,6 +101,11 @@ no schema change.
   (§11.70) is verifiable independently of the version row. Each signature also
   records how and when the signer re-authenticated (§11.200) — a database CHECK
   requires it on every new row. Immutable, like versions.
+- **document_return** — the review outcome besides approval (ADR-0015): who
+  returned a version, when, and why. The reason is required and non-blank at
+  the schema level, the row is immutable like a signature, and a returned
+  version can never be approved — the fix is a corrected version, which
+  reopens review.
 
 ## The requirement engine
 
@@ -115,7 +121,7 @@ no schema change.
 - **v_expected_document_status** (*view*) — the heart of the system. Joins each
   placeholder to its best fulfilling document (same artifact and scope, latest
   effective) and derives status:
-  `missing | pending_review | current | expiring_soon (≤60 days) | expired | superseded`.
+  `missing | pending_review | returned | current | expiring_soon (≤60 days) | expired | superseded`.
 - **v_study_site_completeness** (*view*) — the per-site rollup: counts by
   status, percent current.
 

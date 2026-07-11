@@ -46,18 +46,18 @@ restated here because a feature comparison is meaningless without them.
   Florence ships in-app PHI redaction; nothing comparable exists here yet,
   and won't until a blinded seat is designed.
 
+## Closed since first written
+
+- **Review outcomes beyond approval** — shipped as
+  [return-for-correction](user-guide/documents.qmd#returning-for-correction)
+  (ADR-0015): a reviewer sends a pending version back with a required,
+  immutable reason; the document shows `returned` until a corrected version
+  reopens review, and the returned version can never be approved. What
+  remains of the original gap is the narrower QC tooling incumbents layer on
+  top (checklists, tracked quality-issue workflows à la Veeva) — real, but no
+  longer the daily-use hole.
+
 ## Genuine gaps
-
-### Review outcomes beyond approval
-
-A `pending_review` version can be approved (signature with `approval`
-meaning) or left pending — there is no return-for-correction, no rejection
-with a documented reason, and no QC checklist. Veeva runs pre- and
-post-approval QC with tracked quality issues and annotation-based review
-workflows. The absence bites in daily use: a reviewer who spots a wrong file
-today has to leave it pending and chase the uploader out of band. The data
-model wants a review-outcome fact (who, when, why) with derived status
-picking it up — same pattern as everything else (ADR-0004, ADR-0006).
 
 ### Study, site, and staff administration
 
@@ -141,16 +141,15 @@ structured DoA/training logs would be its first real test.
 
 ## If we built next
 
-1. **Return-for-correction on review.** Smallest gap with daily-use impact;
-   completes the document QC loop and is one fact table + one view change.
-2. **Site and staff administration.** A pilot cannot onboard a site without
+1. **Site and staff administration.** A pilot cannot onboard a site without
    SQL today; this gates any real deployment more than any other item.
-3. **Expiry/overdue digest notifications.** Highest oversight value per unit
+2. **Expiry/overdue digest notifications.** Highest oversight value per unit
    effort — the views already compute everything; a scheduled job formats
    and sends.
-
-Expected-document waivers ride along naturally with item 2 (both are
-requirement-level administration).
+3. **Expected-document waivers.** Rides along naturally with item 1 (both
+   are requirement-level administration), and the shape is already proven:
+   a waiver is a fact row the status view reads, exactly like a return
+   (ADR-0015).
 
 ## Sources
 

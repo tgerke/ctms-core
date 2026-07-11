@@ -108,6 +108,12 @@ Pending review
 : Uploaded but not yet approved. A pending-review document doesn't count as
 current anywhere.
 
+Returned (for correction)
+: The review outcome besides approval: a reviewer sent the latest version
+back with a reason, which stays on the document's permanent record. The
+returned version can never be approved — uploading a corrected version
+reopens review.
+
 Current / effective
 : Approved by signature and in force. "Effective" is the document's own
 state; "current" is how a requirement row reports it.

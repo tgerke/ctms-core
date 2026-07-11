@@ -25,6 +25,7 @@ export const SiteCompletenessSchema = z
     current_count: z.number().int(),
     expiring_soon_count: z.number().int(),
     pending_review_count: z.number().int(),
+    returned_count: z.number().int(),
     expired_count: z.number().int(),
     missing_count: z.number().int(),
     pct_current: z.number(),
@@ -32,7 +33,15 @@ export const SiteCompletenessSchema = z
   .openapi("SiteCompleteness");
 
 export const ExpectedStatusSchema = z
-  .enum(["missing", "pending_review", "current", "expiring_soon", "expired", "superseded"])
+  .enum([
+    "missing",
+    "pending_review",
+    "returned",
+    "current",
+    "expiring_soon",
+    "expired",
+    "superseded",
+  ])
   .openapi("ExpectedStatus");
 
 export const ExpectedDocumentSchema = z
@@ -101,6 +110,7 @@ export const DocumentDetailSchema = z
     document: z.record(z.any()),
     versions: z.array(z.record(z.any())),
     signatures: z.array(z.record(z.any())),
+    returns: z.array(z.record(z.any())),
   })
   .openapi("DocumentDetail");
 

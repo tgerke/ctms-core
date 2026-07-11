@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import {
   document,
+  documentReturn,
   documentVersion,
   signature,
   putBlob,
@@ -68,8 +69,9 @@ export async function uploadDocument(db: Db, actor: Actor, input: UploadInput) {
         })
         .returning();
       doc = inserted[0]!;
-    } else if (doc.status === "effective") {
-      // New version of an effective document goes back through review.
+    } else if (doc.status === "effective" || doc.status === "returned") {
+      // A new version of an effective document goes back through review; a
+      // corrected version of a returned document does the same (ADR-0015).
       await tx
         .update(document)
         .set({ status: "pending_review" })
@@ -129,6 +131,21 @@ export async function signDocumentVersion(
       .limit(1);
     const version = versions[0];
     if (!version) throw new Error("document version not found");
+
+    // A returned version is never approvable: the fix is a corrected version
+    // (ADR-0015). author/review attestations stay allowed.
+    if (input.meaning === "approval") {
+      const returns = await tx
+        .select({ id: documentReturn.id })
+        .from(documentReturn)
+        .where(eq(documentReturn.documentVersionId, version.id))
+        .limit(1);
+      if (returns.length > 0) {
+        throw new Error(
+          "version was returned for correction; upload a corrected version instead",
+        );
+      }
+    }
 
     const signatures = await tx
       .insert(signature)
@@ -190,6 +207,70 @@ export async function signDocumentVersion(
       }
     }
     return signatures[0]!;
+  });
+}
+
+/**
+ * Return-for-correction (ADR-0015): the review outcome besides approval. Only
+ * the latest version of a pending_review document can be returned; the reason
+ * is recorded as an immutable fact row and the document moves to 'returned'
+ * until a corrected version arrives.
+ */
+export async function returnDocumentVersion(
+  db: Db,
+  actor: Actor,
+  input: {
+    documentVersionId: string;
+    returnedByPersonId: string;
+    reason: string;
+  },
+) {
+  if (input.reason.trim().length === 0) {
+    throw new Error("a return requires a documented reason");
+  }
+  return withActor(db, actor, async (tx) => {
+    const versions = await tx
+      .select()
+      .from(documentVersion)
+      .where(eq(documentVersion.id, input.documentVersionId))
+      .limit(1);
+    const version = versions[0];
+    if (!version) throw new Error("document version not found");
+
+    const docs = await tx
+      .select()
+      .from(document)
+      .where(eq(document.id, version.documentId))
+      .limit(1);
+    const doc = docs[0]!;
+    if (doc.status !== "pending_review") {
+      throw new Error(`only a pending_review document can be returned (status: ${doc.status})`);
+    }
+
+    const [{ latest }] = (await tx.execute(sql`
+      SELECT max(version_number) AS latest
+      FROM document_version WHERE document_id = ${doc.id}`)) as unknown as [
+      { latest: number },
+    ];
+    if (version.versionNumber !== Number(latest)) {
+      throw new Error("only the latest version can be returned");
+    }
+
+    const returns = await tx
+      .insert(documentReturn)
+      .values({
+        documentVersionId: version.id,
+        returnedBy: input.returnedByPersonId,
+        reason: input.reason.trim(),
+      })
+      .returning();
+
+    await tx
+      .update(document)
+      .set({ status: "returned" })
+      .where(eq(document.id, doc.id));
+
+    return returns[0]!;
   });
 }
 

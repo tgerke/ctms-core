@@ -156,6 +156,17 @@ regulatory texts to market claims. Gaps are not commitments, the page never
 claims a feature exists, and a gap moves off the page in the same change that
 ships it.
 
+## ADR-0015 — Review has two outcomes: approve, or return with a recorded reason
+
+A reviewer can [return a pending version for correction](user-guide/documents.qmd#returning-for-correction)
+with a required reason, recorded as an immutable, audited fact row — part of
+the document's permanent record, like a signature. The document shows
+`returned` until a corrected version reopens review, and the returned version
+itself can never be approved (fix-forward, like "no delete button"). Returning
+takes the same `approve` authority as approving but is not a signature, so no
+re-authentication ceremony. This closed the roadmap's top gap (ADR-0014) in
+the same change that shipped it.
+
 ---
 
 Three of these — ADR-0004, ADR-0006, and ADR-0010 — are the same idea applied

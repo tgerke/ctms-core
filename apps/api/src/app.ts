@@ -14,6 +14,7 @@ import {
   reportEnrollment,
   resolveActionItem,
   resolveIssue,
+  returnDocumentVersion,
   scheduleVisit,
   signDocumentVersion,
   siteStaff,
@@ -146,6 +147,13 @@ export function buildApp(db: Db, sql: Sql) {
       },
       "versionId",
     ),
+  );
+  // Returning is the other review outcome: it takes the same authority that
+  // could approve (ADR-0015).
+  app.use(
+    "/document-versions/:versionId/return",
+    auth,
+    requirePermission(sql, "approve", "versionId"),
   );
   app.use("/audit-events", auth, requirePermission(sql, "read"));
   app.use("/audit-chain/*", auth, requirePermission(sql, "read"));
@@ -395,6 +403,7 @@ export function buildApp(db: Db, sql: Sql) {
         ),
         400: json(ErrorSchema, "Invalid input"),
         403: json(ErrorSchema, "Re-authentication failed"),
+        409: json(ErrorSchema, "Not signable (e.g. version was returned for correction)"),
       },
     }),
     async (c) => {
@@ -405,16 +414,70 @@ export function buildApp(db: Db, sql: Sql) {
       const body = c.req.valid("json");
       const reauth = await verifyReauth(c, body.reauth_token);
       if (!reauth.ok) return c.json({ error: reauth.error }, 403);
-      const sig = await signDocumentVersion(db, actor, {
-        documentVersionId: c.req.valid("param").versionId,
-        signerPersonId: actor.personId,
-        meaning: body.meaning,
-        reauthMethod: reauth.method,
-        reauthAt: reauth.at,
-        effectiveDate: body.effective_date,
-        expiresAt: body.expires_at,
-      });
-      return c.json({ signature_id: sig.id, signed_sha256: sig.signedSha256 }, 201);
+      try {
+        const sig = await signDocumentVersion(db, actor, {
+          documentVersionId: c.req.valid("param").versionId,
+          signerPersonId: actor.personId,
+          meaning: body.meaning,
+          reauthMethod: reauth.method,
+          reauthAt: reauth.at,
+          effectiveDate: body.effective_date,
+          expiresAt: body.expires_at,
+        });
+        return c.json({ signature_id: sig.id, signed_sha256: sig.signedSha256 }, 201);
+      } catch (e) {
+        // Domain refusals (e.g. approving a returned version) are the client's
+        // to fix, not server faults.
+        return c.json({ error: e instanceof Error ? e.message : "sign failed" }, 409);
+      }
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: "post",
+      path: "/document-versions/{versionId}/return",
+      security,
+      summary: "Return a pending version for correction",
+      description:
+        "The review outcome besides approval (ADR-0015): records who returned the version, when, and why as an immutable fact, and moves the document to 'returned' until a corrected version is uploaded. A returned version can never be approved. Requires the same 'approve' permission as an approval signature; not a signature, so no re-authentication.",
+      request: {
+        params: z.object({ versionId: z.string().uuid() }),
+        body: {
+          content: {
+            "application/json": {
+              schema: z.object({ reason: z.string().trim().min(1).max(2000) }),
+            },
+          },
+        },
+      },
+      responses: {
+        201: json(
+          z.object({ return_id: z.string().uuid(), returned_at: z.string() }),
+          "Returned",
+        ),
+        400: json(ErrorSchema, "Invalid input"),
+        409: json(ErrorSchema, "Not returnable (not latest, or not pending review)"),
+      },
+    }),
+    async (c) => {
+      const actor = c.get("actor");
+      if (!actor.personId) {
+        return c.json({ error: "returning requires a person-linked token" }, 400);
+      }
+      try {
+        const ret = await returnDocumentVersion(db, actor, {
+          documentVersionId: c.req.valid("param").versionId,
+          returnedByPersonId: actor.personId,
+          reason: c.req.valid("json").reason,
+        });
+        return c.json(
+          { return_id: ret.id, returned_at: ret.returnedAt.toISOString() },
+          201,
+        );
+      } catch (e) {
+        return c.json({ error: e instanceof Error ? e.message : "return failed" }, 409);
+      }
     },
   );
 

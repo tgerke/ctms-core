@@ -68,7 +68,14 @@ export default function VisitPage() {
       <section className="card">
         <div className="flex flex-wrap items-center gap-2 border-b border-hairline px-4 py-3">
           <h2 className="font-medium">Trip report & letters</h2>
-          {v.visit_date && !tripReport && <TripReportUpload visitId={v.monitoring_visit_id} siteNumber={v.site_number} visitType={v.visit_type} />}
+          {v.visit_date && (!tripReport || tripReport.status === "returned") && (
+            <TripReportUpload
+              visitId={v.monitoring_visit_id}
+              siteNumber={v.site_number}
+              visitType={v.visit_type}
+              corrected={tripReport?.status === "returned"}
+            />
+          )}
         </div>
         {detail.documents.length === 0 ? (
           <p className="px-4 py-3 text-sm text-muted">
@@ -160,10 +167,12 @@ function TripReportUpload({
   visitId,
   siteNumber,
   visitType,
+  corrected,
 }: {
   visitId: string;
   siteNumber: string;
   visitType: string;
+  corrected?: boolean;
 }) {
   const upload = useVisitUpload();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -196,7 +205,11 @@ function TripReportUpload({
         className="inline-flex items-center gap-1.5 rounded-md border border-hairline px-2 py-1 text-xs text-ink2 hover:bg-page disabled:opacity-50"
       >
         <FileUp size={12} aria-hidden />
-        {upload.isPending ? "Uploading…" : "Upload trip report"}
+        {upload.isPending
+          ? "Uploading…"
+          : corrected
+            ? "Upload corrected report"
+            : "Upload trip report"}
       </button>
       <ErrorNote error={err} />
     </div>

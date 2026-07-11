@@ -102,7 +102,11 @@ request("http://localhost:8787") |>
 
 `approval` is one of three signature meanings — `author` and `review` record
 attestations without changing status; only `approval` makes a version
-effective and supersedes its non-visit-linked predecessors. The upload accepts
+effective and supersedes its non-visit-linked predecessors. Review's other
+outcome is `POST /document-versions/{id}/return` with a `reason` (ADR-0015):
+the reason is an immutable fact row, the document shows `returned` until a
+corrected version arrives, and the returned version can never be approved.
+Same `approve` permission as approving; not a signature, so no re-auth. The upload accepts
 two optional provenance fields, `source_system` and `source_ref`, for
 source-system filing (ADR-0011): filed versions land as `pending_review` like
 any upload and show a "filed by" chip in the UI.

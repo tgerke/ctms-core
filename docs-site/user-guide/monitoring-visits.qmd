@@ -48,6 +48,12 @@ approval works exactly as described in
 [working with documents](documents.qmd#approving-and-signing): a confirmation
 step, an identity check, and a signature bound to the exact file.
 
+The reviewer can also send the report back —
+[return it for correction](documents.qmd#returning-for-correction) with a
+reason. The visit drops back to **Awaiting report**, and the visit page's
+upload button reads **Upload corrected report**; the corrected report goes
+through review like the first one, and the returned one stays on the record.
+
 ## Action items and closing out
 
 Findings from the visit go in as action items: a description and a due date,

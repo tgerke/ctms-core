@@ -64,12 +64,16 @@ const pendingDoc = expected.find(
 );
 if (!pendingDoc) throw new Error("no pending_review document in seed data");
 
+const returnedDoc = expected.find((e) => e.status === "returned" && e.document_id);
+if (!returnedDoc) throw new Error("no returned document in seed data");
+
 console.log("subjects:", {
   site: `${gappySite.site_number} (${gappySite.pct_current}% current)`,
   visit: `${visit.visit_type} @ ${visit.site_number} (${visit.stage})`,
   scheduledVisit: `${scheduledVisit.visit_type} @ ${scheduledVisit.site_number}`,
   document: doc.artifact_name,
   pendingDocument: pendingDoc.artifact_name,
+  returnedDocument: returnedDoc.artifact_name,
 });
 
 // --- CDP plumbing --------------------------------------------------------
@@ -200,6 +204,10 @@ await evaluate(
 );
 await sleep(400);
 await shootSections({ Versions: "document-approve.png" });
+
+// the returned document: reason banner in the versions card, no approve button
+await navigate(`${WEB}/documents/${returnedDoc.document_id}`);
+await shootSections({ Versions: "document-returned.png" });
 
 await navigate(`${WEB}/audit`);
 await shoot("audit-page.png");

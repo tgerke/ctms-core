@@ -29,7 +29,7 @@ const monthsFromNow = (n: number) => monthsAgo(-n);
 // Attribute all seed writes in the audit trail.
 await sql`SELECT set_config('ctms.actor_label', 'seed', false)`;
 
-await sql`TRUNCATE audit_event, signature, document_version, expected_document,
+await sql`TRUNCATE audit_event, signature, document_return, document_version, expected_document,
   monitoring_visit_document, visit_action_item, issue, monitoring_visit,
   enrollment_report, study_milestone, access_grant,
   document, requirement_rule, study_site_role, study_site, protocol_version,
@@ -253,11 +253,13 @@ interface DocSpec {
   title: string;
   site?: string;
   person?: string;
-  status?: "pending_review" | "effective" | "superseded";
+  status?: "pending_review" | "effective" | "superseded" | "returned";
   effective?: string;
   uploadedBy?: string;
   versions?: string[]; // version labels; default one
   sign?: { by: string; meaning: "author" | "review" | "approval" };
+  // Return-for-correction fact (ADR-0015); pair with status: "returned".
+  returned?: { by: string; reason: string };
 }
 
 async function addDoc(spec: DocSpec) {
@@ -271,7 +273,10 @@ async function addDoc(spec: DocSpec) {
       personId: spec.person ? personId.get(spec.person)! : null,
       title: spec.title,
       status,
-      effectiveDate: status === "pending_review" ? null : (spec.effective ?? null),
+      effectiveDate:
+        status === "pending_review" || status === "returned"
+          ? null
+          : (spec.effective ?? null),
     })
     .returning();
   const labels = spec.versions ?? ["v1.0"];
@@ -295,6 +300,16 @@ async function addDoc(spec: DocSpec) {
       mimeType: "application/pdf",
       sizeBytes,
       uploadedBy: personId.get(spec.uploadedBy ?? "feld")!,
+    });
+  }
+  if (spec.returned) {
+    const [version] = await sql<[{ id: string }]>`
+      SELECT id FROM document_version WHERE document_id = ${doc!.id}
+      ORDER BY version_number DESC LIMIT 1`;
+    await db.insert(s.documentReturn).values({
+      documentVersionId: version!.id,
+      returnedBy: personId.get(spec.returned.by)!,
+      reason: spec.returned.reason,
     });
   }
   if (spec.sign) {
@@ -368,7 +383,8 @@ await addDoc({ artifact: "05.02.01", title: "CV — Tom Oduya, CCRP", site: "002
 await addDoc({ artifact: "05.02.01", title: "CV — Grace Lin, RN", site: "002", person: "lin", effective: monthsAgo(3) });
 await addDoc({ artifact: "05.02.03", title: "GCP Certificate — Lin", site: "002", person: "lin", effective: monthsAgo(8) });
 
-// --- Site 003 (missing DoA log + lab accreditation; Cole license expiring)
+// --- Site 003 (missing DoA log + lab accreditation; Cole license expiring;
+// --- Torres GCP certificate returned for correction)
 await addDoc({ artifact: "04.01.02", title: "IRB Approval — Site 003", site: "003", effective: monthsAgo(5) });
 await addDoc({ artifact: "04.01.04", title: "IRB-Approved Consent Form — Site 003", site: "003", effective: monthsAgo(5) });
 await addDoc({ artifact: "05.01.04", title: "Clinical Trial Agreement — Site 003", site: "003", effective: monthsAgo(6) });
@@ -386,7 +402,16 @@ await addDoc({ artifact: "05.02.02", title: "Medical License — Cole (SC)", sit
 await addDoc({ artifact: "05.02.03", title: "GCP Certificate — Cole", site: "003", person: "cole", effective: monthsAgo(24) });
 await addDoc({ artifact: "05.02.04", title: "Financial Disclosure — Cole", site: "003", person: "cole", effective: monthsAgo(5) });
 await addDoc({ artifact: "05.02.01", title: "CV — Mia Torres, BSN, CCRC", site: "003", person: "torres", effective: monthsAgo(2) });
-await addDoc({ artifact: "05.02.03", title: "GCP Certificate — Torres", site: "003", person: "torres", effective: monthsAgo(6) });
+// Returned for correction (ADR-0015): scan unreadable, sent back by the sponsor.
+await addDoc({
+  artifact: "05.02.03",
+  title: "GCP Certificate — Torres",
+  site: "003",
+  person: "torres",
+  status: "returned",
+  uploadedBy: "torres",
+  returned: { by: "feld", reason: "Certificate scan is cut off — completion date and provider are not legible. Please upload a full-page scan." },
+});
 
 // --- Site 004 (pending activation: mostly missing, startup docs trickling in)
 await addDoc({ artifact: "05.01.04", title: "Clinical Trial Agreement — Site 004", site: "004", effective: daysAgo(20) });

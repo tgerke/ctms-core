@@ -10,6 +10,7 @@ import {
   FileClock,
   Hourglass,
   ListChecks,
+  Undo2,
   X,
   type LucideIcon,
 } from "lucide-react";
@@ -33,20 +34,26 @@ export const STATUS: Record<ExpectedStatus, StatusSpec> = {
     hollow: true,
   },
   expired: { label: "Expired", rank: 1, icon: X, cssVar: "--status-critical" },
+  returned: {
+    label: "Returned",
+    rank: 2,
+    icon: Undo2,
+    cssVar: "--status-serious",
+  },
   pending_review: {
     label: "Pending review",
-    rank: 2,
+    rank: 3,
     icon: Hourglass,
     cssVar: "--info",
   },
   expiring_soon: {
     label: "Expiring soon",
-    rank: 3,
+    rank: 4,
     icon: Clock,
     cssVar: "--status-warn",
   },
-  superseded: { label: "Superseded", rank: 4, icon: Archive, cssVar: "--muted" },
-  current: { label: "Current", rank: 5, icon: Check, cssVar: "--status-good" },
+  superseded: { label: "Superseded", rank: 5, icon: Archive, cssVar: "--muted" },
+  current: { label: "Current", rank: 6, icon: Check, cssVar: "--status-good" },
 };
 
 export const worst = (statuses: ExpectedStatus[]): ExpectedStatus =>

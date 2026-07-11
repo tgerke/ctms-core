@@ -78,7 +78,8 @@ erDiagram
 - **document** — one logical record: FK to `tmf_artifact` (its type) plus scope
   columns: `study_id` (always), `study_site_id` (site-scoped), `person_id`
   (person-scoped; CHECK: person scope requires site scope — a CV is filed per site).
-  Lifecycle `status`: `pending_review → effective → superseded`. Optional
+  Lifecycle `status`: `pending_review → effective → superseded`, with a `returned`
+  detour when review sends a version back (ADR-0015). Optional
   `effective_date` / `expires_at` (licenses, approvals, training certificates).
 - **document_version** — **immutable** (DB triggers reject UPDATE/DELETE): version
   number, `sha256` of content, filename, MIME type, size, uploader, timestamp, and —
@@ -92,6 +93,10 @@ erDiagram
   (§11.70) verifiable independently of the version row. Also records
   `reauth_method` and `reauth_at` — the §11.200 re-authentication that produced
   the signature — required by a DB CHECK on every new row. Immutable like versions.
+- **document_return** — the review outcome besides approval (ADR-0015):
+  `document_version_id`, `returned_by`, `reason` (CHECK: non-blank), timestamp.
+  Immutable like a signature; a returned version can never be approved — the fix
+  is a corrected version, which reopens review.
 
 ## Requirement engine
 
@@ -105,7 +110,7 @@ erDiagram
 - **v_expected_document_status** (*view*) — the heart of the system. Joins each
   placeholder to its best fulfilling document (same artifact + scope, latest
   effective) and derives status:
-  `missing | pending_review | current | expiring_soon (≤60d) | expired | superseded`.
+  `missing | pending_review | returned | current | expiring_soon (≤60d) | expired | superseded`.
   No stored status column exists anywhere — completeness is always computed from
   ground truth, so it cannot drift.
 - **v_study_site_completeness** (*view*) — per-site rollup: counts by status, percent
@@ -138,7 +143,8 @@ views** (ADR-0006). No table in this layer has a status column.
 
 Derived views: **v_monitoring_visit_status** (stage: `scheduled → overdue →
 awaiting_report → report_pending_review → follow_up → complete`, computed from the
-dates, the linked trip report's document status, and open action items),
+dates, the linked trip report's document status, and open action items; a
+returned trip report drops the visit back to `awaiting_report`, ADR-0015),
 **v_issue_status** (`open | overdue | resolved`), **v_site_enrollment** (latest report
 per site vs target), **v_milestone_status** (`achieved | overdue | upcoming`).
 

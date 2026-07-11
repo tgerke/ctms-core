@@ -33,6 +33,7 @@ export const documentStatus = pgEnum("document_status", [
   "pending_review",
   "effective",
   "superseded",
+  "returned",
 ]);
 export const signatureMeaning = pgEnum("signature_meaning", ["author", "review", "approval"]);
 // System-access roles (who may call which API operations) — distinct from
@@ -292,6 +293,21 @@ export const signature = pgTable("signature", {
   // exempt — the columns state the honest truth about them).
   reauthMethod: reauthMethod("reauth_method"),
   reauthAt: timestamp("reauth_at", { withTimezone: true }),
+});
+
+// Return-for-correction (ADR-0015): a reviewer sends a pending version back
+// with a documented reason. Append-only like signature (immutability trigger
+// in the SQL migration); the document's status carries the lifecycle state.
+export const documentReturn = pgTable("document_return", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  documentVersionId: uuid("document_version_id")
+    .notNull()
+    .references(() => documentVersion.id),
+  returnedBy: uuid("returned_by")
+    .notNull()
+    .references(() => person.id),
+  reason: text("reason").notNull(),
+  returnedAt: timestamp("returned_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 // ---------------------------------------------------------------------------

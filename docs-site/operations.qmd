@@ -33,7 +33,7 @@ the dates, the linked trip report's document status, and open action items:
 | --- | --- |
 | `scheduled` | Scheduled date in the future, not yet conducted |
 | `overdue` | Scheduled date has passed with no visit date recorded |
-| `awaiting_report` | Conducted, but no trip report uploaded yet |
+| `awaiting_report` | Conducted, but no trip report yet — or the report was returned for correction (ADR-0015) |
 | `report_pending_review` | Trip report uploaded, awaiting approval signature |
 | `follow_up` | Report approved, but action items remain open |
 | `complete` | Report approved and every action item resolved |
@@ -49,7 +49,9 @@ Visit documents — trip reports, confirmation letters, follow-up letters — ar
 ordinary documents linked to the visit through a typed join table. They get the
 same immutable versions and hash-bound signatures as everything else; "report
 approved" is an ordinary approval signature, which is what moves the visit past
-`report_pending_review`.
+`report_pending_review` — and "report returned" is an ordinary
+return-for-correction (ADR-0015), which drops the visit back to
+`awaiting_report` until a corrected report is uploaded.
 
 One wrinkle worth knowing: two visits at the same site produce documents with
 identical artifact and scope, so visit-linked documents are treated as

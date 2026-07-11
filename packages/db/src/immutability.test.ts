@@ -43,6 +43,13 @@ describe("append-only enforcement (Part 11 §11.10(c) §11.10(e))", () => {
     );
     await expect(sql`DELETE FROM signature`).rejects.toThrow(/immutable/);
   });
+
+  it("rejects UPDATE and DELETE on document_return (ADR-0015)", async () => {
+    await expect(
+      sql`UPDATE document_return SET reason = 'rewritten'`,
+    ).rejects.toThrow(/immutable/);
+    await expect(sql`DELETE FROM document_return`).rejects.toThrow(/immutable/);
+  });
 });
 
 describe("audit trail (§11.10(e))", () => {
