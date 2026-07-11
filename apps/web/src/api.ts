@@ -8,7 +8,8 @@ export type ExpectedStatus =
   | "current"
   | "expiring_soon"
   | "expired"
-  | "superseded";
+  | "superseded"
+  | "waived";
 
 export interface Study {
   id: string;
@@ -35,6 +36,7 @@ export interface SiteCompleteness {
   returned_count: number;
   expired_count: number;
   missing_count: number;
+  waived_count: number;
   pct_current: number;
 }
 
@@ -59,6 +61,12 @@ export interface ExpectedDocument {
   document_status: string | null;
   effective_date: string | null;
   effective_expiry: string | null;
+  waiver_id: string | null;
+  waiver_reason: string | null;
+  waived_at: string | null;
+  waived_by: string | null;
+  waived_by_given_name: string | null;
+  waived_by_family_name: string | null;
   status: ExpectedStatus;
   site_number: string | null;
   site_name: string | null;
@@ -217,6 +225,71 @@ export interface VisitDetail {
   }[];
   actionItems: ActionItem[];
   issues: Issue[];
+}
+
+// --- Administration (ADR-0016) ---------------------------------------------
+
+export type OrgKind = "sponsor" | "cro" | "site_org";
+export type StaffRole =
+  | "principal_investigator"
+  | "sub_investigator"
+  | "study_coordinator"
+  | "pharmacist"
+  | "research_nurse";
+export type AccessRole = "admin" | "trial_ops" | "monitor" | "read_only" | "ingest";
+
+export interface Organization {
+  id: string;
+  name: string;
+  kind: OrgKind;
+  site_count: number;
+}
+
+export interface SiteDirectoryEntry {
+  id: string;
+  name: string;
+  city: string | null;
+  state: string | null;
+  organization_id: string;
+  organization_name: string;
+}
+
+export interface Person {
+  id: string;
+  given_name: string;
+  family_name: string;
+  email: string;
+  credentials: string | null;
+  grants: {
+    grant_id: string;
+    role: AccessRole;
+    study_id: string | null;
+    study_site_id: string | null;
+    granted_at: string;
+  }[];
+}
+
+export interface RequirementRule {
+  id: string;
+  study_id: string;
+  tmf_artifact_id: number;
+  artifact_code: string;
+  artifact_name: string;
+  scope_level: "study" | "study_site" | "person_role";
+  applies_to_roles: string[] | null;
+  validity_months: number | null;
+  requires_signature: boolean;
+  name: string;
+  description: string | null;
+  expected_count: number;
+}
+
+export interface TmfArtifact {
+  id: number;
+  code: string;
+  name: string;
+  section_name: string;
+  zone_name: string;
 }
 
 export class ApiError extends Error {
@@ -633,6 +706,239 @@ export function useReturn() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ reason: input.reason }),
       }),
+    onSuccess: () => qc.invalidateQueries(),
+  });
+}
+
+// --- Administration hooks (ADR-0016) ---------------------------------------
+
+export const useOrganizations = () =>
+  useQuery({
+    queryKey: ["organizations"],
+    queryFn: () => api<Organization[]>("/organizations"),
+  });
+
+export const useSiteDirectory = () =>
+  useQuery({ queryKey: ["site-directory"], queryFn: () => api<SiteDirectoryEntry[]>("/sites") });
+
+export const usePeople = () =>
+  useQuery({ queryKey: ["people"], queryFn: () => api<Person[]>("/people") });
+
+export const useTmfArtifacts = () =>
+  useQuery({
+    queryKey: ["tmf-artifacts"],
+    queryFn: () => api<TmfArtifact[]>("/tmf-artifacts"),
+  });
+
+export const useRequirementRules = (studyId: string | undefined) =>
+  useQuery({
+    queryKey: ["requirement-rules", studyId],
+    queryFn: () => api<RequirementRule[]>(`/studies/${studyId}/requirement-rules`),
+    enabled: !!studyId,
+  });
+
+/** Generic invalidate-everything mutation over a JSON endpoint. */
+function useAdminMutation<TInput>(toRequest: (input: TInput) => [string, RequestInit]) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: TInput) => {
+      const [path, init] = toRequest(input);
+      return api<{ id: string }>(path, init);
+    },
+    onSuccess: () => qc.invalidateQueries(),
+  });
+}
+
+export const useCreateOrganization = () =>
+  useAdminMutation((input: { name: string; kind: OrgKind }) => [
+    "/organizations",
+    jsonInit("POST", input),
+  ]);
+
+export const useCreateSite = () =>
+  useAdminMutation(
+    (input: { organizationId: string; name: string; city?: string; state?: string }) => [
+      "/sites",
+      jsonInit("POST", {
+        organization_id: input.organizationId,
+        name: input.name,
+        ...(input.city ? { city: input.city } : {}),
+        ...(input.state ? { state: input.state } : {}),
+      }),
+    ],
+  );
+
+export const useCreatePerson = () =>
+  useAdminMutation(
+    (input: {
+      givenName: string;
+      familyName: string;
+      email: string;
+      credentials?: string;
+    }) => [
+      "/people",
+      jsonInit("POST", {
+        given_name: input.givenName,
+        family_name: input.familyName,
+        email: input.email,
+        ...(input.credentials ? { credentials: input.credentials } : {}),
+      }),
+    ],
+  );
+
+export const useAddStudySite = (studyId: string | undefined) =>
+  useAdminMutation(
+    (input: { siteId: string; siteNumber: string; targetEnrollment?: number }) => [
+      `/studies/${studyId}/sites`,
+      jsonInit("POST", {
+        site_id: input.siteId,
+        site_number: input.siteNumber,
+        ...(input.targetEnrollment ? { target_enrollment: input.targetEnrollment } : {}),
+      }),
+    ],
+  );
+
+export const useUpdateStudySite = () =>
+  useAdminMutation(
+    (input: {
+      studySiteId: string;
+      status?: "pending" | "active" | "closed";
+      activatedAt?: string | null;
+    }) => [
+      `/study-sites/${input.studySiteId}`,
+      jsonInit("PATCH", {
+        ...(input.status ? { status: input.status } : {}),
+        ...(input.activatedAt !== undefined ? { activated_at: input.activatedAt } : {}),
+      }),
+    ],
+  );
+
+export const useAssignSiteRole = () =>
+  useAdminMutation(
+    (input: {
+      studySiteId: string;
+      personId: string;
+      role: StaffRole;
+      startDate: string;
+    }) => [
+      `/study-sites/${input.studySiteId}/roles`,
+      jsonInit("POST", {
+        person_id: input.personId,
+        role: input.role,
+        start_date: input.startDate,
+      }),
+    ],
+  );
+
+export const useEndSiteRole = () =>
+  useAdminMutation((input: { roleId: string; endDate: string }) => [
+    `/study-site-roles/${input.roleId}`,
+    jsonInit("PATCH", { end_date: input.endDate }),
+  ]);
+
+export const useGrantAccess = () =>
+  useAdminMutation(
+    (input: {
+      personId: string;
+      role: AccessRole;
+      studyId?: string;
+      studySiteId?: string;
+    }) => [
+      "/access-grants",
+      jsonInit("POST", {
+        person_id: input.personId,
+        role: input.role,
+        ...(input.studyId ? { study_id: input.studyId } : {}),
+        ...(input.studySiteId ? { study_site_id: input.studySiteId } : {}),
+      }),
+    ],
+  );
+
+export const useRevokeGrant = () =>
+  useAdminMutation((input: { grantId: string }) => [
+    `/access-grants/${input.grantId}/revoke`,
+    jsonInit("POST", {}),
+  ]);
+
+export const useCreateRule = (studyId: string | undefined) =>
+  useAdminMutation(
+    (input: {
+      tmfArtifactId: number;
+      scopeLevel: "study" | "study_site" | "person_role";
+      name: string;
+      description?: string;
+      appliesToRoles?: StaffRole[];
+      validityMonths?: number;
+      requiresSignature?: boolean;
+    }) => [
+      `/studies/${studyId}/requirement-rules`,
+      jsonInit("POST", {
+        tmf_artifact_id: input.tmfArtifactId,
+        scope_level: input.scopeLevel,
+        name: input.name,
+        ...(input.description ? { description: input.description } : {}),
+        ...(input.appliesToRoles ? { applies_to_roles: input.appliesToRoles } : {}),
+        ...(input.validityMonths ? { validity_months: input.validityMonths } : {}),
+        ...(input.requiresSignature !== undefined
+          ? { requires_signature: input.requiresSignature }
+          : {}),
+      }),
+    ],
+  );
+
+export const useUpdateRule = () =>
+  useAdminMutation(
+    (input: {
+      ruleId: string;
+      name?: string;
+      validityMonths?: number | null;
+      requiresSignature?: boolean;
+    }) => [
+      `/requirement-rules/${input.ruleId}`,
+      jsonInit("PATCH", {
+        ...(input.name ? { name: input.name } : {}),
+        ...(input.validityMonths !== undefined
+          ? { validity_months: input.validityMonths }
+          : {}),
+        ...(input.requiresSignature !== undefined
+          ? { requires_signature: input.requiresSignature }
+          : {}),
+      }),
+    ],
+  );
+
+export const useSyncExpected = (studyId: string | undefined) => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () =>
+      api<{ inserted: number }>(`/studies/${studyId}/sync-expected-documents`, {
+        method: "POST",
+      }),
+    onSuccess: () => qc.invalidateQueries(),
+  });
+};
+
+/** Waive an expected document: the absence is explained, not a gap (ADR-0016). */
+export function useWaive() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { expectedDocumentId: string; reason: string }) =>
+      api<{ waiver_id: string }>(
+        `/expected-documents/${input.expectedDocumentId}/waive`,
+        jsonInit("POST", { reason: input.reason }),
+      ),
+    onSuccess: () => qc.invalidateQueries(),
+  });
+}
+
+export function useRevokeWaiver() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { expectedDocumentId: string; reason: string }) =>
+      api<{ waiver_id: string }>(
+        `/expected-documents/${input.expectedDocumentId}/revoke-waiver`,
+        jsonInit("POST", { reason: input.reason }),
+      ),
     onSuccess: () => qc.invalidateQueries(),
   });
 }

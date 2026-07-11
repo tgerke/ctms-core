@@ -21,6 +21,7 @@ count tiles.
 | **Expiring soon** (amber) | Current, but inside its expiry warning window | Chase the renewal before it lapses |
 | **Current** (green) | Approved and in force | Nothing |
 | **Superseded** (grey) | Replaced by a newer sibling document | Nothing — it's history, kept forever |
+| **Waived** (grey) | An admin recorded why the requirement doesn't apply here (e.g. central IRB) | Nothing, unless circumstances change — then lift the waiver from the site page |
 
 ## Monitoring visit stages
 

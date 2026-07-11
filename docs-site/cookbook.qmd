@@ -219,10 +219,36 @@ The same `PATCH` records the visit's conducted date, monitor, and summary;
 
 ## The admin corner
 
-When requirement rules or staff role assignments change (today that means
-SQL — see the [roadmap](roadmap.qmd)), an admin re-materializes the
-expected-document placeholders. The sync is idempotent: it inserts what's
-newly expected and prunes unfulfilled placeholders that no longer apply.
+Site onboarding is a write surface, not a seed script (ADR-0016): create the
+org and site, link the site to the study, activate it, add people, assign
+roles, grant access — every step an audited row. The
+[user guide](user-guide/administration.qmd) covers the same flow in the app.
+
+```r
+adm <- function(path, body) {
+  request("http://localhost:8787") |>
+    req_url_path_append(path) |>
+    req_auth_bearer_token("dev-admin-token") |>
+    req_body_json(body) |> req_perform() |> resp_body_json()
+}
+
+org  <- adm("organizations", list(name = "Cascade Clinical Research", kind = "site_org"))
+site <- adm("sites", list(organization_id = org$id, name = "Cascade Clinical Research",
+                          city = "Boise", state = "ID"))
+ss   <- adm(paste0("studies/", study, "/sites"),
+            list(site_id = site$id, site_number = "005"))
+pi   <- adm("people", list(given_name = "Ada", family_name = "Okafor",
+                           email = "ada.okafor@cascade.example", credentials = "MD"))
+adm(paste0("study-sites/", ss$id, "/roles"),
+    list(person_id = pi$id, role = "principal_investigator",
+         start_date = as.character(Sys.Date())))
+adm("access-grants", list(person_id = pi$id, role = "read_only", study_id = study))
+```
+
+When requirement rules or staff role assignments change, an admin
+re-materializes the expected-document placeholders. The sync is idempotent:
+it inserts what's newly expected and prunes unfulfilled placeholders that no
+longer apply.
 
 ```r
 request("http://localhost:8787") |>
@@ -230,6 +256,15 @@ request("http://localhost:8787") |>
   req_auth_bearer_token("dev-admin-token") |>
   req_method("POST") |>
   req_perform()
+```
+
+And when an expected document genuinely doesn't apply, waive it instead of
+leaving a permanent gap — the reason is required, and lifting the waiver
+later is itself a recorded fact:
+
+```r
+adm(paste0("expected-documents/", expected_id, "/waive"),
+    list(reason = "Central IRB of record; local approval letter not applicable."))
 ```
 
 ## Auditability is an endpoint

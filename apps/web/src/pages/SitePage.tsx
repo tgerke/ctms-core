@@ -1,21 +1,30 @@
-import { ArrowLeft, Upload } from "lucide-react";
+import { ArrowLeft, CircleSlash, Undo2, Upload, UserPlus } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import {
+  useAssignSiteRole,
+  useEndSiteRole,
   useEnrollment,
   useExpected,
   useIssues,
+  usePeople,
+  useRevokeWaiver,
   useSites,
   useStaff,
+  useSyncExpected,
   useUpload,
   useVisits,
+  useWaive,
   type ExpectedDocument,
+  type StaffMember,
+  type StaffRole,
   type Study,
 } from "../api";
 import {
   EnrollmentBars,
   ErrorNote,
   IssueListItem,
+  localToday,
   NewIssueForm,
   PageState,
   ReportEnrollmentForm,
@@ -78,6 +87,7 @@ export default function SitePage({ study }: { study: Study | undefined }) {
           {site.expired_count} expired · {site.expiring_soon_count} expiring ·{" "}
           {site.pending_review_count} pending review
           {site.returned_count > 0 ? ` · ${site.returned_count} returned` : ""}
+          {site.waived_count > 0 ? ` · ${site.waived_count} waived` : ""}
         </div>
       </div>
 
@@ -85,24 +95,12 @@ export default function SitePage({ study }: { study: Study | undefined }) {
         <h2 className="border-b border-hairline px-4 py-3 font-medium">Staff</h2>
         <ul className="divide-y divide-hairline">
           {staff?.map((m) => (
-            <li key={m.role_id} className="flex flex-wrap items-center gap-x-3 px-4 py-2.5">
-              <span className="text-sm font-medium">
-                {m.given_name} {m.family_name}
-                {m.credentials ? `, ${m.credentials}` : ""}
-              </span>
-              <span className="text-xs text-ink2">{ROLE_LABEL[m.role] ?? m.role}</span>
-              <span className="ml-auto text-xs">
-                {m.open_items === 0 ? (
-                  <span style={{ color: "var(--status-good)" }}>all documents current</span>
-                ) : (
-                  <span style={{ color: "var(--status-serious)" }}>
-                    {m.open_items} open item{m.open_items > 1 ? "s" : ""}
-                  </span>
-                )}
-              </span>
-            </li>
+            <StaffRow key={m.role_id} m={m} />
           ))}
         </ul>
+        <div className="border-t border-hairline px-4 py-3">
+          <AddStaffForm studyId={study.id} studySiteId={site.study_site_id} />
+        </div>
       </section>
 
       <section className="card">
@@ -173,6 +171,8 @@ export default function SitePage({ study }: { study: Study | undefined }) {
 
 function ExpectedRow({ row }: { row: ExpectedDocument }) {
   const upload = useUpload();
+  const waive = useWaive();
+  const liftWaiver = useRevokeWaiver();
   const fileRef = useRef<HTMLInputElement>(null);
   const [err, setErr] = useState<unknown>(null);
 
@@ -195,8 +195,46 @@ function ExpectedRow({ row }: { row: ExpectedDocument }) {
           {row.rule_name}
           {row.effective_expiry ? ` · expires ${row.effective_expiry}` : ""}
         </div>
+        {row.status === "waived" && (
+          <div className="text-xs text-ink2">
+            ↳ waived {row.waived_at?.slice(0, 10)} by {row.waived_by_given_name}{" "}
+            {row.waived_by_family_name}: {row.waiver_reason}
+          </div>
+        )}
       </div>
       <div className="ml-auto flex items-center gap-2">
+        {row.status === "missing" && (
+          <ReasonAction
+            icon={CircleSlash}
+            label="Waive"
+            prompt="Why is this document not applicable?"
+            pendingLabel="Waiving…"
+            pending={waive.isPending}
+            onConfirm={(reason) => {
+              setErr(null);
+              waive.mutate(
+                { expectedDocumentId: row.expected_document_id, reason },
+                { onError: (e) => setErr(e) },
+              );
+            }}
+          />
+        )}
+        {row.status === "waived" && (
+          <ReasonAction
+            icon={Undo2}
+            label="Lift waiver"
+            prompt="Why does this requirement apply again?"
+            pendingLabel="Lifting…"
+            pending={liftWaiver.isPending}
+            onConfirm={(reason) => {
+              setErr(null);
+              liftWaiver.mutate(
+                { expectedDocumentId: row.expected_document_id, reason },
+                { onError: (e) => setErr(e) },
+              );
+            }}
+          />
+        )}
         {(row.status === "missing" ||
           row.status === "expired" ||
           row.status === "returned") && (
@@ -239,5 +277,206 @@ function ExpectedRow({ row }: { row: ExpectedDocument }) {
       </div>
       <ErrorNote error={err} className="w-full" />
     </li>
+  );
+}
+
+/** Button that expands to a required-reason input before firing its action. */
+function ReasonAction({
+  icon: Icon,
+  label,
+  prompt,
+  pendingLabel,
+  pending,
+  onConfirm,
+}: {
+  icon: typeof CircleSlash;
+  label: string;
+  prompt: string;
+  pendingLabel: string;
+  pending: boolean;
+  onConfirm: (reason: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState("");
+  if (!open) {
+    return (
+      <button
+        onClick={() => setOpen(true)}
+        className="inline-flex items-center gap-1.5 rounded-md border border-hairline px-2 py-1 text-xs text-ink2 hover:bg-page"
+      >
+        <Icon size={12} aria-hidden />
+        {label}
+      </button>
+    );
+  }
+  return (
+    <form
+      className="flex items-center gap-2"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (!reason.trim()) return;
+        onConfirm(reason.trim());
+        setOpen(false);
+        setReason("");
+      }}
+    >
+      <input
+        value={reason}
+        onChange={(e) => setReason(e.target.value)}
+        placeholder={prompt}
+        className="w-64 rounded-md border border-hairline bg-surface px-2 py-1 text-xs"
+        aria-label={prompt}
+        autoFocus
+      />
+      <button
+        type="submit"
+        disabled={pending || !reason.trim()}
+        className="inline-flex items-center gap-1.5 rounded-md border border-hairline px-2 py-1 text-xs text-ink2 hover:bg-page disabled:opacity-50"
+      >
+        <Icon size={12} aria-hidden />
+        {pending ? pendingLabel : label}
+      </button>
+      <button
+        type="button"
+        onClick={() => setOpen(false)}
+        className="text-xs text-muted hover:underline"
+      >
+        cancel
+      </button>
+    </form>
+  );
+}
+
+function StaffRow({ m }: { m: StaffMember }) {
+  const endRole = useEndSiteRole();
+  const [err, setErr] = useState<unknown>(null);
+  const ended = m.end_date !== null;
+  return (
+    <li className="flex flex-wrap items-center gap-x-3 px-4 py-2.5">
+      <span className={`text-sm font-medium ${ended ? "text-muted line-through" : ""}`}>
+        {m.given_name} {m.family_name}
+        {m.credentials ? `, ${m.credentials}` : ""}
+      </span>
+      <span className="text-xs text-ink2">
+        {ROLE_LABEL[m.role] ?? m.role}
+        {ended ? ` · ended ${m.end_date}` : ""}
+      </span>
+      <span className="ml-auto flex items-center gap-2 text-xs">
+        {!ended &&
+          (m.open_items === 0 ? (
+            <span style={{ color: "var(--status-good)" }}>all documents current</span>
+          ) : (
+            <span style={{ color: "var(--status-serious)" }}>
+              {m.open_items} open item{m.open_items > 1 ? "s" : ""}
+            </span>
+          ))}
+        {!ended && (
+          <button
+            onClick={() => {
+              setErr(null);
+              endRole.mutate(
+                { roleId: m.role_id, endDate: localToday() },
+                { onError: (e) => setErr(e) },
+              );
+            }}
+            disabled={endRole.isPending}
+            className="rounded-md border border-hairline px-2 py-1 text-xs text-ink2 hover:bg-page disabled:opacity-50"
+            title="Records today as the role's end date — assignments are never deleted"
+          >
+            {endRole.isPending ? "Ending…" : "End role"}
+          </button>
+        )}
+      </span>
+      <ErrorNote error={err} className="w-full" />
+    </li>
+  );
+}
+
+const STAFF_ROLES = Object.keys(ROLE_LABEL) as StaffRole[];
+
+function AddStaffForm({
+  studyId,
+  studySiteId,
+}: {
+  studyId: string;
+  studySiteId: string;
+}) {
+  const { data: people } = usePeople();
+  const assign = useAssignSiteRole();
+  const sync = useSyncExpected(studyId);
+  const [personId, setPersonId] = useState("");
+  const [role, setRole] = useState<StaffRole>("study_coordinator");
+  const [start, setStart] = useState(localToday());
+  const [err, setErr] = useState<unknown>(null);
+  return (
+    <form
+      className="flex flex-wrap items-center gap-2"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (!personId) return;
+        setErr(null);
+        assign.mutate(
+          { studySiteId, personId, role, startDate: start },
+          {
+            onError: (e) => setErr(e),
+            // Person-scoped requirements (CV, licenses, GCP) materialize on sync.
+            onSuccess: () => {
+              setPersonId("");
+              sync.mutate(undefined, { onError: (e) => setErr(e) });
+            },
+          },
+        );
+      }}
+    >
+      <select
+        value={personId}
+        onChange={(e) => setPersonId(e.target.value)}
+        className="rounded-md border border-hairline bg-surface px-2 py-1 text-xs"
+        aria-label="Person"
+      >
+        <option value="">Add staff…</option>
+        {people?.map((p) => (
+          <option key={p.id} value={p.id}>
+            {p.family_name}, {p.given_name}
+            {p.credentials ? ` (${p.credentials})` : ""}
+          </option>
+        ))}
+      </select>
+      <select
+        value={role}
+        onChange={(e) => setRole(e.target.value as StaffRole)}
+        className="rounded-md border border-hairline bg-surface px-2 py-1 text-xs"
+        aria-label="Site role"
+      >
+        {STAFF_ROLES.map((r) => (
+          <option key={r} value={r}>
+            {ROLE_LABEL[r]}
+          </option>
+        ))}
+      </select>
+      <label className="flex items-center gap-1.5 text-xs text-ink2">
+        from
+        <input
+          type="date"
+          value={start}
+          onChange={(e) => setStart(e.target.value)}
+          className="rounded-md border border-hairline bg-surface px-2 py-1 text-xs"
+          aria-label="Start date"
+          required
+        />
+      </label>
+      <button
+        type="submit"
+        disabled={assign.isPending || sync.isPending || !personId}
+        className="inline-flex items-center gap-1.5 rounded-md border border-hairline px-2 py-1 text-xs text-ink2 hover:bg-page disabled:opacity-50"
+      >
+        <UserPlus size={12} aria-hidden />
+        {assign.isPending || sync.isPending ? "Adding…" : "Assign role"}
+      </button>
+      <span className="text-xs text-muted">
+        New person? Create them on the <Link to="/admin" className="hover:underline">admin page</Link> first.
+      </span>
+      <ErrorNote error={err} className="w-full" />
+    </form>
   );
 }

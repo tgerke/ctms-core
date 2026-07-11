@@ -350,6 +350,30 @@ export const expectedDocument = pgTable(
   (t) => [index("expected_document_site_idx").on(t.studySiteId)],
 );
 
+// Expected-document waiver (ADR-0016): a dated fact explaining why an
+// expected document is not applicable. Lifting a waiver sets the revoke
+// fields (resolve pattern, like issue.resolved_at) — never a delete; a
+// partial unique index in the SQL migration allows one active waiver per
+// expected document.
+export const expectedDocumentWaiver = pgTable(
+  "expected_document_waiver",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    expectedDocumentId: uuid("expected_document_id")
+      .notNull()
+      .references(() => expectedDocument.id),
+    waivedBy: uuid("waived_by")
+      .notNull()
+      .references(() => person.id),
+    reason: text("reason").notNull(),
+    waivedAt: timestamp("waived_at", { withTimezone: true }).notNull().defaultNow(),
+    revokedBy: uuid("revoked_by").references(() => person.id),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    revokeReason: text("revoke_reason"),
+  },
+  (t) => [index("expected_document_waiver_expected_idx").on(t.expectedDocumentId)],
+);
+
 // ---------------------------------------------------------------------------
 // Operational layer: monitoring visits, issues, enrollment, milestones.
 // Lifecycle stages are never stored — they are derived by views in the SQL

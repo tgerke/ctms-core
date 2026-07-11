@@ -57,6 +57,13 @@
       "when": 1783735200000,
       "tag": "0007_return_for_correction",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1783821600000,
+      "tag": "0008_expected_document_waivers",
+      "breakpoints": true
     }
   ]
 }

@@ -7,7 +7,8 @@ export type ExpectedStatus =
   | "current"
   | "expiring_soon"
   | "expired"
-  | "superseded";
+  | "superseded"
+  | "waived";
 
 export interface ExpectedDocumentRow {
   expected_document_id: string;
@@ -30,6 +31,12 @@ export interface ExpectedDocumentRow {
   document_status: string | null;
   effective_date: string | null;
   effective_expiry: string | null;
+  waiver_id: string | null;
+  waiver_reason: string | null;
+  waived_at: string | null;
+  waived_by: string | null;
+  waived_by_given_name: string | null;
+  waived_by_family_name: string | null;
   status: ExpectedStatus;
   site_number: string | null;
   site_name: string | null;
@@ -57,6 +64,7 @@ export async function studySites(sql: Sql, studyId: string) {
            coalesce(c.returned_count, 0)::int AS returned_count,
            coalesce(c.expired_count, 0)::int AS expired_count,
            coalesce(c.missing_count, 0)::int AS missing_count,
+           coalesce(c.waived_count, 0)::int AS waived_count,
            coalesce(c.pct_current, 0)::float AS pct_current
     FROM study_site ss
     JOIN site si ON si.id = ss.site_id
@@ -93,7 +101,7 @@ export async function siteStaff(sql: Sql, studySiteId: string) {
   return sql`
     SELECT ssr.id AS role_id, ssr.role, ssr.start_date, ssr.end_date,
            p.id AS person_id, p.given_name, p.family_name, p.credentials, p.email,
-           count(v.*) FILTER (WHERE v.status NOT IN ('current'))::int AS open_items
+           count(v.*) FILTER (WHERE v.status NOT IN ('current', 'waived'))::int AS open_items
     FROM study_site_role ssr
     JOIN person p ON p.id = ssr.person_id
     LEFT JOIN v_expected_document_status v
@@ -102,6 +110,62 @@ export async function siteStaff(sql: Sql, studySiteId: string) {
     GROUP BY ssr.id, ssr.role, ssr.start_date, ssr.end_date,
              p.id, p.given_name, p.family_name, p.credentials, p.email
     ORDER BY ssr.role, p.family_name`;
+}
+
+// --- Admin directory reads (ADR-0016) --------------------------------------
+
+export async function listOrganizations(sql: Sql) {
+  return sql`
+    SELECT o.id, o.name, o.kind,
+           (SELECT count(*)::int FROM site s WHERE s.organization_id = o.id) AS site_count
+    FROM organization o
+    ORDER BY o.name`;
+}
+
+export async function listSites(sql: Sql) {
+  return sql`
+    SELECT s.id, s.name, s.city, s.state, s.organization_id, o.name AS organization_name
+    FROM site s JOIN organization o ON o.id = s.organization_id
+    ORDER BY s.name`;
+}
+
+export async function listPeople(sql: Sql) {
+  return sql`
+    SELECT p.id, p.given_name, p.family_name, p.email, p.credentials,
+           coalesce(g.grants, '[]'::json) AS grants
+    FROM person p
+    LEFT JOIN LATERAL (
+      SELECT json_agg(json_build_object(
+               'grant_id', ag.id, 'role', ag.role,
+               'study_id', ag.study_id, 'study_site_id', ag.study_site_id,
+               'granted_at', ag.granted_at)
+             ORDER BY ag.granted_at) AS grants
+      FROM access_grant ag
+      WHERE ag.person_id = p.id AND ag.revoked_at IS NULL
+    ) g ON true
+    ORDER BY p.family_name, p.given_name`;
+}
+
+export async function studyRequirementRules(sql: Sql, studyId: string) {
+  return sql`
+    SELECT rr.id, rr.study_id, rr.tmf_artifact_id, ta.code AS artifact_code,
+           ta.name AS artifact_name, rr.scope_level, rr.applies_to_roles,
+           rr.validity_months, rr.requires_signature, rr.name, rr.description,
+           (SELECT count(*)::int FROM expected_document ed WHERE ed.rule_id = rr.id)
+             AS expected_count
+    FROM requirement_rule rr
+    JOIN tmf_artifact ta ON ta.id = rr.tmf_artifact_id
+    WHERE rr.study_id = ${studyId}
+    ORDER BY ta.code, rr.name`;
+}
+
+export async function listTmfArtifacts(sql: Sql) {
+  return sql`
+    SELECT ta.id, ta.code, ta.name, tsec.name AS section_name, tz.name AS zone_name
+    FROM tmf_artifact ta
+    JOIN tmf_section tsec ON tsec.id = ta.section_id
+    JOIN tmf_zone tz ON tz.id = tsec.zone_id
+    ORDER BY ta.code`;
 }
 
 export async function documentDetail(sql: Sql, documentId: string) {

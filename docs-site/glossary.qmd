@@ -114,6 +114,13 @@ back with a reason, which stays on the document's permanent record. The
 returned version can never be approved — uploading a corrected version
 reopens review.
 
+Waived
+: An expected document an administrator has marked not applicable, with a
+recorded reason ("central IRB of record — no local approval letter"). A
+waived requirement stops counting as a gap, but the placeholder and its
+waiver history stay on the record; if a document is filed anyway, the
+document wins.
+
 Current / effective
 : Approved by signature and in force. "Effective" is the document's own
 state; "current" is how a requirement row reports it.

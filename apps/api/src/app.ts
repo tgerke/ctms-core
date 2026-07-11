@@ -2,34 +2,53 @@ import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
 import { cors } from "hono/cors";
 import {
   achieveMilestone,
+  addStudySite,
+  assignSiteRole,
   auditEvents,
   createActionItem,
   createIssue,
   createMilestone,
+  createOrganization,
+  createPerson,
+  createRequirementRule,
+  createSite,
   documentAuditTrail,
   documentDetail,
+  endSiteRole,
   expectedDocuments,
+  grantAccess,
   linkVisitDocument,
+  listOrganizations,
+  listPeople,
+  listSites,
   listStudies,
+  listTmfArtifacts,
   reportEnrollment,
   resolveActionItem,
   resolveIssue,
   returnDocumentVersion,
+  revokeAccess,
+  revokeWaiver,
   scheduleVisit,
   signDocumentVersion,
   siteStaff,
   studyEnrollment,
   studyIssues,
   studyMilestones,
+  studyRequirementRules,
   studySites,
   studyVisits,
   syncExpectedDocuments,
+  updateRequirementRule,
+  updateStudySite,
   updateVisit,
   uploadDocument,
   verifyAuditChain,
   visitDetail,
+  waiveExpectedDocument,
   permits,
   type ExpectedStatus,
+  type Grant,
   type IssueStatus,
   type VisitStage,
 } from "@ctms/core";
@@ -43,6 +62,7 @@ import {
   type Env,
 } from "./auth.js";
 import {
+  AccessRoleSchema,
   ActionItemSchema,
   AuditEventSchema,
   DocumentDetailSchema,
@@ -55,10 +75,17 @@ import {
   IssueStatusSchema,
   MilestoneSchema,
   MonitoringVisitSchema,
+  OrganizationSchema,
+  OrgKindSchema,
+  PersonSchema,
+  RequirementRuleSchema,
   SiteCompletenessSchema,
+  SiteDirectorySchema,
   SiteEnrollmentSchema,
   StaffMemberSchema,
+  StaffRoleSchema,
   StudySchema,
+  TmfArtifactSchema,
   VisitDetailSchema,
   VisitDocumentLinkSchema,
   VisitStageSchema,
@@ -178,6 +205,58 @@ export function buildApp(db: Db, sql: Sql) {
     "/milestones/:milestoneId",
     auth,
     requirePermission(sql, readOrUpload, "milestoneId"),
+  );
+  // Administration (ADR-0016): directory reads are ordinary reads; mutations
+  // take 'administer' (admin role only). Study-scoped paths resolve their
+  // study so a study-scoped admin grant works; grant creation/revocation
+  // carries its scope in the body or the grant row, so the handlers finish
+  // those checks.
+  const readOrAdminister = (c: { req: { method: string } }) =>
+    c.req.method === "GET" ? ("read" as const) : ("administer" as const);
+  app.use("/organizations", auth, requirePermission(sql, readOrAdminister));
+  app.use("/sites", auth, requirePermission(sql, readOrAdminister));
+  app.use("/people", auth, requirePermission(sql, readOrAdminister));
+  app.use("/tmf-artifacts", auth, requirePermission(sql, "read"));
+  app.use(
+    "/studies/:studyId/sites",
+    auth,
+    requirePermission(sql, readOrAdminister, "studyId"),
+  );
+  app.use(
+    "/studies/:studyId/requirement-rules",
+    auth,
+    requirePermission(sql, readOrAdminister, "studyId"),
+  );
+  app.use(
+    "/study-sites/:studySiteId",
+    auth,
+    requirePermission(sql, "administer", "studySiteId"),
+  );
+  app.use(
+    "/study-sites/:studySiteId/roles",
+    auth,
+    requirePermission(sql, "administer", "studySiteId"),
+  );
+  app.use(
+    "/study-site-roles/:roleId",
+    auth,
+    requirePermission(sql, "administer", "roleId"),
+  );
+  app.use("/access-grants", auth, requirePermission(sql, "administer"));
+  app.use(
+    "/access-grants/:grantId/revoke",
+    auth,
+    requirePermission(sql, "administer", "grantId"),
+  );
+  app.use(
+    "/requirement-rules/:ruleId",
+    auth,
+    requirePermission(sql, "administer", "ruleId"),
+  );
+  app.use(
+    "/expected-documents/:expectedDocumentId/*",
+    auth,
+    requirePermission(sql, "administer", "expectedDocumentId"),
   );
 
   app.openapi(
@@ -1089,6 +1168,609 @@ export function buildApp(db: Db, sql: Sql) {
         actualDate: body.actual_date,
       });
       return c.json({ id: updated.id }, 200);
+    },
+  );
+
+  // --- Administration (ADR-0016): studies, sites, staff, rules, waivers -----
+
+  // A grant that names no study or site applies everywhere, so creating or
+  // revoking one takes an equally unscoped administer grant — a site-scoped
+  // admin must not be able to mint global access.
+  const permitsGrantScope = (
+    grants: Grant[],
+    scope: { studyId?: string; studySiteId?: string },
+  ) =>
+    scope.studyId || scope.studySiteId
+      ? permits(grants, "administer", scope)
+      : grants.some((g) => g.role === "admin" && !g.study_id && !g.study_site_id);
+
+  app.openapi(
+    createRoute({
+      method: "get",
+      path: "/organizations",
+      security,
+      summary: "List organizations",
+      responses: { 200: json(z.array(OrganizationSchema), "Organizations") },
+    }),
+    async (c) => c.json((await listOrganizations(sql)) as never, 200),
+  );
+
+  app.openapi(
+    createRoute({
+      method: "post",
+      path: "/organizations",
+      security,
+      summary: "Create an organization",
+      request: {
+        body: {
+          content: {
+            "application/json": {
+              schema: z.object({ name: z.string().trim().min(1), kind: OrgKindSchema }),
+            },
+          },
+        },
+      },
+      responses: {
+        201: json(z.object({ id: z.string().uuid() }), "Created"),
+        400: json(ErrorSchema, "Invalid input"),
+      },
+    }),
+    async (c) => {
+      const body = c.req.valid("json");
+      const org = await createOrganization(db, c.get("actor"), {
+        name: body.name,
+        kind: body.kind,
+      });
+      return c.json({ id: org.id }, 201);
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: "get",
+      path: "/sites",
+      security,
+      summary: "List sites (directory)",
+      responses: { 200: json(z.array(SiteDirectorySchema), "Sites") },
+    }),
+    async (c) => c.json((await listSites(sql)) as never, 200),
+  );
+
+  app.openapi(
+    createRoute({
+      method: "post",
+      path: "/sites",
+      security,
+      summary: "Create a site",
+      request: {
+        body: {
+          content: {
+            "application/json": {
+              schema: z.object({
+                organization_id: z.string().uuid(),
+                name: z.string().trim().min(1),
+                city: z.string().optional(),
+                state: z.string().optional(),
+              }),
+            },
+          },
+        },
+      },
+      responses: {
+        201: json(z.object({ id: z.string().uuid() }), "Created"),
+        400: json(ErrorSchema, "Invalid input"),
+      },
+    }),
+    async (c) => {
+      const body = c.req.valid("json");
+      const created = await createSite(db, c.get("actor"), {
+        organizationId: body.organization_id,
+        name: body.name,
+        city: body.city ?? null,
+        state: body.state ?? null,
+      });
+      return c.json({ id: created.id }, 201);
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: "get",
+      path: "/people",
+      security,
+      summary: "List people with their active access grants",
+      responses: { 200: json(z.array(PersonSchema), "People") },
+    }),
+    async (c) => c.json((await listPeople(sql)) as never, 200),
+  );
+
+  app.openapi(
+    createRoute({
+      method: "post",
+      path: "/people",
+      security,
+      summary: "Create a person",
+      request: {
+        body: {
+          content: {
+            "application/json": {
+              schema: z.object({
+                given_name: z.string().trim().min(1),
+                family_name: z.string().trim().min(1),
+                email: z.string().email(),
+                credentials: z.string().optional(),
+              }),
+            },
+          },
+        },
+      },
+      responses: {
+        201: json(z.object({ id: z.string().uuid() }), "Created"),
+        400: json(ErrorSchema, "Invalid input"),
+        409: json(ErrorSchema, "Email already registered"),
+      },
+    }),
+    async (c) => {
+      const body = c.req.valid("json");
+      try {
+        const created = await createPerson(db, c.get("actor"), {
+          givenName: body.given_name,
+          familyName: body.family_name,
+          email: body.email,
+          credentials: body.credentials ?? null,
+        });
+        return c.json({ id: created.id }, 201);
+      } catch {
+        return c.json({ error: `a person with email ${body.email} already exists` }, 409);
+      }
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: "get",
+      path: "/tmf-artifacts",
+      security,
+      summary: "List TMF artifacts (for requirement-rule setup)",
+      responses: { 200: json(z.array(TmfArtifactSchema), "Artifacts") },
+    }),
+    async (c) => c.json((await listTmfArtifacts(sql)) as never, 200),
+  );
+
+  app.openapi(
+    createRoute({
+      method: "post",
+      path: "/studies/{studyId}/sites",
+      security,
+      summary: "Add a site to a study",
+      description:
+        "Creates the study-site link (status 'pending'). Activate it with PATCH /study-sites/{id}, then sync expected documents to materialize its requirements.",
+      request: {
+        params: z.object({ studyId: z.string().uuid() }),
+        body: {
+          content: {
+            "application/json": {
+              schema: z.object({
+                site_id: z.string().uuid(),
+                site_number: z.string().trim().min(1),
+                target_enrollment: z.number().int().positive().optional(),
+              }),
+            },
+          },
+        },
+      },
+      responses: {
+        201: json(z.object({ id: z.string().uuid() }), "Created"),
+        400: json(ErrorSchema, "Invalid input"),
+        409: json(ErrorSchema, "Site already on study, or site number taken"),
+      },
+    }),
+    async (c) => {
+      const body = c.req.valid("json");
+      try {
+        const created = await addStudySite(db, c.get("actor"), {
+          studyId: c.req.valid("param").studyId,
+          siteId: body.site_id,
+          siteNumber: body.site_number,
+          targetEnrollment: body.target_enrollment ?? null,
+        });
+        return c.json({ id: created.id }, 201);
+      } catch (e) {
+        return c.json({ error: e instanceof Error ? e.message : "add site failed" }, 409);
+      }
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: "patch",
+      path: "/study-sites/{studySiteId}",
+      security,
+      summary: "Update study-site status or activation",
+      request: {
+        params: z.object({ studySiteId: z.string().uuid() }),
+        body: {
+          content: {
+            "application/json": {
+              schema: z.object({
+                status: z.enum(["pending", "active", "closed"]).optional(),
+                activated_at: z.string().date().nullable().optional(),
+                target_enrollment: z.number().int().positive().nullable().optional(),
+              }),
+            },
+          },
+        },
+      },
+      responses: {
+        200: json(z.object({ id: z.string().uuid() }), "Updated"),
+        404: json(ErrorSchema, "Not found"),
+      },
+    }),
+    async (c) => {
+      const body = c.req.valid("json");
+      try {
+        const updated = await updateStudySite(db, c.get("actor"), {
+          studySiteId: c.req.valid("param").studySiteId,
+          status: body.status,
+          activatedAt: body.activated_at,
+          targetEnrollment: body.target_enrollment,
+        });
+        return c.json({ id: updated.id }, 200);
+      } catch (e) {
+        return c.json({ error: e instanceof Error ? e.message : "not found" }, 404);
+      }
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: "post",
+      path: "/study-sites/{studySiteId}/roles",
+      security,
+      summary: "Assign a person to a site role",
+      description:
+        "Site staffing is a dated fact (start/end), not a permission — access grants are separate. Sync expected documents afterwards to materialize person-scoped requirements.",
+      request: {
+        params: z.object({ studySiteId: z.string().uuid() }),
+        body: {
+          content: {
+            "application/json": {
+              schema: z.object({
+                person_id: z.string().uuid(),
+                role: StaffRoleSchema,
+                start_date: z.string().date(),
+              }),
+            },
+          },
+        },
+      },
+      responses: {
+        201: json(z.object({ id: z.string().uuid() }), "Assigned"),
+        400: json(ErrorSchema, "Invalid input"),
+      },
+    }),
+    async (c) => {
+      const body = c.req.valid("json");
+      const created = await assignSiteRole(db, c.get("actor"), {
+        studySiteId: c.req.valid("param").studySiteId,
+        personId: body.person_id,
+        role: body.role,
+        startDate: body.start_date,
+      });
+      return c.json({ id: created.id }, 201);
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: "patch",
+      path: "/study-site-roles/{roleId}",
+      security,
+      summary: "End a site role assignment",
+      description: "Sets the role's end date — assignments are never deleted.",
+      request: {
+        params: z.object({ roleId: z.string().uuid() }),
+        body: {
+          content: {
+            "application/json": { schema: z.object({ end_date: z.string().date() }) },
+          },
+        },
+      },
+      responses: {
+        200: json(z.object({ id: z.string().uuid() }), "Ended"),
+        404: json(ErrorSchema, "Not found"),
+      },
+    }),
+    async (c) => {
+      try {
+        const updated = await endSiteRole(db, c.get("actor"), {
+          roleId: c.req.valid("param").roleId,
+          endDate: c.req.valid("json").end_date,
+        });
+        return c.json({ id: updated.id }, 200);
+      } catch (e) {
+        return c.json({ error: e instanceof Error ? e.message : "not found" }, 404);
+      }
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: "post",
+      path: "/access-grants",
+      security,
+      summary: "Grant system access",
+      description:
+        "Grants a person an access role, optionally scoped to one study or one study-site. Creating an unscoped grant requires an unscoped administer grant.",
+      request: {
+        body: {
+          content: {
+            "application/json": {
+              schema: z.object({
+                person_id: z.string().uuid(),
+                role: AccessRoleSchema,
+                study_id: z.string().uuid().optional(),
+                study_site_id: z.string().uuid().optional(),
+              }),
+            },
+          },
+        },
+      },
+      responses: {
+        201: json(z.object({ id: z.string().uuid() }), "Granted"),
+        400: json(ErrorSchema, "Invalid input"),
+        403: json(ErrorSchema, "Forbidden"),
+      },
+    }),
+    async (c) => {
+      const body = c.req.valid("json");
+      // Resolve the grant's own scope (the site's study included) and check
+      // the actor may administer it — the route middleware could only gate
+      // the operation, not the body's scope.
+      let scope: { studyId?: string; studySiteId?: string } = {};
+      if (body.study_site_id) {
+        const [ss] = await sql`SELECT study_id FROM study_site WHERE id = ${body.study_site_id}`;
+        if (!ss) return c.json({ error: "study site not found" }, 400);
+        scope = { studyId: ss.study_id as string, studySiteId: body.study_site_id };
+      } else if (body.study_id) {
+        scope = { studyId: body.study_id };
+      }
+      if (!permitsGrantScope(c.get("grants"), scope)) {
+        return c.json({ error: "requires 'administer' permission for this scope" }, 403);
+      }
+      const created = await grantAccess(db, c.get("actor"), {
+        personId: body.person_id,
+        role: body.role,
+        studyId: body.study_id ?? null,
+        studySiteId: body.study_site_id ?? null,
+      });
+      return c.json({ id: created.id }, 201);
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: "post",
+      path: "/access-grants/{grantId}/revoke",
+      security,
+      summary: "Revoke an access grant",
+      description: "Sets revoked_at — grants are never deleted (ADR-0008).",
+      request: { params: z.object({ grantId: z.string().uuid() }) },
+      responses: {
+        200: json(z.object({ id: z.string().uuid() }), "Revoked"),
+        403: json(ErrorSchema, "Forbidden"),
+        404: json(ErrorSchema, "Not found or already revoked"),
+      },
+    }),
+    async (c) => {
+      const grantId = c.req.valid("param").grantId;
+      const [row] = await sql`
+        SELECT study_id, study_site_id FROM access_grant WHERE id = ${grantId}`;
+      if (!row) return c.json({ error: "grant not found" }, 404);
+      if (
+        !permitsGrantScope(c.get("grants"), {
+          studyId: (row.study_id as string | null) ?? undefined,
+          studySiteId: (row.study_site_id as string | null) ?? undefined,
+        })
+      ) {
+        return c.json({ error: "requires 'administer' permission for this scope" }, 403);
+      }
+      try {
+        const revoked = await revokeAccess(db, c.get("actor"), { grantId });
+        return c.json({ id: revoked.id }, 200);
+      } catch (e) {
+        return c.json({ error: e instanceof Error ? e.message : "not found" }, 404);
+      }
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: "get",
+      path: "/studies/{studyId}/requirement-rules",
+      security,
+      summary: "Requirement rules for a study",
+      request: { params: z.object({ studyId: z.string().uuid() }) },
+      responses: { 200: json(z.array(RequirementRuleSchema), "Rules") },
+    }),
+    async (c) =>
+      c.json(
+        (await studyRequirementRules(sql, c.req.valid("param").studyId)) as never,
+        200,
+      ),
+  );
+
+  app.openapi(
+    createRoute({
+      method: "post",
+      path: "/studies/{studyId}/requirement-rules",
+      security,
+      summary: "Create a requirement rule",
+      description:
+        "Defines what the study expects on file. Sync expected documents afterwards to materialize placeholders; the rule's scope level and artifact are fixed — a different requirement is a new rule.",
+      request: {
+        params: z.object({ studyId: z.string().uuid() }),
+        body: {
+          content: {
+            "application/json": {
+              schema: z.object({
+                tmf_artifact_id: z.number().int(),
+                scope_level: z.enum(["study", "study_site", "person_role"]),
+                name: z.string().trim().min(1),
+                description: z.string().optional(),
+                applies_to_roles: z.array(StaffRoleSchema).optional(),
+                validity_months: z.number().int().positive().optional(),
+                requires_signature: z.boolean().optional(),
+              }),
+            },
+          },
+        },
+      },
+      responses: {
+        201: json(z.object({ id: z.string().uuid() }), "Created"),
+        400: json(ErrorSchema, "Invalid input"),
+      },
+    }),
+    async (c) => {
+      const body = c.req.valid("json");
+      const created = await createRequirementRule(db, c.get("actor"), {
+        studyId: c.req.valid("param").studyId,
+        tmfArtifactId: body.tmf_artifact_id,
+        scopeLevel: body.scope_level,
+        name: body.name,
+        description: body.description ?? null,
+        appliesToRoles: body.applies_to_roles ?? null,
+        validityMonths: body.validity_months ?? null,
+        requiresSignature: body.requires_signature,
+      });
+      return c.json({ id: created.id }, 201);
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: "patch",
+      path: "/requirement-rules/{ruleId}",
+      security,
+      summary: "Update a requirement rule",
+      request: {
+        params: z.object({ ruleId: z.string().uuid() }),
+        body: {
+          content: {
+            "application/json": {
+              schema: z.object({
+                name: z.string().trim().min(1).optional(),
+                description: z.string().nullable().optional(),
+                applies_to_roles: z.array(StaffRoleSchema).nullable().optional(),
+                validity_months: z.number().int().positive().nullable().optional(),
+                requires_signature: z.boolean().optional(),
+              }),
+            },
+          },
+        },
+      },
+      responses: {
+        200: json(z.object({ id: z.string().uuid() }), "Updated"),
+        404: json(ErrorSchema, "Not found"),
+      },
+    }),
+    async (c) => {
+      const body = c.req.valid("json");
+      try {
+        const updated = await updateRequirementRule(db, c.get("actor"), {
+          ruleId: c.req.valid("param").ruleId,
+          name: body.name,
+          description: body.description,
+          appliesToRoles: body.applies_to_roles,
+          validityMonths: body.validity_months,
+          requiresSignature: body.requires_signature,
+        });
+        return c.json({ id: updated.id }, 200);
+      } catch (e) {
+        return c.json({ error: e instanceof Error ? e.message : "not found" }, 404);
+      }
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: "post",
+      path: "/expected-documents/{expectedDocumentId}/waive",
+      security,
+      summary: "Waive an expected document",
+      description:
+        "Records why this expected document is not applicable (e.g. central IRB makes the local approval letter moot). The absence shows as 'waived' instead of 'missing' and leaves the completeness denominator. A filed document always wins over a waiver; lifting the waiver is a recorded fact, never a delete (ADR-0016).",
+      request: {
+        params: z.object({ expectedDocumentId: z.string().uuid() }),
+        body: {
+          content: {
+            "application/json": {
+              schema: z.object({ reason: z.string().trim().min(1).max(2000) }),
+            },
+          },
+        },
+      },
+      responses: {
+        201: json(z.object({ waiver_id: z.string().uuid() }), "Waived"),
+        400: json(ErrorSchema, "Invalid input"),
+        409: json(ErrorSchema, "Already waived, or expected document not found"),
+      },
+    }),
+    async (c) => {
+      const actor = c.get("actor");
+      if (!actor.personId) {
+        return c.json({ error: "waiving requires a person-linked token" }, 400);
+      }
+      try {
+        const waiver = await waiveExpectedDocument(db, actor, {
+          expectedDocumentId: c.req.valid("param").expectedDocumentId,
+          waivedByPersonId: actor.personId,
+          reason: c.req.valid("json").reason,
+        });
+        return c.json({ waiver_id: waiver.id }, 201);
+      } catch (e) {
+        return c.json({ error: e instanceof Error ? e.message : "waive failed" }, 409);
+      }
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: "post",
+      path: "/expected-documents/{expectedDocumentId}/revoke-waiver",
+      security,
+      summary: "Lift the active waiver on an expected document",
+      request: {
+        params: z.object({ expectedDocumentId: z.string().uuid() }),
+        body: {
+          content: {
+            "application/json": {
+              schema: z.object({ reason: z.string().trim().min(1).max(2000) }),
+            },
+          },
+        },
+      },
+      responses: {
+        200: json(z.object({ waiver_id: z.string().uuid() }), "Waiver lifted"),
+        400: json(ErrorSchema, "Invalid input"),
+        409: json(ErrorSchema, "No active waiver"),
+      },
+    }),
+    async (c) => {
+      const actor = c.get("actor");
+      if (!actor.personId) {
+        return c.json({ error: "revoking a waiver requires a person-linked token" }, 400);
+      }
+      try {
+        const waiver = await revokeWaiver(db, actor, {
+          expectedDocumentId: c.req.valid("param").expectedDocumentId,
+          revokedByPersonId: actor.personId,
+          reason: c.req.valid("json").reason,
+        });
+        return c.json({ waiver_id: waiver.id }, 200);
+      } catch (e) {
+        return c.json({ error: e instanceof Error ? e.message : "no active waiver" }, 409);
+      }
     },
   );
 

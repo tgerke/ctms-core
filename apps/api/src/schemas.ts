@@ -28,6 +28,7 @@ export const SiteCompletenessSchema = z
     returned_count: z.number().int(),
     expired_count: z.number().int(),
     missing_count: z.number().int(),
+    waived_count: z.number().int(),
     pct_current: z.number(),
   })
   .openapi("SiteCompleteness");
@@ -41,6 +42,7 @@ export const ExpectedStatusSchema = z
     "expiring_soon",
     "expired",
     "superseded",
+    "waived",
   ])
   .openapi("ExpectedStatus");
 
@@ -66,6 +68,12 @@ export const ExpectedDocumentSchema = z
     document_status: z.string().nullable(),
     effective_date: z.string().nullable(),
     effective_expiry: z.string().nullable(),
+    waiver_id: z.string().uuid().nullable(),
+    waiver_reason: z.string().nullable(),
+    waived_at: z.string().nullable(),
+    waived_by: z.string().uuid().nullable(),
+    waived_by_given_name: z.string().nullable(),
+    waived_by_family_name: z.string().nullable(),
     status: ExpectedStatusSchema,
     site_number: z.string().nullable(),
     site_name: z.string().nullable(),
@@ -117,6 +125,90 @@ export const DocumentDetailSchema = z
 export const ErrorSchema = z
   .object({ error: z.string() })
   .openapi("Error");
+
+// --- Administration (ADR-0016) -------------------------------------------------
+
+export const OrgKindSchema = z.enum(["sponsor", "cro", "site_org"]).openapi("OrgKind");
+
+export const StaffRoleSchema = z
+  .enum([
+    "principal_investigator",
+    "sub_investigator",
+    "study_coordinator",
+    "pharmacist",
+    "research_nurse",
+  ])
+  .openapi("StaffRole");
+
+export const AccessRoleSchema = z
+  .enum(["admin", "trial_ops", "monitor", "read_only", "ingest"])
+  .openapi("AccessRole");
+
+export const OrganizationSchema = z
+  .object({
+    id: z.string().uuid(),
+    name: z.string(),
+    kind: OrgKindSchema,
+    site_count: z.number().int(),
+  })
+  .openapi("Organization");
+
+export const SiteDirectorySchema = z
+  .object({
+    id: z.string().uuid(),
+    name: z.string(),
+    city: z.string().nullable(),
+    state: z.string().nullable(),
+    organization_id: z.string().uuid(),
+    organization_name: z.string(),
+  })
+  .openapi("SiteDirectory");
+
+export const PersonSchema = z
+  .object({
+    id: z.string().uuid(),
+    given_name: z.string(),
+    family_name: z.string(),
+    email: z.string(),
+    credentials: z.string().nullable(),
+    grants: z.array(
+      z.object({
+        grant_id: z.string().uuid(),
+        role: AccessRoleSchema,
+        study_id: z.string().uuid().nullable(),
+        study_site_id: z.string().uuid().nullable(),
+        granted_at: z.string(),
+      }),
+    ),
+  })
+  .openapi("Person");
+
+export const RequirementRuleSchema = z
+  .object({
+    id: z.string().uuid(),
+    study_id: z.string().uuid(),
+    tmf_artifact_id: z.number().int(),
+    artifact_code: z.string(),
+    artifact_name: z.string(),
+    scope_level: z.enum(["study", "study_site", "person_role"]),
+    applies_to_roles: z.array(z.string()).nullable(),
+    validity_months: z.number().int().nullable(),
+    requires_signature: z.boolean(),
+    name: z.string(),
+    description: z.string().nullable(),
+    expected_count: z.number().int(),
+  })
+  .openapi("RequirementRule");
+
+export const TmfArtifactSchema = z
+  .object({
+    id: z.number().int(),
+    code: z.string(),
+    name: z.string(),
+    section_name: z.string(),
+    zone_name: z.string(),
+  })
+  .openapi("TmfArtifact");
 
 // --- Operational layer -------------------------------------------------------
 

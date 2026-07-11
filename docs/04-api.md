@@ -175,6 +175,72 @@ admin re-runs `POST /studies/{id}/sync-expected-documents` — idempotent:
 inserts what's newly expected, prunes unfulfilled placeholders that no longer
 apply.
 
+## Onboarding a site (ADR-0016)
+
+Studies, sites, people, roles, grants, and requirement rules are ordinary
+audited rows with a write surface — no seed script or SQL needed. All admin
+mutations require the `administer` operation (the `admin` role); directory
+reads (`GET /organizations`, `/sites`, `/people`, `/tmf-artifacts`,
+`/studies/{id}/requirement-rules`) are ordinary reads. The whole onboarding
+sequence, as an admin:
+
+```r
+adm <- function(path, body) {
+  request("http://localhost:8787") |>
+    req_url_path_append(path) |>
+    req_auth_bearer_token("dev-admin-token") |>
+    req_body_json(body) |> req_perform() |> resp_body_json()
+}
+
+org  <- adm("organizations", list(name = "Cascade Clinical Research", kind = "site_org"))
+site <- adm("sites", list(organization_id = org$id, name = "Cascade Clinical Research",
+                          city = "Boise", state = "ID"))
+ss   <- adm(paste0("studies/", study, "/sites"),
+            list(site_id = site$id, site_number = "005"))
+
+# Activation is a PATCH; staffing is a dated fact; access is a separate grant.
+request("http://localhost:8787") |>
+  req_url_path_append("study-sites", ss$id) |>
+  req_auth_bearer_token("dev-admin-token") |>
+  req_body_json(list(status = "active", activated_at = as.character(Sys.Date()))) |>
+  req_method("PATCH") |> req_perform()
+
+pi <- adm("people", list(given_name = "Ada", family_name = "Okafor",
+                         email = "ada.okafor@cascade.example", credentials = "MD"))
+adm(paste0("study-sites/", ss$id, "/roles"),
+    list(person_id = pi$id, role = "principal_investigator",
+         start_date = as.character(Sys.Date())))
+adm("access-grants", list(person_id = pi$id, role = "read_only", study_id = study))
+
+# Materialize the new site's (and PI's) expected documents.
+request("http://localhost:8787") |>
+  req_url_path_append("studies", study, "sync-expected-documents") |>
+  req_auth_bearer_token("dev-admin-token") |>
+  req_method("POST") |> req_perform()
+```
+
+Endings are facts, never deletes: `PATCH /study-site-roles/{id}` sets an
+`end_date`, `POST /access-grants/{id}/revoke` sets `revoked_at`. Creating or
+revoking an *unscoped* grant requires an equally unscoped `administer` grant,
+so a site-scoped admin cannot mint global access. Requirement rules are
+`POST /studies/{id}/requirement-rules` and `PATCH /requirement-rules/{id}`;
+a rule's scope level and artifact are fixed after creation — a different
+requirement is a new rule.
+
+When an expected document genuinely does not apply ("central IRB — no local
+approval letter"), waive it instead of leaving a permanent gap:
+
+```r
+adm(paste0("expected-documents/", expected_id, "/waive"),
+    list(reason = "Central IRB of record; local approval letter not applicable."))
+```
+
+The row shows `waived` where it would have shown `missing`, leaves the
+completeness denominator, and carries who/when/why on the view. A filed
+document always beats the waiver, and
+`POST /expected-documents/{id}/revoke-waiver` (reason required) lifts it as a
+recorded fact — the waiver history is never deleted (ADR-0016).
+
 ## Skip the API entirely: the views are the contract
 
 The `v_*` views are documented public surface (see `02-data-model.md`). With a

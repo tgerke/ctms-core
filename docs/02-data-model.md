@@ -29,6 +29,8 @@ erDiagram
     tmf_artifact ||--o{ requirement_rule : requires
     study ||--o{ requirement_rule : configures
     requirement_rule ||--o{ expected_document : materializes
+    expected_document ||--o{ expected_document_waiver : waives
+    person ||--o{ expected_document_waiver : waived_by
     study_site ||--o{ monitoring_visit : hosts
     monitoring_visit ||--o{ monitoring_visit_document : links
     document ||--o{ monitoring_visit_document : linked
@@ -52,6 +54,10 @@ erDiagram
   as a stable business key.
 
 ## Organizational spine
+
+Everything in this section is writable through the admin API surface
+(ADR-0016) — the seed script is no longer the only writer. Endings are dated
+facts (`end_date`, `revoked_at`), never deletes.
 
 - **organization** — sponsor, CRO, or site institution (`kind`).
 - **study** — protocol number, title, phase, status; FK to sponsoring organization.
@@ -107,14 +113,21 @@ erDiagram
   in-scope entity (the study; each active study-site; each active matching role
   assignment). Idempotent sync in `packages/core` inserts missing placeholders and
   removes unfulfilled ones whose scope entity left (role ended, site closed).
+- **expected_document_waiver** — why an expected document is not applicable
+  (ADR-0016): waiver reason (CHECK: non-blank), who, when. Lifting a waiver sets
+  `revoked_by`/`revoked_at`/`revoke_reason` once (CHECK: all three together, reason
+  non-blank) — the resolve pattern, never a delete; a partial unique index allows one
+  active waiver per placeholder, and history accumulates as revoked rows.
 - **v_expected_document_status** (*view*) — the heart of the system. Joins each
   placeholder to its best fulfilling document (same artifact + scope, latest
-  effective) and derives status:
-  `missing | pending_review | returned | current | expiring_soon (≤60d) | expired | superseded`.
-  No stored status column exists anywhere — completeness is always computed from
-  ground truth, so it cannot drift.
+  effective) and its active waiver, and derives status:
+  `missing | waived | pending_review | returned | current | expiring_soon (≤60d) | expired | superseded`.
+  `waived` appears exactly where `missing` would have — a filed document always wins
+  over a waiver. No stored status column exists anywhere — completeness is always
+  computed from ground truth, so it cannot drift.
 - **v_study_site_completeness** (*view*) — per-site rollup: counts by status, percent
-  current.
+  current. Waived rows leave the percentage's denominator: an explained absence is
+  not a gap.
 
 ## Operational layer
 

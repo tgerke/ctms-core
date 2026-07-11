@@ -110,6 +110,9 @@ how those filings appear.
 - [Issues and deviations](issues.qmd) — logging and resolving findings.
 - [Enrollment and milestones](enrollment-milestones.qmd) — reporting counts
   and tracking key dates.
+- [Administration](administration.qmd) — onboarding sites, staffing them,
+  granting access, adjusting requirement rules, and waiving expected
+  documents.
 - [What the statuses mean](statuses.qmd) — every chip in the app, and what to
   do about each.
 - [Glossary](../glossary.qmd) — the trial and system terms used throughout.

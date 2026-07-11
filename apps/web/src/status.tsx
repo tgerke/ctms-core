@@ -6,6 +6,7 @@ import {
   CircleAlert,
   CircleDashed,
   CircleDot,
+  CircleSlash,
   Clock,
   FileClock,
   Hourglass,
@@ -54,6 +55,9 @@ export const STATUS: Record<ExpectedStatus, StatusSpec> = {
   },
   superseded: { label: "Superseded", rank: 5, icon: Archive, cssVar: "--muted" },
   current: { label: "Current", rank: 6, icon: Check, cssVar: "--status-good" },
+  // Waived reads as satisfied-by-explanation (ADR-0016): it never drags an
+  // aggregate cell down, so it ranks past 'current'.
+  waived: { label: "Waived", rank: 7, icon: CircleSlash, cssVar: "--muted" },
 };
 
 export const worst = (statuses: ExpectedStatus[]): ExpectedStatus =>

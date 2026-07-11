@@ -2,6 +2,7 @@ import { FileCheck2, Moon, ShieldCheck, ShieldX, Sun } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, Route, Routes } from "react-router-dom";
 import { useChainStatus, useStudies } from "./api";
+import AdminPage from "./pages/AdminPage";
 import AuditPage from "./pages/AuditPage";
 import DocumentPage from "./pages/DocumentPage";
 import SitePage from "./pages/SitePage";
@@ -66,6 +67,12 @@ export default function App() {
           <div className="ml-auto flex items-center gap-2">
             <ChainBadge />
             <Link
+              to="/admin"
+              className="rounded-md px-2 py-1 text-sm text-ink2 hover:bg-surface"
+            >
+              Admin
+            </Link>
+            <Link
               to="/audit"
               className="rounded-md px-2 py-1 text-sm text-ink2 hover:bg-surface"
             >
@@ -95,6 +102,7 @@ export default function App() {
           <Route path="/sites/:studySiteId" element={<SitePage study={study} />} />
           <Route path="/visits/:visitId" element={<VisitPage />} />
           <Route path="/documents/:documentId" element={<DocumentPage />} />
+          <Route path="/admin" element={<AdminPage study={study} />} />
           <Route path="/audit" element={<AuditPage />} />
         </Routes>
       </main>

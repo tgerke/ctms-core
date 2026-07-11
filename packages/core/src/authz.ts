@@ -66,7 +66,11 @@ export type ScopeParam =
   | "visitId"
   | "actionItemId"
   | "issueId"
-  | "milestoneId";
+  | "milestoneId"
+  | "roleId"
+  | "grantId"
+  | "ruleId"
+  | "expectedDocumentId";
 
 /**
  * Resolve a path parameter to the study/site it belongs to (one indexed
@@ -123,6 +127,31 @@ export async function resolveScope(
     case "milestoneId": {
       const [r] = await sql`
         SELECT study_id, study_site_id FROM study_milestone WHERE id = ${id}`;
+      return r
+        ? { studyId: r.study_id, studySiteId: r.study_site_id ?? undefined }
+        : null;
+    }
+    case "roleId": {
+      const [r] = await sql`
+        SELECT ss.study_id, ssr.study_site_id FROM study_site_role ssr
+        JOIN study_site ss ON ss.id = ssr.study_site_id WHERE ssr.id = ${id}`;
+      return r ? { studyId: r.study_id, studySiteId: r.study_site_id } : null;
+    }
+    case "grantId": {
+      const [r] = await sql`
+        SELECT study_id, study_site_id FROM access_grant WHERE id = ${id}`;
+      return r
+        ? { studyId: r.study_id ?? undefined, studySiteId: r.study_site_id ?? undefined }
+        : null;
+    }
+    case "ruleId": {
+      const [r] = await sql`
+        SELECT study_id FROM requirement_rule WHERE id = ${id}`;
+      return r ? { studyId: r.study_id } : null;
+    }
+    case "expectedDocumentId": {
+      const [r] = await sql`
+        SELECT study_id, study_site_id FROM expected_document WHERE id = ${id}`;
       return r
         ? { studyId: r.study_id, studySiteId: r.study_site_id ?? undefined }
         : null;

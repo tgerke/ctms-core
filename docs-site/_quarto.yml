@@ -35,6 +35,7 @@ website:
           - user-guide/monitoring-visits.qmd
           - user-guide/issues.qmd
           - user-guide/enrollment-milestones.qmd
+          - user-guide/administration.qmd
           - user-guide/statuses.qmd
       - section: "Technical guide"
         contents:

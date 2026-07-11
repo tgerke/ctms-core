@@ -51,19 +51,20 @@ feature comparison is meaningless without them.
   remains of the original gap is the narrower QC tooling incumbents layer on
   top (checklists, tracked quality-issue workflows à la Veeva) — real, but no
   longer the daily-use hole.
+- **Study, site, and staff administration** — shipped as the admin write
+  surface (ADR-0016): organizations, sites, study-site activation, people,
+  role assignments, access grants, and requirement rules are all creatable
+  through the API and the admin page, with endings as dated facts and every
+  step in the audit trail. What remains is the startup *workflow* incumbents
+  layer on top (Medidata's site-specific startup milestones and task
+  checklists) — the write surface exists; the guided process does not.
+- **Expected-document waivers** — shipped as waiver fact rows (ADR-0016): an
+  admin records why an expected document is not applicable; the row shows
+  `waived` instead of `missing`, leaves the completeness denominator, and a
+  filed document always wins over the waiver. Lifting a waiver is itself a
+  recorded fact, never a delete.
 
 ## Genuine gaps
-
-### Study, site, and staff administration
-
-Studies, sites, organizations, people, role assignments, and requirement
-rules are created only by the seed script. There is no UI or API to activate
-a new site, add a coordinator, or adjust a requirement rule — a pilot
-onboarding its first real site would be writing SQL. Incumbent CTMS treats
-study/site startup as a core workflow: Medidata embeds startup activities
-with site-specific milestones and tasks. The schema is ready (these are
-ordinary rows with audit triggers already on their tables); what is missing
-is the write surface and the UI.
 
 ### Multi-study operation in the UI
 
@@ -82,16 +83,6 @@ Medidata sends automatic notifications; Florence notifies on workflow
 distribution. A digest job consuming the existing `v_*` views is the obvious
 shape — the derived-status design means there is no state to sync, only a
 query to run and send.
-
-### Expected-document waivers
-
-An expected document can be fulfilled or missing — it cannot be waived. Real
-studies have per-site exceptions ("this site's central IRB makes the local
-approval letter not applicable"), and TMF completeness practice expects the
-absence itself to be explained. Incumbents manage this at the expected-list
-level (Veeva EDLs; Florence placeholders with due dates). A waiver here
-should be a fact row — who waived, when, why — that the status view reads,
-not a deleted placeholder.
 
 ### TMF transfer and inspection export
 
@@ -135,15 +126,14 @@ structured DoA/training logs would be its first real test.
 
 ## If we built next
 
-1. **Site and staff administration.** A pilot cannot onboard a site without
-   SQL today; this gates any real deployment more than any other item.
-2. **Expiry/overdue digest notifications.** Highest oversight value per unit
+1. **Expiry/overdue digest notifications.** Highest oversight value per unit
    effort — the views already compute everything; a scheduled job formats
    and sends.
-3. **Expected-document waivers.** Rides along naturally with item 1 (both
-   are requirement-level administration), and the shape is already proven:
-   a waiver is a fact row the status view reads, exactly like a return
-   (ADR-0015).
+2. **Task assignment and review queues.** With onboarding solved, the next
+   daily-use hole: pending review is a list, not a queue, and nothing is
+   assignable to a named reviewer with a due date.
+3. **Document search.** Metadata search first (the views make it a query);
+   full-text over document content is the larger second step.
 
 ## Sources
 

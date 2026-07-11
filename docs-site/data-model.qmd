@@ -118,12 +118,19 @@ no schema change.
   matching role assignment). An idempotent sync inserts missing placeholders
   and removes unfulfilled ones whose scope entity has left (a role ended, a
   site closed).
+- **expected_document_waiver** — why an expected document is not applicable
+  (ADR-0016): reason (required, non-blank), who, when. Lifting a waiver sets
+  the revoke fields once — a recorded fact, never a delete — and one active
+  waiver is allowed per placeholder.
 - **v_expected_document_status** (*view*) — the heart of the system. Joins each
   placeholder to its best fulfilling document (same artifact and scope, latest
-  effective) and derives status:
-  `missing | pending_review | returned | current | expiring_soon (≤60 days) | expired | superseded`.
+  effective) and its active waiver, and derives status:
+  `missing | waived | pending_review | returned | current | expiring_soon (≤60 days) | expired | superseded`.
+  `waived` appears exactly where `missing` would have — a filed document always
+  wins over a waiver.
 - **v_study_site_completeness** (*view*) — the per-site rollup: counts by
-  status, percent current.
+  status, percent current. Waived rows leave the percentage's denominator: an
+  explained absence is not a gap.
 
 Because no stored status exists, completeness is computed from ground truth on
 every read. It cannot drift from the documents — the failure mode this project

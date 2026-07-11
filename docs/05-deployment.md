@@ -76,7 +76,8 @@ a client-credentials OIDC client whose subject maps to its person row via
 ```sh
 pnpm db:migrate                          # owning role
 pnpm db:import-tmf -- TMF_RM.xlsx        # full CDISC taxonomy (licensed download)
-# provision people + access_grant rows (SQL or seed script adapted per customer)
+# provision the first admin person + unscoped access_grant row (two audited
+# INSERTs); everything after that goes through the admin API/UI (ADR-0016)
 pnpm validation:iq --report iq-$(date +%F).md   # file the report
 pnpm validation:artifacts                # OQ + traceability, file alongside
 ```

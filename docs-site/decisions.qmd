@@ -167,6 +167,21 @@ takes the same `approve` authority as approving but is not a signature, so no
 re-authentication ceremony. This closed the roadmap's top gap (ADR-0014) in
 the same change that shipped it.
 
+## ADR-0016 — An administration write surface, and waivers as fact rows
+
+Studies, sites, people, role assignments, access grants, and requirement
+rules gained [an API and UI write surface](user-guide/administration.qmd) —
+ordinary audited rows behind the existing `administer` permission, with
+endings as dated facts (an `end_date`, a `revoked_at`) and no DELETE routes.
+Creating or revoking an unscoped grant takes an equally unscoped admin grant,
+so scoped admins cannot escalate. Expected documents can now be
+[waived](user-guide/administration.qmd#waiving-an-expected-document): a fact
+row (who, when, why — reason required) that the status view reads as `waived`
+where it would have said `missing`. A filed document always wins over a
+waiver, waived rows leave the completeness denominator, and lifting a waiver
+is itself a recorded fact. This closed the roadmap's #1 and #3 gaps
+(ADR-0014) in the same change.
+
 ---
 
 Three of these — ADR-0004, ADR-0006, and ADR-0010 — are the same idea applied
