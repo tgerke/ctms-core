@@ -109,9 +109,21 @@ feature comparison is meaningless without them.
   that the schema didn't carry — TMF RM unique IDs, the model version, site
   countries — arrive via the verbatim importer and the admin surface, never
   from model memory: export refuses, listing every gap, until
-  `pnpm db:import-tmf` has loaded the licensed spreadsheet. What remains is
-  the import side (reading a partner's exchange.xml into the filing
-  endpoint, ADR-0011).
+  `pnpm db:import-tmf` has loaded the licensed spreadsheet. The import side
+  followed as ADR-0025.
+- **eTMF-EMS import** — shipped as a client of the filing interface
+  (ADR-0025): `pnpm import-ems -- --package <dir>` performs the standard's
+  receiving-side checks (XSD validation, checksum verification, spec §4.1),
+  maps artifacts by TMF RM unique ID against the verbatim-imported taxonomy
+  — never invented — and files every object through the same audited
+  endpoint any source system uses (ADR-0011), as an `ingest` machine
+  identity. Iterations thread onto one document by provenance, re-runs are
+  no-ops (`GET /studies/{id}/filings` is the idempotency read), everything
+  lands `pending_review`, and the partner's signatures and audit records
+  stay in the retained package rather than being replayed into this record.
+  What remains is a bulk-review surface for large imported batches —
+  nothing becomes effective without a human, and today that human works
+  one document at a time.
 - **Site-seat log workflows** — shipped as structured facts on a site-scoped
   seat (ADR-0023): a `site_staff` grant lands its holder on their site's page
   and nowhere else, and delegation-of-authority and training logs are dated
@@ -143,9 +155,10 @@ new system.
 
 ## If we built next
 
-Nothing is queued: eTMF-EMS serialization, the last listed item, shipped
-2026-07-12 (ADR-0024). Candidates live in the "what remains" notes above —
-EMS import, auditor UX, site-side depth, cross-study analytics.
+Nothing is queued: eTMF-EMS import, the last candidate pulled from the
+"what remains" notes, shipped 2026-07-12 (ADR-0025). Remaining candidates
+live in the notes above — auditor UX, bulk review of imported batches,
+site-side depth, cross-study analytics.
 
 ## Sources
 

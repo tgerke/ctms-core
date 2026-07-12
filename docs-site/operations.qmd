@@ -150,6 +150,22 @@ unique IDs and model version are read from the licensed spreadsheet, never
 invented, and the export refuses — naming every gap — until they are on
 record.
 
+## Receiving a partner's TMF
+
+The exchange works in both directions (ADR-0025). `pnpm import-ems --
+--package <dir>` reads a partner's eTMF-EMS package and files it through the
+same audited endpoint every source system uses (ADR-0011), as an `ingest`
+machine identity. The standard's receiving-side checks run first — XSD
+validation, checksum verification of every file — and the batch refuses as a
+whole, every blocker named at once, when anything cannot be mapped honestly:
+a TMF RM unique ID the imported taxonomy doesn't know, a site the study
+doesn't have, a country-level or RESTRICTED object the schema can't hold.
+What files lands `pending_review`; nothing becomes effective without a
+human. Re-running the same package files nothing — the importer asks the API
+what it already filed — and the partner's own signatures and audit records
+stay in the retained package as their testimony, never replayed into this
+system's record.
+
 ## Reading it all from code
 
 Every capability here ships in the OpenAPI spec, and the four `v_*` views are

@@ -17,6 +17,7 @@ pnpm db:import-tmf -- file.xlsx   # official CDISC TMF RM spreadsheet, verbatim
 pnpm digest                  # oversight digest email per study (ADR-0017)
 pnpm export-tmf -- --study CORC-2201   # verifiable transfer/inspection package (ADR-0020)
 pnpm export-tmf -- --study CORC-2201 --ems <agreement-id>  # + eTMF-EMS exchange.xml; needs db:import-tmf first (ADR-0024)
+pnpm import-ems -- --package <dir>   # file a partner's eTMF-EMS package via the API; needs a running API + ingest token (ADR-0025)
 pnpm db:extract-text         # backfill content search text for pre-existing versions (ADR-0022)
 ```
 

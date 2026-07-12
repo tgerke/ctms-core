@@ -17,6 +17,7 @@
     "validation:artifacts": "tsx tools/validation-artifacts.ts",
     "digest": "tsx tools/digest.ts",
     "export-tmf": "tsx tools/export-tmf.ts",
+    "import-ems": "tsx tools/import-ems.ts",
     "typecheck": "pnpm -r typecheck"
   },
   "devDependencies": {

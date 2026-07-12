@@ -135,6 +135,17 @@ approves), and its row on the document page carries a "filed by edc-core"
 chip. Machine identities hold the `ingest` role — read and upload, never
 sign (see [ADR-0011](decisions.qmd#adr-0011-a-generic-source-system-filing-interface-edc-integration-stays-outside-the-data-boundary)).
 
+The filing surface is complete enough to build an idempotent integration on
+(ADR-0025): `force_new = "true"` creates a fresh document even when a
+non-superseded one with the same artifact and scope exists (an imported
+partner record must not merge into a local one),
+`POST /documents/{id}/versions` appends a version to exactly that document
+(a superseded document answers 409), and
+`GET /studies/{id}/filings?source_system=` returns what that source already
+filed, so a re-run skips instead of duplicating. The eTMF-EMS importer
+(`pnpm import-ems`, [operations](operations.qmd#receiving-a-partners-tmf))
+is exactly such a client and nothing more.
+
 ## The CRA's week {#the-cras-week}
 
 The [operational layer](operations.qmd) answers the questions a monitor plans a
