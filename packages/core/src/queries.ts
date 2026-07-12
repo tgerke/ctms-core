@@ -130,6 +130,36 @@ export async function reviewQueue(
              q.uploaded_at`;
 }
 
+// --- Document search (ADR-0019) ---------------------------------------------
+
+/**
+ * Metadata search over v_document_search: every whitespace token must appear
+ * somewhere in the document's haystack (title, artifact taxonomy, site,
+ * person, uploader, file names, filing source, status). Predictable
+ * substring semantics — "04.01" finds the IRB zone, "raman license" finds
+ * Dr. Raman's license — with no index to drift from the record.
+ */
+export async function searchDocuments(
+  sql: Sql,
+  filter: { studyId: string; q: string; status?: string; limit?: number },
+) {
+  const tokens = filter.q
+    .toLowerCase()
+    .split(/\s+/)
+    .filter((t) => t.length > 0)
+    .map((t) => `%${t.replace(/[%_\\]/g, (c) => `\\${c}`)}%`);
+  if (tokens.length === 0) return [];
+  const limit = Math.min(filter.limit ?? 50, 200);
+  return sql`
+    SELECT s.*
+    FROM v_document_search s
+    WHERE s.study_id = ${filter.studyId}
+      AND s.haystack LIKE ALL(${tokens})
+      AND (${filter.status ?? null}::text IS NULL OR s.status::text = ${filter.status ?? null})
+    ORDER BY s.latest_uploaded_at DESC NULLS LAST, s.artifact_code
+    LIMIT ${limit}`;
+}
+
 // --- Admin directory reads (ADR-0016) --------------------------------------
 
 export async function listOrganizations(sql: Sql) {

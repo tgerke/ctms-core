@@ -30,6 +30,7 @@ import {
   returnDocumentVersion,
   reviewQueue,
   revokeAccess,
+  searchDocuments,
   revokeWaiver,
   scheduleVisit,
   signDocumentVersion,
@@ -84,6 +85,7 @@ import {
   QueueEntrySchema,
   QueueStatusSchema,
   RequirementRuleSchema,
+  SearchResultSchema,
   SiteCompletenessSchema,
   SiteDirectorySchema,
   SiteEnrollmentSchema,
@@ -568,6 +570,39 @@ export function buildApp(db: Db, sql: Sql) {
       } catch (e) {
         return c.json({ error: e instanceof Error ? e.message : "return failed" }, 409);
       }
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: "get",
+      path: "/studies/{studyId}/document-search",
+      security,
+      summary: "Search documents by metadata",
+      description:
+        "Metadata search (ADR-0019): every whitespace token in q must appear in the document's title, artifact taxonomy, site, person, uploader, file names, filing source, or status — 'raman license' finds Dr. Raman's medical license, '04.01 site 002' finds site 002's IRB documents. Content full-text is deliberately out of scope.",
+      request: {
+        params: z.object({ studyId: z.string().uuid() }),
+        query: z.object({
+          q: z.string().trim().min(2),
+          status: z.string().optional(),
+          limit: z.coerce.number().int().positive().max(200).optional(),
+        }),
+      },
+      responses: {
+        200: json(z.array(SearchResultSchema), "Matching documents"),
+        400: json(ErrorSchema, "Query too short"),
+      },
+    }),
+    async (c) => {
+      const q = c.req.valid("query");
+      const rows = await searchDocuments(sql, {
+        studyId: c.req.valid("param").studyId,
+        q: q.q,
+        status: q.status,
+        limit: q.limit,
+      });
+      return c.json(rows as never, 200);
     },
   );
 

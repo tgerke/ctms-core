@@ -32,6 +32,7 @@ grant, not a feature request.
 | `v_expected_document_status` | Every expected document with derived status: `missing`, `waived`, `pending_review`, `returned`, `current`, `expiring_soon`, `expired`, `superseded` |
 | `v_study_site_completeness` | Per-site rollup: counts by status, percent current (waived rows leave the denominator) |
 | `v_review_queue` | Documents awaiting review with their latest assignment: `unassigned`, `assigned`, `overdue` |
+| `v_document_search` | Every document with its metadata flattened into a searchable `haystack` |
 | `v_monitoring_visit_status` | Visits with derived stage: `scheduled` → `overdue` → `awaiting_report` → `report_pending_review` → `follow_up` → `complete`, plus open action-item counts |
 | `v_issue_status` | Issues and deviations: `open`, `overdue`, `resolved` |
 | `v_site_enrollment` | Latest enrollment report per site vs its target |

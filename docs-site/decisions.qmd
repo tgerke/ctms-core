@@ -207,6 +207,19 @@ authority as returning, the assignee must hold a grant that can approve the
 document, and overdue assignments join the digest. "My work" is a filter,
 not a feature — and the queue can never disagree with the documents.
 
+## ADR-0019 — Document search is a metadata query, not an index
+
+`v_document_search` flattens each document's metadata — title, artifact
+taxonomy, site, person, uploader, file names, filing source — into a
+searchable haystack, and [search](user-guide/documents.qmd#finding-a-document)
+requires every word to match. No Elasticsearch, no tsvector table to keep in
+sync: a search index is derived state that can drift from the record, which
+is the failure mode this system exists to avoid. Substring semantics keep
+codes and site numbers predictable ("04.01 002"); Postgres FTS with a
+generated indexed column is the documented scale path. Content full-text
+stays on the roadmap — safe to add later precisely because versions are
+immutable.
+
 ---
 
 Three of these — ADR-0004, ADR-0006, and ADR-0010 — are the same idea applied

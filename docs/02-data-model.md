@@ -114,6 +114,11 @@ facts (`end_date`, `revoked_at`), never deletes.
   its latest assignment, and a derived `queue_status`
   (`unassigned | assigned | overdue`). Approval or return is what empties the
   queue; "my work" is a filter, not stored state.
+- **v_document_search** (*view*) — one row per document with its searchable
+  metadata (title, artifact taxonomy, site, person, uploader, file names,
+  filing source, status) flattened into a lowercase `haystack` (ADR-0019).
+  Search is every-token-must-match substring over this view — no index to
+  drift from the record.
 
 ## Requirement engine
 

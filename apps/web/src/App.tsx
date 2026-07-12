@@ -1,10 +1,11 @@
-import { FileCheck2, Moon, ShieldCheck, ShieldX, Sun } from "lucide-react";
+import { FileCheck2, Moon, Search, ShieldCheck, ShieldX, Sun } from "lucide-react";
 import { useEffect, useState } from "react";
-import { Link, Route, Routes } from "react-router-dom";
+import { Link, Route, Routes, useNavigate } from "react-router-dom";
 import { useChainStatus, useStudies } from "./api";
 import AdminPage from "./pages/AdminPage";
 import AuditPage from "./pages/AuditPage";
 import QueuePage from "./pages/QueuePage";
+import SearchPage from "./pages/SearchPage";
 import DocumentPage from "./pages/DocumentPage";
 import SitePage from "./pages/SitePage";
 import StudyPage from "./pages/StudyPage";
@@ -22,6 +23,32 @@ function useTheme() {
     localStorage.setItem("ctms_theme", dark ? "dark" : "light");
   }, [dark]);
   return { dark, toggle: () => setDark((d) => !d) };
+}
+
+function HeaderSearch() {
+  const navigate = useNavigate();
+  const [q, setQ] = useState("");
+  return (
+    <form
+      className="hidden items-center md:flex"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (q.trim().length < 2) return;
+        navigate(`/search?q=${encodeURIComponent(q.trim())}`);
+        setQ("");
+      }}
+      role="search"
+    >
+      <Search size={14} className="-mr-6 z-10 ml-2 text-muted" aria-hidden />
+      <input
+        value={q}
+        onChange={(e) => setQ(e.target.value)}
+        placeholder="Search documents…"
+        className="w-44 rounded-md border border-hairline bg-surface py-1 pl-7 pr-2 text-sm"
+        aria-label="Search documents"
+      />
+    </form>
+  );
 }
 
 function ChainBadge() {
@@ -66,6 +93,7 @@ export default function App() {
             </span>
           )}
           <div className="ml-auto flex items-center gap-2">
+            <HeaderSearch />
             <ChainBadge />
             <Link
               to="/queue"
@@ -109,6 +137,7 @@ export default function App() {
           <Route path="/sites/:studySiteId" element={<SitePage study={study} />} />
           <Route path="/visits/:visitId" element={<VisitPage />} />
           <Route path="/documents/:documentId" element={<DocumentPage />} />
+          <Route path="/search" element={<SearchPage study={study} />} />
           <Route path="/queue" element={<QueuePage study={study} />} />
           <Route path="/admin" element={<AdminPage study={study} />} />
           <Route path="/audit" element={<AuditPage />} />

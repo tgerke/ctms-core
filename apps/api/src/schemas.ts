@@ -123,6 +123,37 @@ export const DocumentDetailSchema = z
   })
   .openapi("DocumentDetail");
 
+// --- Document search (ADR-0019) --------------------------------------------------
+
+export const SearchResultSchema = z
+  .object({
+    study_id: z.string().uuid(),
+    document_id: z.string().uuid(),
+    title: z.string(),
+    status: z.string(),
+    effective_date: z.string().nullable(),
+    expires_at: z.string().nullable(),
+    created_at: z.string(),
+    artifact_code: z.string(),
+    artifact_name: z.string(),
+    section_name: z.string(),
+    zone_number: z.number().int(),
+    zone_name: z.string(),
+    study_site_id: z.string().uuid().nullable(),
+    site_number: z.string().nullable(),
+    site_name: z.string().nullable(),
+    person_id: z.string().uuid().nullable(),
+    person_given_name: z.string().nullable(),
+    person_family_name: z.string().nullable(),
+    version_count: z.number().int(),
+    latest_version_id: z.string().uuid(),
+    latest_uploaded_at: z.string(),
+    uploader_given_name: z.string().nullable(),
+    uploader_family_name: z.string().nullable(),
+    haystack: z.string(),
+  })
+  .openapi("SearchResult");
+
 // --- Review queue (ADR-0018) ---------------------------------------------------
 
 export const QueueStatusSchema = z

@@ -79,6 +79,13 @@ feature comparison is meaningless without them.
   What remains is the multi-step named workflow engines incumbents ship
   (route to A, then B, then C); this system deliberately commits to two
   review outcomes per version.
+- **Document search** — shipped as a metadata query over `v_document_search`
+  (ADR-0019): every word must match the document's title, artifact taxonomy,
+  site, person, uploader, file names, or filing source — "1572 003" finds
+  site 003's Form FDA 1572, from the UI header, the API, or read-only SQL.
+  No index to drift: search is a query over the record. What remains is
+  content full-text (extracting and indexing the PDF text — safe to add
+  later because versions are immutable) and Excel export of result sets.
 
 ## Genuine gaps
 
@@ -101,15 +108,6 @@ the sha256 the standard's checksum verification wants. Related and smaller:
 inspectors currently get the `read_only` role and the audit endpoints, where
 Veeva advertises purpose-built auditor access and an inspection-ready flag.
 
-### Document search
-
-No full-text or metadata search. Navigation is the site matrix, status
-filters, and URL-addressable lists — good for "what is missing," weak for
-"find the signed protocol amendment 2 from site 03." Veeva's TMF Viewer
-searches all document versions and exports to Excel. The data team has
-`ctms_readonly` SQL for metadata questions; clinical operations users have
-nothing comparable in the UI, and nothing indexes document text.
-
 ### Site-seat log workflows
 
 Florence's bread and butter — delegation-of-authority logs, training
@@ -123,13 +121,14 @@ structured DoA/training logs would be its first real test.
 
 ## If we built next
 
-1. **Document search.** Metadata search first (the views make it a query);
-   full-text over document content is the larger second step.
-2. **TMF transfer and inspection export.** The CDISC Exchange Mechanism
+1. **TMF transfer and inspection export.** The CDISC Exchange Mechanism
    package; the content-addressed store already has every checksum the
    standard wants.
-3. **Multi-study operation in the UI.** A study switcher first; portfolio
+2. **Multi-study operation in the UI.** A study switcher first; portfolio
    rollups across `v_study_site_completeness` after.
+3. **Content full-text search.** The metadata search's larger second step:
+   extract and index PDF text — safe derived state, since versions are
+   immutable.
 
 ## Sources
 

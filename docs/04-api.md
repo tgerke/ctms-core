@@ -74,6 +74,12 @@ df_expected |>
 No pagination-by-folder, no per-document round trips, no XML exports: the
 completeness of a 4-site trial is three GETs.
 
+Finding a specific document is one more
+(`GET /studies/{id}/document-search?q=`, ADR-0019): every word in `q` must
+match the document's title, artifact taxonomy, site, person, uploader, file
+names, or filing source — `q=1572 003` finds site 003's Form FDA 1572.
+Metadata only; content full-text is on the roadmap.
+
 ## Writing
 
 ```r

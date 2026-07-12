@@ -111,6 +111,34 @@ export interface DocumentDetail {
   assignments: Record<string, any>[];
 }
 
+// --- Document search (ADR-0019) ----------------------------------------------
+
+export interface SearchResult {
+  study_id: string;
+  document_id: string;
+  title: string;
+  status: string;
+  effective_date: string | null;
+  expires_at: string | null;
+  created_at: string;
+  artifact_code: string;
+  artifact_name: string;
+  section_name: string;
+  zone_number: number;
+  zone_name: string;
+  study_site_id: string | null;
+  site_number: string | null;
+  site_name: string | null;
+  person_id: string | null;
+  person_given_name: string | null;
+  person_family_name: string | null;
+  version_count: number;
+  latest_version_id: string;
+  latest_uploaded_at: string;
+  uploader_given_name: string | null;
+  uploader_family_name: string | null;
+}
+
 // --- Review queue (ADR-0018) -------------------------------------------------
 
 export type QueueStatus = "unassigned" | "assigned" | "overdue";
@@ -727,6 +755,23 @@ export function useReportEnrollment() {
     onSuccess: () => qc.invalidateQueries(),
   });
 }
+
+// --- Document search hook (ADR-0019) ------------------------------------------
+
+export const useDocumentSearch = (
+  studyId: string | undefined,
+  q: string,
+  status?: string,
+) =>
+  useQuery({
+    queryKey: ["document-search", studyId, q, status],
+    queryFn: () => {
+      const params = new URLSearchParams({ q });
+      if (status) params.set("status", status);
+      return api<SearchResult[]>(`/studies/${studyId}/document-search?${params}`);
+    },
+    enabled: !!studyId && q.trim().length >= 2,
+  });
 
 // --- Review queue hooks (ADR-0018) -------------------------------------------
 
