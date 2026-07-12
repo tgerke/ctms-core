@@ -27,7 +27,7 @@ below with that framing.
 | §11.10(g) authority checks | Role-based grants (admin / trial_ops / monitor / read_only / ingest / site_staff over read / upload / sign / approve / administer / log, scoped to study or site; ingest is the machine-identity role for source-system filing, ADR-0011; site_staff is the site seat and log gates writing a site's own DoA/training entries, ADR-0023) enforced per route; grant changes are themselves audited. Actor identity bound per transaction |
 | §11.50 signature manifestation | Signature rows carry signer, timestamp, and meaning (author/review/approval); the UI displays all three |
 | §11.70 signature/record linking | Each signature stores a copy of the signed version's content hash, so the binding is verifiable independently of the version row |
-| §11.200 signature components | Signing requires re-authentication: in OIDC mode a freshly issued token for the same subject within a short freshness window; method and time are recorded on the signature row, and a database CHECK requires them on every new signature |
+| §11.200 signature components | Signing requires re-authentication: in OIDC mode a freshly issued token for the same subject within a short freshness window; method and time are recorded on the signature row, and a database CHECK requires them on every new signature. Bulk approval is a §11.200(a)(1)(i) series of signings — one re-authentication opens the series, every version still gains its own recorded signature |
 
 ## ICH E6(R3) — essential records
 

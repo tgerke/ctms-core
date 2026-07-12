@@ -6,6 +6,9 @@ import {
   assignReview,
   assignSiteRole,
   auditEvents,
+  bulkApproveVersions,
+  bulkReturnVersions,
+  BulkReviewError,
   createActionItem,
   createIssue,
   createMilestone,
@@ -232,6 +235,11 @@ export function buildApp(db: Db, sql: Sql) {
     auth,
     requirePermission(sql, "approve", "versionId"),
   );
+  // Bulk review (ADR-0026): the selection arrives in the body, so the
+  // middleware gates the operation and the handler completes the per-version
+  // scope checks (the POST /documents pattern).
+  app.use("/document-versions/bulk-approve", auth, requirePermission(sql, "approve"));
+  app.use("/document-versions/bulk-return", auth, requirePermission(sql, "approve"));
   // Routing a review is review-owner authority, same as returning (ADR-0018).
   app.use(
     "/document-versions/:versionId/assign-review",
@@ -936,6 +944,151 @@ export function buildApp(db: Db, sql: Sql) {
         // Domain refusals (e.g. approving a returned version) are the client's
         // to fix, not server faults.
         return c.json({ error: e instanceof Error ? e.message : "sign failed" }, 409);
+      }
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: "post",
+      path: "/document-versions/bulk-approve",
+      security,
+      summary: "Approve a selection of versions as one series of signings",
+      description:
+        "Bulk review (ADR-0026), built on §11.200(a)(1)(i): a series of signings during a single, continuous period of controlled system access — one verified re-authentication (reauth_token) opens the series, and each version still gains its own signature row bound to its own content hash (§11.70). All-or-nothing: every version must be the latest of a pending_review document inside the caller's approve scope, and every blocker across the selection is reported at once. Each approval promotes and supersedes exactly as the single-version ceremony does.",
+      request: {
+        body: {
+          content: {
+            "application/json": {
+              schema: z.object({
+                version_ids: z.array(z.string().uuid()).min(1).max(200),
+                reauth_token: z.string().min(1),
+                effective_date: z.string().date().optional(),
+              }),
+            },
+          },
+        },
+      },
+      responses: {
+        201: json(
+          z.object({
+            signed: z.array(
+              z.object({
+                version_id: z.string().uuid(),
+                signature_id: z.string().uuid(),
+                signed_sha256: z.string(),
+              }),
+            ),
+          }),
+          "Signed",
+        ),
+        400: json(ErrorSchema, "Invalid input"),
+        403: json(ErrorSchema, "Re-authentication failed"),
+        409: json(
+          ErrorSchema.extend({ problems: z.array(z.string()).optional() }),
+          "Selection refused — every blocker listed, nothing signed",
+        ),
+      },
+    }),
+    async (c) => {
+      const actor = c.get("actor");
+      if (!actor.personId) {
+        return c.json({ error: "signing requires a person-linked token" }, 400);
+      }
+      const body = c.req.valid("json");
+      const reauth = await verifyReauth(c, body.reauth_token);
+      if (!reauth.ok) return c.json({ error: reauth.error }, 403);
+      try {
+        const signed = await bulkApproveVersions(db, actor, {
+          versionIds: body.version_ids,
+          signerPersonId: actor.personId,
+          grants: c.get("grants"),
+          reauthMethod: reauth.method,
+          reauthAt: reauth.at,
+          effectiveDate: body.effective_date,
+        });
+        return c.json(
+          {
+            signed: signed.map((s) => ({
+              version_id: s.documentVersionId,
+              signature_id: s.id,
+              signed_sha256: s.signedSha256,
+            })),
+          },
+          201,
+        );
+      } catch (e) {
+        if (e instanceof BulkReviewError) {
+          return c.json({ error: e.message, problems: e.problems }, 409);
+        }
+        return c.json({ error: e instanceof Error ? e.message : "bulk approve failed" }, 409);
+      }
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: "post",
+      path: "/document-versions/bulk-return",
+      security,
+      summary: "Return a selection of versions for correction, one shared reason",
+      description:
+        "The other bulk review outcome (ADR-0026 over ADR-0015): every selected version goes back with the same documented, immutable reason. Same approve authority and all-or-nothing preflight as bulk approval; not a signature, so no re-authentication.",
+      request: {
+        body: {
+          content: {
+            "application/json": {
+              schema: z.object({
+                version_ids: z.array(z.string().uuid()).min(1).max(200),
+                reason: z.string().min(1),
+              }),
+            },
+          },
+        },
+      },
+      responses: {
+        201: json(
+          z.object({
+            returned: z.array(
+              z.object({ version_id: z.string().uuid(), return_id: z.string().uuid() }),
+            ),
+          }),
+          "Returned",
+        ),
+        400: json(ErrorSchema, "Invalid input"),
+        409: json(
+          ErrorSchema.extend({ problems: z.array(z.string()).optional() }),
+          "Selection refused — every blocker listed, nothing returned",
+        ),
+      },
+    }),
+    async (c) => {
+      const actor = c.get("actor");
+      if (!actor.personId) {
+        return c.json({ error: "returning requires a person-linked token" }, 400);
+      }
+      const body = c.req.valid("json");
+      try {
+        const returned = await bulkReturnVersions(db, actor, {
+          versionIds: body.version_ids,
+          returnedByPersonId: actor.personId,
+          grants: c.get("grants"),
+          reason: body.reason,
+        });
+        return c.json(
+          {
+            returned: returned.map((r) => ({
+              version_id: r.documentVersionId,
+              return_id: r.id,
+            })),
+          },
+          201,
+        );
+      } catch (e) {
+        if (e instanceof BulkReviewError) {
+          return c.json({ error: e.message, problems: e.problems }, 409);
+        }
+        return c.json({ error: e instanceof Error ? e.message : "bulk return failed" }, 409);
       }
     },
   );

@@ -311,6 +311,20 @@ already filed. The partner's signatures, audit records, and lifecycle states
 stay in the retained package: this system's audit chain records the filings
 it witnessed, and nothing becomes effective without a human.
 
+## ADR-0026 — Bulk review is a series of signings, not a lighter signature
+
+The human half of ADR-0025's honest cost: an imported batch lands as
+dozens of pending documents, and Part 11 anticipated exactly this in
+§11.200(a)(1)(i) — a series of signings during one continuous period of
+controlled access, first signing with all components. Bulk approval from
+the review queue is that series: one re-authentication opens it, and every
+selected version still gains its own signature row bound to its own
+content hash — N signatures on the record, never one signature waved over
+N documents. Bulk return shares one immutable reason. Both are
+all-or-nothing in one transaction with every blocker listed, and both run
+the same code path as the single-document ceremony, so the two can never
+drift.
+
 ---
 
 Three of these — ADR-0004, ADR-0006, and ADR-0010 — are the same idea applied

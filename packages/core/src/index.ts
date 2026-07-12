@@ -11,10 +11,14 @@ export {
 } from "./authz.js";
 export {
   assignReview,
+  bulkApproveVersions,
+  bulkReturnVersions,
+  BulkReviewError,
   uploadDocument,
   signDocumentVersion,
   returnDocumentVersion,
   sha256Hex,
+  type SignInput,
   type UploadInput,
 } from "./documents.js";
 export {

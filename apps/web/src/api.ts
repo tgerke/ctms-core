@@ -1284,6 +1284,38 @@ export function useRevokeWaiver() {
   });
 }
 
+/**
+ * Bulk approval (ADR-0026): one re-authentication opens a §11.200(a)(1)(i)
+ * series of signings; every selected version gains its own signature bound
+ * to its own content hash. All-or-nothing on the server.
+ */
+export function useBulkApprove() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { versionIds: string[] }) => {
+      const reauthToken = await getReauthToken();
+      return api<{ signed: { version_id: string; signature_id: string }[] }>(
+        "/document-versions/bulk-approve",
+        jsonInit("POST", { version_ids: input.versionIds, reauth_token: reauthToken }),
+      );
+    },
+    onSuccess: () => qc.invalidateQueries(),
+  });
+}
+
+/** Bulk return-for-correction: one shared documented reason (ADR-0026). */
+export function useBulkReturn() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { versionIds: string[]; reason: string }) =>
+      api<{ returned: { version_id: string; return_id: string }[] }>(
+        "/document-versions/bulk-return",
+        jsonInit("POST", { version_ids: input.versionIds, reason: input.reason }),
+      ),
+    onSuccess: () => qc.invalidateQueries(),
+  });
+}
+
 export function useSign() {
   const qc = useQueryClient();
   return useMutation({

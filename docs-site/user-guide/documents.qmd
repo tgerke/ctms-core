@@ -95,6 +95,19 @@ computed from the documents themselves, so it can never show stale work.
 Filter by reviewer for a personal worklist, or by status to see what's
 overdue; overdue assignments also appear in the emailed digest.
 
+Review a batch by ticking the checkboxes (or the select-all next to the
+heading). Approving the selection is **one signature ceremony for the
+series**: you re-authenticate once, and every selected version gets its own
+signature bound to its own file — the audit trail shows N signatures, never
+one signature waved over N documents. Returning the selection shares one
+documented reason. If anything in the selection can't be reviewed — already
+returned, superseded mid-review, not yours to approve — the whole action
+refuses and lists exactly which rows to untick. This is how a partner TMF
+imported over the exchange standard gets reviewed without 74 separate
+sign-ins.
+
+![The queue with a selection and the series-signing confirmation open](../images/queue-bulk-review.png)
+
 ## Uploading a new version
 
 When a document needs an update — an amended protocol, a renewed license — you

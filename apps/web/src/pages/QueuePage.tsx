@@ -1,8 +1,10 @@
-import { CircleAlert, CircleDashed, UserCheck, UserPlus } from "lucide-react";
+import { CircleAlert, CircleDashed, CornerUpLeft, PenLine, UserCheck, UserPlus } from "lucide-react";
 import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import {
   useAssignReview,
+  useBulkApprove,
+  useBulkReturn,
   usePeople,
   useReviewQueue,
   type QueueEntry,
@@ -15,6 +17,8 @@ import { SpecChip, type StatusSpec } from "../status";
 // The review queue (ADR-0018): every document awaiting review, its latest
 // version's current assignment, and a derived status. Approving or returning
 // a version is what empties the queue — nothing here marks work "done".
+// Bulk review (ADR-0026) acts on a checkbox selection: approval is one
+// §11.200(a)(1)(i) series of signings, return shares one documented reason.
 
 const QUEUE_STATUS: Record<QueueStatus, Omit<StatusSpec, "rank">> = {
   overdue: { label: "Overdue", icon: CircleAlert, cssVar: "--status-critical" },
@@ -28,6 +32,7 @@ export default function QueuePage({ study }: { study: Study | undefined }) {
   const assignedTo = params.get("assigned_to") ?? undefined;
   const queueQuery = useReviewQueue(study?.id, { status, assignedTo });
   const { data: people } = usePeople();
+  const [selected, setSelected] = useState<Set<string>>(new Set());
 
   const setParam = (key: string, value: string | undefined) => {
     setParams(
@@ -39,6 +44,16 @@ export default function QueuePage({ study }: { study: Study | undefined }) {
       { replace: true },
     );
   };
+
+  const visibleIds = (queueQuery.data ?? []).map((q) => q.document_version_id);
+  const allSelected = visibleIds.length > 0 && visibleIds.every((id) => selected.has(id));
+  const toggle = (id: string) =>
+    setSelected((s) => {
+      const next = new Set(s);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
 
   if (!study) return <PageState query={{ isPending: true, isError: false, error: null }} label="study" />;
 
@@ -55,7 +70,15 @@ export default function QueuePage({ study }: { study: Study | undefined }) {
 
       <section className="card">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-hairline px-4 py-3">
-          <h2 className="font-medium">Pending review</h2>
+          <input
+            type="checkbox"
+            checked={allSelected}
+            onChange={() =>
+              setSelected(allSelected ? new Set() : new Set(visibleIds))
+            }
+            aria-label={allSelected ? "Clear selection" : "Select all listed"}
+          />
+          <h2 className="-ml-2 font-medium">Pending review</h2>
           <div className="ml-auto flex flex-wrap items-center gap-2">
             {(Object.keys(QUEUE_STATUS) as QueueStatus[]).map((s) => (
               <button
@@ -82,6 +105,12 @@ export default function QueuePage({ study }: { study: Study | undefined }) {
             </select>
           </div>
         </div>
+        {selected.size > 0 && (
+          <BulkBar
+            selected={selected}
+            clear={() => setSelected(new Set())}
+          />
+        )}
         {queueQuery.data?.length === 0 ? (
           <p className="px-4 py-3 text-sm text-muted">
             Nothing awaiting review{status || assignedTo ? " matches the filter" : ""}.
@@ -89,7 +118,12 @@ export default function QueuePage({ study }: { study: Study | undefined }) {
         ) : (
           <ul className="divide-y divide-hairline">
             {queueQuery.data?.map((q) => (
-              <QueueRow key={q.document_version_id} q={q} />
+              <QueueRow
+                key={q.document_version_id}
+                q={q}
+                checked={selected.has(q.document_version_id)}
+                toggle={() => toggle(q.document_version_id)}
+              />
             ))}
           </ul>
         )}
@@ -98,7 +132,130 @@ export default function QueuePage({ study }: { study: Study | undefined }) {
   );
 }
 
-function QueueRow({ q }: { q: QueueEntry }) {
+/**
+ * Actions over the selection. Approval is one signature ceremony for the
+ * series — one re-authentication, then one signature per version, each bound
+ * to its own content hash. The server refuses the whole selection, listing
+ * every blocker, if anything in it is not reviewable.
+ */
+function BulkBar({ selected, clear }: { selected: Set<string>; clear: () => void }) {
+  const approve = useBulkApprove();
+  const bulkReturn = useBulkReturn();
+  const [mode, setMode] = useState<"idle" | "approve" | "return">("idle");
+  const [reason, setReason] = useState("");
+  const [err, setErr] = useState<unknown>(null);
+  const n = selected.size;
+  const done = () => {
+    setMode("idle");
+    setReason("");
+    setErr(null);
+    clear();
+  };
+
+  return (
+    <div className="border-b border-hairline bg-page px-4 py-2.5">
+      <div className="flex flex-wrap items-center gap-2 text-sm">
+        <span className="text-ink2">
+          {n} selected — review as a batch: approve is one signature ceremony
+          ({n} signature{n === 1 ? "" : "s"}, each bound to its version's hash),
+          return shares one reason.
+        </span>
+        <span className="ml-auto flex items-center gap-2">
+          {mode !== "approve" && (
+            <button
+              onClick={() => setMode("approve")}
+              className="inline-flex items-center gap-1.5 rounded-md border border-hairline px-2 py-1 text-xs text-ink2 hover:bg-surface"
+            >
+              <PenLine size={12} aria-hidden />
+              Approve {n}…
+            </button>
+          )}
+          {mode !== "return" && (
+            <button
+              onClick={() => setMode("return")}
+              className="inline-flex items-center gap-1.5 rounded-md border border-hairline px-2 py-1 text-xs text-ink2 hover:bg-surface"
+            >
+              <CornerUpLeft size={12} aria-hidden />
+              Return {n}…
+            </button>
+          )}
+          <button onClick={done} className="text-xs text-muted hover:underline">
+            clear
+          </button>
+        </span>
+      </div>
+      {mode === "approve" && (
+        <div className="mt-1.5 flex flex-wrap items-center gap-2">
+          <span className="text-xs text-ink2">
+            Sign approval for {n} document{n === 1 ? "" : "s"}? You will
+            re-authenticate once for the series (§11.200).
+          </span>
+          <button
+            onClick={() => {
+              setErr(null);
+              approve.mutate(
+                { versionIds: [...selected] },
+                { onError: setErr, onSuccess: done },
+              );
+            }}
+            disabled={approve.isPending}
+            className="inline-flex items-center gap-1.5 rounded-md border border-hairline px-2 py-1 text-xs font-medium text-ink2 hover:bg-surface disabled:opacity-50"
+          >
+            <PenLine size={12} aria-hidden />
+            {approve.isPending ? "Signing…" : `Sign ${n} approval${n === 1 ? "" : "s"}`}
+          </button>
+          <button onClick={() => setMode("idle")} className="text-xs text-muted hover:underline">
+            cancel
+          </button>
+        </div>
+      )}
+      {mode === "return" && (
+        <form
+          className="mt-1.5 flex flex-wrap items-center gap-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!reason.trim()) return;
+            setErr(null);
+            bulkReturn.mutate(
+              { versionIds: [...selected], reason: reason.trim() },
+              { onError: setErr, onSuccess: done },
+            );
+          }}
+        >
+          <input
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            placeholder="Reason, recorded immutably on every returned version…"
+            className="w-72 rounded-md border border-hairline bg-surface px-2 py-1 text-xs"
+            aria-label="Return reason"
+          />
+          <button
+            type="submit"
+            disabled={bulkReturn.isPending || !reason.trim()}
+            className="inline-flex items-center gap-1.5 rounded-md border border-hairline px-2 py-1 text-xs text-ink2 hover:bg-surface disabled:opacity-50"
+          >
+            <CornerUpLeft size={12} aria-hidden />
+            {bulkReturn.isPending ? "Returning…" : `Return ${n}`}
+          </button>
+          <button type="button" onClick={() => setMode("idle")} className="text-xs text-muted hover:underline">
+            cancel
+          </button>
+        </form>
+      )}
+      <ErrorNote error={err} className="mt-1 w-full" />
+    </div>
+  );
+}
+
+function QueueRow({
+  q,
+  checked,
+  toggle,
+}: {
+  q: QueueEntry;
+  checked: boolean;
+  toggle: () => void;
+}) {
   const assign = useAssignReview();
   const { data: people } = usePeople();
   const [open, setOpen] = useState(false);
@@ -109,6 +266,12 @@ function QueueRow({ q }: { q: QueueEntry }) {
   return (
     <li className="px-4 py-2.5">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        <input
+          type="checkbox"
+          checked={checked}
+          onChange={toggle}
+          aria-label={`Select ${q.title} v${q.version_number}`}
+        />
         <span className="mono text-xs text-muted">{q.artifact_code}</span>
         <Link to={`/documents/${q.document_id}`} className="text-sm hover:underline">
           {q.title}

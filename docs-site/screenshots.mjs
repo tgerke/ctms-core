@@ -222,6 +222,22 @@ await shootSections({ Versions: "document-approve.png" });
 await navigate(`${WEB}/documents/${returnedDoc.document_id}`);
 await shootSections({ Versions: "document-returned.png" });
 
+// bulk review (ADR-0026): a selection with the series-signing confirmation
+// open — never confirmed, so nothing mutates
+await navigate(`${WEB}/queue`);
+await evaluate(
+  `[...document.querySelectorAll('input[type=checkbox][aria-label^="Select "]')]
+     .filter((c) => c.getAttribute('aria-label') !== 'Select all listed')
+     .slice(0, 2).forEach((c) => c.click()); true`
+);
+await sleep(300);
+await evaluate(
+  `[...document.querySelectorAll('button')]
+     .find((b) => b.textContent.startsWith('Approve ')).click(); true`
+);
+await sleep(300);
+await shootSections({ "Pending review": "queue-bulk-review.png" });
+
 await navigate(`${WEB}/audit`);
 await shoot("audit-page.png");
 
