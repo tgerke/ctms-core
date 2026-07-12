@@ -3,6 +3,7 @@ import { cors } from "hono/cors";
 import {
   achieveMilestone,
   addStudySite,
+  assignReview,
   assignSiteRole,
   auditEvents,
   createActionItem,
@@ -27,6 +28,7 @@ import {
   resolveActionItem,
   resolveIssue,
   returnDocumentVersion,
+  reviewQueue,
   revokeAccess,
   revokeWaiver,
   scheduleVisit,
@@ -50,6 +52,7 @@ import {
   type ExpectedStatus,
   type Grant,
   type IssueStatus,
+  type QueueStatus,
   type VisitStage,
 } from "@ctms/core";
 import { getBlob, type Db, type Sql } from "@ctms/db";
@@ -78,6 +81,8 @@ import {
   OrganizationSchema,
   OrgKindSchema,
   PersonSchema,
+  QueueEntrySchema,
+  QueueStatusSchema,
   RequirementRuleSchema,
   SiteCompletenessSchema,
   SiteDirectorySchema,
@@ -179,6 +184,12 @@ export function buildApp(db: Db, sql: Sql) {
   // could approve (ADR-0015).
   app.use(
     "/document-versions/:versionId/return",
+    auth,
+    requirePermission(sql, "approve", "versionId"),
+  );
+  // Routing a review is review-owner authority, same as returning (ADR-0018).
+  app.use(
+    "/document-versions/:versionId/assign-review",
     auth,
     requirePermission(sql, "approve", "versionId"),
   );
@@ -557,6 +568,85 @@ export function buildApp(db: Db, sql: Sql) {
       } catch (e) {
         return c.json({ error: e instanceof Error ? e.message : "return failed" }, 409);
       }
+    },
+  );
+
+  // --- Review queue (ADR-0018) ---------------------------------------------
+
+  app.openapi(
+    createRoute({
+      method: "post",
+      path: "/document-versions/{versionId}/assign-review",
+      security,
+      summary: "Assign a pending version to a named reviewer",
+      description:
+        "Routes review work (ADR-0018): records who should review this version, set by whom, due when. The assignment finishes itself — an approval signature or a return resolves it, because the queue is derived from the documents. Reassigning inserts a new assignment; the latest one stands. The assignee must hold a grant that can approve this document.",
+      request: {
+        params: z.object({ versionId: z.string().uuid() }),
+        body: {
+          content: {
+            "application/json": {
+              schema: z.object({
+                assignee_person_id: z.string().uuid(),
+                due_date: z.string().date().optional(),
+                note: z.string().trim().max(2000).optional(),
+              }),
+            },
+          },
+        },
+      },
+      responses: {
+        201: json(z.object({ assignment_id: z.string().uuid() }), "Assigned"),
+        400: json(ErrorSchema, "Invalid input"),
+        409: json(ErrorSchema, "Not assignable (not pending review, not latest, or assignee cannot approve)"),
+      },
+    }),
+    async (c) => {
+      const actor = c.get("actor");
+      if (!actor.personId) {
+        return c.json({ error: "assigning requires a person-linked token" }, 400);
+      }
+      const body = c.req.valid("json");
+      try {
+        const assignment = await assignReview(db, actor, {
+          documentVersionId: c.req.valid("param").versionId,
+          assignedToPersonId: body.assignee_person_id,
+          assignedByPersonId: actor.personId,
+          dueDate: body.due_date ?? null,
+          note: body.note ?? null,
+        });
+        return c.json({ assignment_id: assignment.id }, 201);
+      } catch (e) {
+        return c.json({ error: e instanceof Error ? e.message : "assign failed" }, 409);
+      }
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: "get",
+      path: "/studies/{studyId}/review-queue",
+      security,
+      summary: "The review queue: pending versions with derived assignment status",
+      description:
+        "Every document awaiting review, with its latest version's current assignment and a derived queue status (unassigned, assigned, overdue). Filter by assignee for a 'my work' view. Approval or return empties the queue — there is no completion flag to forget.",
+      request: {
+        params: z.object({ studyId: z.string().uuid() }),
+        query: z.object({
+          assigned_to: z.string().uuid().optional(),
+          status: QueueStatusSchema.optional(),
+        }),
+      },
+      responses: { 200: json(z.array(QueueEntrySchema), "Queue") },
+    }),
+    async (c) => {
+      const q = c.req.valid("query");
+      const rows = await reviewQueue(sql, {
+        studyId: c.req.valid("param").studyId,
+        assignedTo: q.assigned_to,
+        status: q.status as QueueStatus | undefined,
+      });
+      return c.json(rows as never, 200);
     },
   );
 

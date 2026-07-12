@@ -295,6 +295,33 @@ export const signature = pgTable("signature", {
   reauthAt: timestamp("reauth_at", { withTimezone: true }),
 });
 
+// Review assignment (ADR-0018): who should review a pending version, due
+// when. Lifecycle is derived, never stored — an assignment is finished when
+// its version gains an approval signature or a return. Reassignment inserts
+// a new row (v_review_queue reads the latest); nothing is deleted.
+export const reviewAssignment = pgTable(
+  "review_assignment",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    documentVersionId: uuid("document_version_id")
+      .notNull()
+      .references(() => documentVersion.id),
+    assignedTo: uuid("assigned_to")
+      .notNull()
+      .references(() => person.id),
+    assignedBy: uuid("assigned_by")
+      .notNull()
+      .references(() => person.id),
+    dueDate: date("due_date"),
+    note: text("note"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("review_assignment_version_idx").on(t.documentVersionId),
+    index("review_assignment_assignee_idx").on(t.assignedTo),
+  ],
+);
+
 // Return-for-correction (ADR-0015): a reviewer sends a pending version back
 // with a documented reason. Append-only like signature (immutability trigger
 // in the SQL migration); the document's status carries the lifecycle state.

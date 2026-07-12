@@ -87,9 +87,9 @@ Do **not** run `pnpm db:seed` against a pilot database — it truncates.
 ## Digest notifications
 
 `pnpm digest` (ADR-0017) emails each study's oversight digest — expiring and
-expired documents, overdue visits, action items, issues, milestones, and any
-audit-chain failure — to everyone holding a study-wide `admin` or `trial_ops`
-grant. It is stateless: a pure function of the derived views at send time,
+expired documents, overdue visits, action items, issues, milestones, overdue
+review assignments, and any audit-chain failure — to everyone holding a
+study-wide `admin` or `trial_ops` grant. It is stateless: a pure function of the derived views at send time,
 safe to rerun, with nothing to sync. Schedule it with cron at whatever
 cadence the team wants:
 

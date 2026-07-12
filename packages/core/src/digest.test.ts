@@ -34,7 +34,8 @@ describe("digest notifications (ADR-0017)", () => {
         d.overdueVisits.length +
         d.overdueActionItems.length +
         d.overdueIssues.length +
-        d.overdueMilestones.length,
+        d.overdueMilestones.length +
+        d.overdueReviews.length,
     );
     for (const row of [...d.expired, ...d.expiringSoon]) {
       expect(row.effective_expiry).toBeTruthy();

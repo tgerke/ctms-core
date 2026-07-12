@@ -42,6 +42,14 @@ export interface DigestMilestoneRow {
   planned_date: string;
 }
 
+export interface DigestReviewRow {
+  title: string;
+  site_number: string | null;
+  assignee_given_name: string;
+  assignee_family_name: string;
+  due_date: string;
+}
+
 export interface DigestData {
   study: { id: string; protocol_number: string; title: string };
   generatedOn: string;
@@ -59,6 +67,7 @@ export interface DigestData {
   overdueActionItems: DigestActionItemRow[];
   overdueIssues: DigestIssueRow[];
   overdueMilestones: DigestMilestoneRow[];
+  overdueReviews: DigestReviewRow[];
 }
 
 export async function collectDigest(sql: Sql, studyId: string): Promise<DigestData> {
@@ -112,6 +121,12 @@ export async function collectDigest(sql: Sql, studyId: string): Promise<DigestDa
     WHERE study_id = ${studyId} AND status = 'overdue'
     ORDER BY planned_date`) as unknown as DigestMilestoneRow[];
 
+  const overdueReviews = (await sql`
+    SELECT title, site_number, assignee_given_name, assignee_family_name, due_date
+    FROM v_review_queue
+    WHERE study_id = ${studyId} AND queue_status = 'overdue'
+    ORDER BY due_date`) as unknown as DigestReviewRow[];
+
   const chainResult = await verifyAuditChain(sql);
 
   // Local date, not toISOString(): a digest cron runs in the team's evening
@@ -131,6 +146,7 @@ export async function collectDigest(sql: Sql, studyId: string): Promise<DigestDa
     overdueActionItems,
     overdueIssues,
     overdueMilestones,
+    overdueReviews,
   };
 }
 
@@ -143,6 +159,7 @@ export function attentionCount(d: DigestData): number {
     d.overdueActionItems.length +
     d.overdueIssues.length +
     d.overdueMilestones.length +
+    d.overdueReviews.length +
     (d.chain.valid ? 0 : 1)
   );
 }
@@ -202,6 +219,14 @@ export function renderDigest(d: DigestData): { subject: string; text: string } {
     "Overdue issues",
     d.overdueIssues.map(
       (r) => `${r.site_number ? `Site ${r.site_number}` : "Study-level"} — [${r.severity}] ${r.title} — due ${r.due_date}`,
+    ),
+  );
+  section(
+    "Overdue review assignments",
+    d.overdueReviews.map(
+      (r) =>
+        `${r.title}${r.site_number ? ` (Site ${r.site_number})` : ""} — ` +
+        `${r.assignee_given_name} ${r.assignee_family_name} — due ${r.due_date}`,
     ),
   );
   section(

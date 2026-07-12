@@ -10,6 +10,7 @@ export {
   type ScopeParam,
 } from "./authz.js";
 export {
+  assignReview,
   uploadDocument,
   signDocumentVersion,
   returnDocumentVersion,
@@ -68,6 +69,7 @@ export {
   listSites,
   listStudies,
   listTmfArtifacts,
+  reviewQueue,
   studyRequirementRules,
   siteStaff,
   studyEnrollment,
@@ -81,5 +83,6 @@ export {
   type ExpectedDocumentRow,
   type ExpectedStatus,
   type IssueStatus,
+  type QueueStatus,
   type VisitStage,
 } from "./queries.js";

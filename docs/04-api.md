@@ -111,6 +111,15 @@ two optional provenance fields, `source_system` and `source_ref`, for
 source-system filing (ADR-0011): filed versions land as `pending_review` like
 any upload and show a "filed by" chip in the UI.
 
+Review work routes through the same two outcomes (ADR-0018):
+`POST /document-versions/{id}/assign-review` names a reviewer (who must hold
+approval authority for the document) with an optional `due_date`, and
+`GET /studies/{id}/review-queue` returns every document awaiting review with
+its latest assignment and a derived `queue_status`
+(`unassigned | assigned | overdue`; filter with `assigned_to` for a "my
+work" list). There is no completion call — approving or returning the
+version is what clears the queue entry.
+
 Both calls leave hash-chained audit events attributed to the token's person;
 `GET /audit-chain/verify` confirms the chain end-to-end, and
 `GET /files/{sha256}` returns the exact bytes a signature covers — storage is

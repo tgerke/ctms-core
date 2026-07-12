@@ -15,8 +15,10 @@ import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 
 const CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
-const WEB = "http://localhost:5173";
-const API = "http://localhost:8787";
+// Override when the default ports are taken (e.g. a sibling repo's dev
+// server on 5173): WEB=http://localhost:5199 node docs-site/screenshots.mjs
+const WEB = process.env.WEB ?? "http://localhost:5173";
+const API = process.env.API ?? "http://localhost:8787";
 const TOKEN = "dev-admin-token";
 const outdir = join(dirname(fileURLToPath(import.meta.url)), "images");
 mkdirSync(outdir, { recursive: true });

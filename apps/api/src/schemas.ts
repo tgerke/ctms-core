@@ -119,8 +119,44 @@ export const DocumentDetailSchema = z
     versions: z.array(z.record(z.any())),
     signatures: z.array(z.record(z.any())),
     returns: z.array(z.record(z.any())),
+    assignments: z.array(z.record(z.any())),
   })
   .openapi("DocumentDetail");
+
+// --- Review queue (ADR-0018) ---------------------------------------------------
+
+export const QueueStatusSchema = z
+  .enum(["unassigned", "assigned", "overdue"])
+  .openapi("QueueStatus");
+
+export const QueueEntrySchema = z
+  .object({
+    study_id: z.string().uuid(),
+    document_id: z.string().uuid(),
+    document_version_id: z.string().uuid(),
+    version_number: z.number().int(),
+    title: z.string(),
+    study_site_id: z.string().uuid().nullable(),
+    site_number: z.string().nullable(),
+    site_name: z.string().nullable(),
+    artifact_code: z.string(),
+    artifact_name: z.string(),
+    uploaded_at: z.string(),
+    uploader_given_name: z.string().nullable(),
+    uploader_family_name: z.string().nullable(),
+    assignment_id: z.string().uuid().nullable(),
+    assigned_to: z.string().uuid().nullable(),
+    assignee_given_name: z.string().nullable(),
+    assignee_family_name: z.string().nullable(),
+    assigned_by: z.string().uuid().nullable(),
+    assigner_given_name: z.string().nullable(),
+    assigner_family_name: z.string().nullable(),
+    due_date: z.string().nullable(),
+    assigned_at: z.string().nullable(),
+    note: z.string().nullable(),
+    queue_status: QueueStatusSchema,
+  })
+  .openapi("QueueEntry");
 
 export const ErrorSchema = z
   .object({ error: z.string() })

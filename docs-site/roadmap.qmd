@@ -76,6 +76,14 @@ restated here because a feature comparison is meaningless without them.
   remains is the per-user subscription and flash-report scheduling UI
   incumbents ship (Veeva's any-frequency flash reports); the daily-use hole
   — nothing emails anyone — is closed.
+- **Task assignment and review queues** — shipped as review assignments with
+  a derived queue (ADR-0018): a pending version is assigned to a named
+  reviewer with a due date, "my work" is a filter on `v_review_queue`, and
+  the assignment resolves itself when the version is approved or returned —
+  no completion state exists to drift. Overdue assignments join the digest.
+  What remains is the multi-step named workflow engines incumbents ship
+  (route to A, then B, then C); this system deliberately commits to two
+  review outcomes per version.
 
 ## Genuine gaps
 
@@ -108,15 +116,6 @@ searches all document versions and exports to Excel. The data team has
 operations users have nothing comparable in the UI, and nothing indexes
 document text.
 
-### Task assignment and review queues
-
-Pending-review documents are a list, not a queue: no assignment, no due
-date, no "my work" view. Action items exist but only attached to monitoring
-visits. Florence builds placeholders, due dates, and task assignments into
-the binder itself; Veeva routes documents through named review workflows.
-The oversight seat needs at least "assign this pending version to a
-reviewer" before a team larger than a few people can share the work.
-
 ### Site-seat log workflows
 
 Florence's bread and butter — delegation-of-authority logs, training
@@ -130,14 +129,13 @@ structured DoA/training logs would be its first real test.
 
 ## If we built next
 
-1. **Task assignment and review queues.** The next daily-use hole: pending
-   review is a list, not a queue, and nothing is assignable to a named
-   reviewer with a due date.
-2. **Document search.** Metadata search first (the views make it a query);
+1. **Document search.** Metadata search first (the views make it a query);
    full-text over document content is the larger second step.
-3. **TMF transfer and inspection export.** The CDISC Exchange Mechanism
+2. **TMF transfer and inspection export.** The CDISC Exchange Mechanism
    package; the content-addressed store already has every checksum the
    standard wants.
+3. **Multi-study operation in the UI.** A study switcher first; portfolio
+   rollups across `v_study_site_completeness` after.
 
 ## Sources
 

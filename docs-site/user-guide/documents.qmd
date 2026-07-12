@@ -70,6 +70,20 @@ document back through review.
 Returning takes the same authority as approving. It isn't a signature, so
 there's no identity re-check — just the reason and one click.
 
+## The review queue
+
+The **Review queue** link in the header lists everything awaiting review in
+one place: each pending document, who it's assigned to, and whether it's
+overdue. Assign a pending version to a named reviewer with an optional due
+date (the reviewer must hold approval authority — the app checks); reassign
+by assigning again, and the newest assignment stands.
+
+There is no "mark as done" anywhere, on purpose. Approving or returning the
+version is what completes the assignment and clears the row — the queue is
+computed from the documents themselves, so it can never show stale work.
+Filter by reviewer for a personal worklist, or by status to see what's
+overdue; overdue assignments also appear in the emailed digest.
+
 ## Uploading a new version
 
 When a document needs an update — an amended protocol, a renewed license — you

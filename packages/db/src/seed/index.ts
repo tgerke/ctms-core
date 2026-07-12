@@ -366,7 +366,7 @@ await addDoc({ artifact: "05.02.03", title: "GCP Certificate — Reyes", site: "
 // --- Site 002 (IRB renewal in review; coordinator missing GCP)
 // Original IRB approval superseded; continuing-review approval awaiting QC.
 await addDoc({ artifact: "04.01.02", title: "IRB Approval — Site 002 (initial)", site: "002", status: "superseded", effective: monthsAgo(13) });
-await addDoc({ artifact: "04.01.02", title: "IRB Continuing Review Approval — Site 002", site: "002", status: "pending_review", uploadedBy: "oduya" });
+const docIrbRenewal002 = await addDoc({ artifact: "04.01.02", title: "IRB Continuing Review Approval — Site 002", site: "002", status: "pending_review", uploadedBy: "oduya" });
 await addDoc({ artifact: "04.01.04", title: "IRB-Approved Consent Form — Site 002", site: "002", effective: monthsAgo(7) });
 await addDoc({ artifact: "05.01.04", title: "Clinical Trial Agreement — Site 002", site: "002", effective: monthsAgo(8) });
 await addDoc({ artifact: "05.02.05", title: "Form FDA 1572 — Raman", site: "002", effective: monthsAgo(7), sign: { by: "raman", meaning: "approval" } });
@@ -417,6 +417,21 @@ await addDoc({
 await addDoc({ artifact: "05.01.04", title: "Clinical Trial Agreement — Site 004", site: "004", effective: daysAgo(20) });
 await addDoc({ artifact: "04.01.02", title: "IRB Approval — Site 004", site: "004", effective: daysAgo(10) });
 await addDoc({ artifact: "05.02.01", title: "CV — Olaf Bergstrom, MD", site: "004", person: "bergstrom", effective: daysAgo(15) });
+
+// --- Review assignment (ADR-0018): the IRB renewal review is routed to Feld
+// and already past due, so the queue and the digest have an overdue example.
+{
+  const [version] = await sql<[{ id: string }]>`
+    SELECT id FROM document_version WHERE document_id = ${docIrbRenewal002.id}
+    ORDER BY version_number DESC LIMIT 1`;
+  await db.insert(s.reviewAssignment).values({
+    documentVersionId: version!.id,
+    assignedTo: personId.get("feld")!,
+    assignedBy: personId.get("feld")!,
+    dueDate: daysAgo(2),
+    note: "QC against the IRB letter before the continuing-review window closes.",
+  });
+}
 
 // --- Operational layer: monitoring visits ------------------------------------
 // One visit per derived stage so v_monitoring_visit_status tells a story:

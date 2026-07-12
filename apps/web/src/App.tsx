@@ -4,6 +4,7 @@ import { Link, Route, Routes } from "react-router-dom";
 import { useChainStatus, useStudies } from "./api";
 import AdminPage from "./pages/AdminPage";
 import AuditPage from "./pages/AuditPage";
+import QueuePage from "./pages/QueuePage";
 import DocumentPage from "./pages/DocumentPage";
 import SitePage from "./pages/SitePage";
 import StudyPage from "./pages/StudyPage";
@@ -67,6 +68,12 @@ export default function App() {
           <div className="ml-auto flex items-center gap-2">
             <ChainBadge />
             <Link
+              to="/queue"
+              className="rounded-md px-2 py-1 text-sm text-ink2 hover:bg-surface"
+            >
+              Review queue
+            </Link>
+            <Link
               to="/admin"
               className="rounded-md px-2 py-1 text-sm text-ink2 hover:bg-surface"
             >
@@ -102,6 +109,7 @@ export default function App() {
           <Route path="/sites/:studySiteId" element={<SitePage study={study} />} />
           <Route path="/visits/:visitId" element={<VisitPage />} />
           <Route path="/documents/:documentId" element={<DocumentPage />} />
+          <Route path="/queue" element={<QueuePage study={study} />} />
           <Route path="/admin" element={<AdminPage study={study} />} />
           <Route path="/audit" element={<AuditPage />} />
         </Routes>

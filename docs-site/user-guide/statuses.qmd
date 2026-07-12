@@ -23,6 +23,17 @@ count tiles.
 | **Superseded** (grey) | Replaced by a newer sibling document | Nothing — it's history, kept forever |
 | **Waived** (grey) | An admin recorded why the requirement doesn't apply here (e.g. central IRB) | Nothing, unless circumstances change — then lift the waiver from the site page |
 
+## Review queue statuses
+
+The queue lists documents awaiting review; these describe the assignment,
+not the document (which is always **Pending review** while it's here).
+
+| Status | Meaning | What to do |
+| --- | --- | --- |
+| **Unassigned** (amber outline) | Awaiting review, nobody named | Assign a reviewer from the queue page |
+| **Assigned** (blue) | A named reviewer has it, not yet due | Review it — approve or return |
+| **Overdue** (red) | Past the assignment's due date | Review it now, or reassign |
+
 ## Monitoring visit stages
 
 The full lifecycle, with next steps, is walked through in

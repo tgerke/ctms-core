@@ -112,6 +112,24 @@ export async function siteStaff(sql: Sql, studySiteId: string) {
     ORDER BY ssr.role, p.family_name`;
 }
 
+// --- Review queue (ADR-0018) ------------------------------------------------
+
+export type QueueStatus = "unassigned" | "assigned" | "overdue";
+
+export async function reviewQueue(
+  sql: Sql,
+  filter: { studyId: string; assignedTo?: string; status?: QueueStatus },
+) {
+  return sql`
+    SELECT q.*
+    FROM v_review_queue q
+    WHERE q.study_id = ${filter.studyId}
+      AND (${filter.assignedTo ?? null}::uuid IS NULL OR q.assigned_to = ${filter.assignedTo ?? null})
+      AND (${filter.status ?? null}::text IS NULL OR q.queue_status = ${filter.status ?? null})
+    ORDER BY (q.queue_status = 'overdue') DESC, q.due_date NULLS LAST,
+             q.uploaded_at`;
+}
+
 // --- Admin directory reads (ADR-0016) --------------------------------------
 
 export async function listOrganizations(sql: Sql) {
@@ -205,7 +223,17 @@ export async function documentDetail(sql: Sql, documentId: string) {
     JOIN person p ON p.id = dr.returned_by
     WHERE dv.document_id = ${documentId}
     ORDER BY dr.returned_at DESC`;
-  return { document: docs[0], versions, signatures, returns };
+  const assignments = await sql`
+    SELECT ra.*, dv.version_number,
+           ap.given_name AS assignee_given_name, ap.family_name AS assignee_family_name,
+           bp.given_name AS assigner_given_name, bp.family_name AS assigner_family_name
+    FROM review_assignment ra
+    JOIN document_version dv ON dv.id = ra.document_version_id
+    JOIN person ap ON ap.id = ra.assigned_to
+    JOIN person bp ON bp.id = ra.assigned_by
+    WHERE dv.document_id = ${documentId}
+    ORDER BY ra.created_at DESC`;
+  return { document: docs[0], versions, signatures, returns, assignments };
 }
 
 export async function auditEvents(

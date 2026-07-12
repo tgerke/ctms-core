@@ -22,6 +22,8 @@ erDiagram
     person o|--o{ document : scopes
     document ||--o{ document_version : versions
     document_version ||--o{ signature : signs
+    document_version ||--o{ review_assignment : routes
+    person ||--o{ review_assignment : reviewer
     person ||--o{ signature : signer
     person ||--o{ access_grant : authorizes
     study o|--o{ access_grant : scopes
@@ -103,6 +105,15 @@ facts (`end_date`, `revoked_at`), never deletes.
   `document_version_id`, `returned_by`, `reason` (CHECK: non-blank), timestamp.
   Immutable like a signature; a returned version can never be approved — the fix
   is a corrected version, which reopens review.
+- **review_assignment** — who should review a pending version, set by whom, due
+  when (ADR-0018). No status column and no completion flag: an assignment is
+  finished exactly when its version gains an approval signature or a return.
+  Reassignment inserts a new row (the queue view reads the latest); assignment
+  history stays on the document.
+- **v_review_queue** (*view*) — every `pending_review` document's latest version,
+  its latest assignment, and a derived `queue_status`
+  (`unassigned | assigned | overdue`). Approval or return is what empties the
+  queue; "my work" is a filter, not stored state.
 
 ## Requirement engine
 

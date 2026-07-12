@@ -114,6 +114,12 @@ back with a reason, which stays on the document's permanent record. The
 returned version can never be approved — uploading a corrected version
 reopens review.
 
+Review assignment
+: Routing a pending version to a named reviewer, with an optional due date.
+It has no "done" state of its own: approving or returning the version is
+what completes it, so the review queue can never disagree with the
+documents.
+
 Waived
 : An expected document an administrator has marked not applicable, with a
 recorded reason ("central IRB of record — no local approval letter"). A

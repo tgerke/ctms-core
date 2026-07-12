@@ -108,6 +108,38 @@ export interface DocumentDetail {
   versions: Record<string, any>[];
   signatures: Record<string, any>[];
   returns: Record<string, any>[];
+  assignments: Record<string, any>[];
+}
+
+// --- Review queue (ADR-0018) -------------------------------------------------
+
+export type QueueStatus = "unassigned" | "assigned" | "overdue";
+
+export interface QueueEntry {
+  study_id: string;
+  document_id: string;
+  document_version_id: string;
+  version_number: number;
+  title: string;
+  study_site_id: string | null;
+  site_number: string | null;
+  site_name: string | null;
+  artifact_code: string;
+  artifact_name: string;
+  uploaded_at: string;
+  uploader_given_name: string | null;
+  uploader_family_name: string | null;
+  assignment_id: string | null;
+  assigned_to: string | null;
+  assignee_given_name: string | null;
+  assignee_family_name: string | null;
+  assigned_by: string | null;
+  assigner_given_name: string | null;
+  assigner_family_name: string | null;
+  due_date: string | null;
+  assigned_at: string | null;
+  note: string | null;
+  queue_status: QueueStatus;
 }
 
 // --- Operational layer --------------------------------------------------------
@@ -690,6 +722,45 @@ export function useReportEnrollment() {
           enrolled: input.enrolled,
           withdrawn: input.withdrawn,
           completed: input.completed,
+        }),
+      ),
+    onSuccess: () => qc.invalidateQueries(),
+  });
+}
+
+// --- Review queue hooks (ADR-0018) -------------------------------------------
+
+export const useReviewQueue = (
+  studyId: string | undefined,
+  filter?: { assignedTo?: string; status?: QueueStatus },
+) =>
+  useQuery({
+    queryKey: ["review-queue", studyId, filter],
+    queryFn: () => {
+      const params = new URLSearchParams();
+      if (filter?.assignedTo) params.set("assigned_to", filter.assignedTo);
+      if (filter?.status) params.set("status", filter.status);
+      const qs = params.toString();
+      return api<QueueEntry[]>(`/studies/${studyId}/review-queue${qs ? `?${qs}` : ""}`);
+    },
+    enabled: !!studyId,
+  });
+
+export function useAssignReview() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      versionId: string;
+      assigneePersonId: string;
+      dueDate?: string;
+      note?: string;
+    }) =>
+      api<{ assignment_id: string }>(
+        `/document-versions/${input.versionId}/assign-review`,
+        jsonInit("POST", {
+          assignee_person_id: input.assigneePersonId,
+          ...(input.dueDate ? { due_date: input.dueDate } : {}),
+          ...(input.note ? { note: input.note } : {}),
         }),
       ),
     onSuccess: () => qc.invalidateQueries(),

@@ -1,14 +1,17 @@
 import { createHash } from "node:crypto";
 import {
+  accessGrant,
   document,
   documentReturn,
   documentVersion,
+  reviewAssignment,
   signature,
   putBlob,
   type Db,
 } from "@ctms/db";
 import { and, eq, isNull, ne, sql } from "drizzle-orm";
 import { withActor, type Actor } from "./actor.js";
+import { permits, type Grant } from "./authz.js";
 
 export interface UploadInput {
   tmfArtifactId: number;
@@ -271,6 +274,87 @@ export async function returnDocumentVersion(
       .where(eq(document.id, doc.id));
 
     return returns[0]!;
+  });
+}
+
+/**
+ * Assign a pending version to a named reviewer (ADR-0018). The assignment is
+ * a fact row; it is finished the moment the version gains an approval
+ * signature or a return — no completion flag exists. Reassignment inserts a
+ * new row and the queue view reads the latest.
+ */
+export async function assignReview(
+  db: Db,
+  actor: Actor,
+  input: {
+    documentVersionId: string;
+    assignedToPersonId: string;
+    assignedByPersonId: string;
+    dueDate?: string | null;
+    note?: string | null;
+  },
+) {
+  return withActor(db, actor, async (tx) => {
+    const versions = await tx
+      .select()
+      .from(documentVersion)
+      .where(eq(documentVersion.id, input.documentVersionId))
+      .limit(1);
+    const version = versions[0];
+    if (!version) throw new Error("document version not found");
+
+    const docs = await tx
+      .select()
+      .from(document)
+      .where(eq(document.id, version.documentId))
+      .limit(1);
+    const doc = docs[0]!;
+    if (doc.status !== "pending_review") {
+      throw new Error(
+        `only a pending_review document can be assigned for review (status: ${doc.status})`,
+      );
+    }
+    const [{ latest }] = (await tx.execute(sql`
+      SELECT max(version_number) AS latest
+      FROM document_version WHERE document_id = ${doc.id}`)) as unknown as [
+      { latest: number },
+    ];
+    if (version.versionNumber !== Number(latest)) {
+      throw new Error("only the latest version can be assigned for review");
+    }
+
+    // The assignee must actually be able to finish the review: an active
+    // grant permitting 'approve' on this document's scope.
+    const grants = (await tx
+      .select({
+        role: accessGrant.role,
+        study_id: accessGrant.studyId,
+        study_site_id: accessGrant.studySiteId,
+      })
+      .from(accessGrant)
+      .where(
+        and(eq(accessGrant.personId, input.assignedToPersonId), isNull(accessGrant.revokedAt)),
+      )) as Grant[];
+    if (
+      !permits(grants, "approve", {
+        studyId: doc.studyId,
+        studySiteId: doc.studySiteId ?? undefined,
+      })
+    ) {
+      throw new Error("assignee cannot approve this document (no covering grant)");
+    }
+
+    const rows = await tx
+      .insert(reviewAssignment)
+      .values({
+        documentVersionId: version.id,
+        assignedTo: input.assignedToPersonId,
+        assignedBy: input.assignedByPersonId,
+        dueDate: input.dueDate ?? null,
+        note: input.note ?? null,
+      })
+      .returning();
+    return rows[0]!;
   });
 }
 

@@ -283,6 +283,24 @@ export default function DocumentPage() {
                   <Undo2 size={11} aria-hidden /> returned
                 </span>
               )}
+              {detail.document.status === "pending_review" &&
+                (() => {
+                  // Latest assignment for this version (ADR-0018); resolved
+                  // assignments disappear with the pending status itself.
+                  const a = detail.assignments.find(
+                    (x) => x.document_version_id === v.id,
+                  );
+                  return a ? (
+                    <span
+                      className="rounded-full border px-2 py-0.5 text-xs font-medium"
+                      style={{ color: "var(--info)", borderColor: "var(--ring)" }}
+                      title={a.note ?? undefined}
+                    >
+                      review: {a.assignee_given_name} {a.assignee_family_name}
+                      {a.due_date ? ` · due ${a.due_date}` : ""}
+                    </span>
+                  ) : null;
+                })()}
               <span className="mono ml-auto text-xs text-muted" title={`sha256 ${v.sha256}`}>
                 {v.sha256.slice(0, 12)}…
               </span>
