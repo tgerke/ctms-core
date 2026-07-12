@@ -9,14 +9,21 @@ import {
   createActionItem,
   createIssue,
   createMilestone,
+  createDelegation,
   createOrganization,
   createPerson,
   createRequirementRule,
   createSite,
+  delegationLog,
   documentAuditTrail,
   documentDetail,
+  endDelegation,
   endSiteRole,
   expectedDocuments,
+  recordTraining,
+  siteEnrollment,
+  siteOverview,
+  trainingLog,
   grantAccess,
   linkVisitDocument,
   listOrganizations,
@@ -51,10 +58,12 @@ import {
   visitDetail,
   waiveExpectedDocument,
   permits,
+  type DelegationStatus,
   type ExpectedStatus,
   type Grant,
   type IssueStatus,
   type QueueStatus,
+  type TrainingStatus,
   type VisitStage,
 } from "@ctms/core";
 import { getBlob, type Db, type Sql } from "@ctms/db";
@@ -70,6 +79,8 @@ import {
   AccessRoleSchema,
   ActionItemSchema,
   AuditEventSchema,
+  DelegationSchema,
+  DelegationStatusSchema,
   DocumentDetailSchema,
   ErrorSchema,
   ExpectedDocumentSchema,
@@ -78,6 +89,7 @@ import {
   IssueSchema,
   IssueSeveritySchema,
   IssueStatusSchema,
+  MeSchema,
   MilestoneSchema,
   MonitoringVisitSchema,
   OrganizationSchema,
@@ -91,10 +103,13 @@ import {
   SiteCompletenessSchema,
   SiteDirectorySchema,
   SiteEnrollmentSchema,
+  SiteOverviewSchema,
   StaffMemberSchema,
   StaffRoleSchema,
   StudySchema,
   TmfArtifactSchema,
+  TrainingRecordSchema,
+  TrainingStatusSchema,
   VisitDetailSchema,
   VisitDocumentLinkSchema,
   VisitStageSchema,
@@ -149,6 +164,8 @@ export function buildApp(db: Db, sql: Sql) {
 
   app.use("/studies", auth, requirePermission(sql, "read"));
   app.use("/portfolio", auth, requirePermission(sql, "read"));
+  // Who am I: any authenticated, provisioned identity may ask (ADR-0023).
+  app.use("/me", auth);
   app.use(
     "/studies/:studyId/sync-expected-documents",
     auth,
@@ -159,6 +176,27 @@ export function buildApp(db: Db, sql: Sql) {
     "/study-sites/:studySiteId/*",
     auth,
     requirePermission(sql, readOrUpload, "studySiteId"),
+  );
+  // Site logs (ADR-0023): reads are ordinary reads; writes take 'log' — held
+  // by site_staff and admin only. The wildcard middleware above also runs, so
+  // a log write effectively needs upload ∧ log; that keeps monitors (who can
+  // upload) from authoring a site's own log.
+  const readOrLog = (c: { req: { method: string } }) =>
+    c.req.method === "GET" ? ("read" as const) : ("log" as const);
+  app.use(
+    "/study-sites/:studySiteId/delegation-log",
+    auth,
+    requirePermission(sql, readOrLog, "studySiteId"),
+  );
+  app.use(
+    "/study-sites/:studySiteId/training-log",
+    auth,
+    requirePermission(sql, readOrLog, "studySiteId"),
+  );
+  app.use(
+    "/delegations/:delegationId",
+    auth,
+    requirePermission(sql, "log", "delegationId"),
   );
   // POST /documents carries its study/site scope in the multipart body; the
   // handler completes the scope check after parsing.
@@ -243,10 +281,11 @@ export function buildApp(db: Db, sql: Sql) {
     auth,
     requirePermission(sql, readOrAdminister, "studyId"),
   );
+  // GET is the site seat's landing read (ADR-0023); mutations stay admin.
   app.use(
     "/study-sites/:studySiteId",
     auth,
-    requirePermission(sql, "administer", "studySiteId"),
+    requirePermission(sql, readOrAdminister, "studySiteId"),
   );
   app.use(
     "/study-sites/:studySiteId/roles",
@@ -294,9 +333,51 @@ export function buildApp(db: Db, sql: Sql) {
       summary: "Cross-study rollup",
       description:
         "One row per study with the oversight numbers a portfolio needs — completeness, attention counts, open issues, overdue visits, review queue size, enrollment vs target — computed from the same views the per-study pages read (ADR-0021).",
-      responses: { 200: json(z.array(PortfolioEntrySchema), "Portfolio") },
+      responses: {
+        200: json(z.array(PortfolioEntrySchema), "Portfolio"),
+        403: json(ErrorSchema, "Forbidden"),
+      },
     }),
-    async (c) => c.json((await portfolio(sql)) as never, 200),
+    async (c) => {
+      // Cross-study by definition: a purely site-scoped seat (ADR-0023) has
+      // no business reading every study's rollup.
+      if (c.get("grants").every((g) => g.study_site_id)) {
+        return c.json({ error: "requires access beyond a single site" }, 403);
+      }
+      return c.json((await portfolio(sql)) as never, 200);
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: "get",
+      path: "/me",
+      security,
+      summary: "The authenticated person and their active grants",
+      description:
+        "Lets a client decide what surface to render (ADR-0023): a person whose every grant is site-scoped gets the site seat, not the study-wide dashboard.",
+      responses: {
+        200: json(MeSchema, "Identity and grants"),
+        403: json(ErrorSchema, "No person-linked identity"),
+      },
+    }),
+    async (c) => {
+      const actor = c.get("actor");
+      if (!actor.personId) {
+        return c.json({ error: "no person record for this identity" }, 403);
+      }
+      const [p] = await sql`
+        SELECT given_name, family_name FROM person WHERE id = ${actor.personId}`;
+      return c.json(
+        {
+          person_id: actor.personId,
+          given_name: p?.given_name ?? "",
+          family_name: p?.family_name ?? "",
+          grants: c.get("grants"),
+        } as never,
+        200,
+      );
+    },
   );
 
   app.openapi(
@@ -369,6 +450,244 @@ export function buildApp(db: Db, sql: Sql) {
     }),
     async (c) =>
       c.json((await siteStaff(sql, c.req.valid("param").studySiteId)) as never, 200),
+  );
+
+  // --- Site seat (ADR-0023): site-scoped reads and log workflows ------------
+
+  app.openapi(
+    createRoute({
+      method: "get",
+      path: "/study-sites/{studySiteId}",
+      security,
+      summary: "One site with study context and completeness rollup",
+      description:
+        "The site seat's landing read (ADR-0023): the same numbers the study's site list carries, reachable with a site-scoped grant.",
+      request: { params: z.object({ studySiteId: z.string().uuid() }) },
+      responses: {
+        200: json(SiteOverviewSchema, "Site overview"),
+        404: json(ErrorSchema, "Not found"),
+      },
+    }),
+    async (c) => {
+      const row = await siteOverview(sql, c.req.valid("param").studySiteId);
+      if (!row) return c.json({ error: "study site not found" }, 404);
+      return c.json(row as never, 200);
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: "get",
+      path: "/study-sites/{studySiteId}/expected-documents",
+      security,
+      summary: "Expected documents for one site, with derived status",
+      request: {
+        params: z.object({ studySiteId: z.string().uuid() }),
+        query: z.object({ status: ExpectedStatusSchema.optional() }),
+      },
+      responses: {
+        200: json(z.array(ExpectedDocumentSchema), "Expected documents"),
+        404: json(ErrorSchema, "Not found"),
+      },
+    }),
+    async (c) => {
+      const studySiteId = c.req.valid("param").studySiteId;
+      const [ss] = await sql`SELECT study_id FROM study_site WHERE id = ${studySiteId}`;
+      if (!ss) return c.json({ error: "study site not found" }, 404);
+      const rows = await expectedDocuments(sql, {
+        studyId: ss.study_id as string,
+        studySiteId,
+        status: c.req.valid("query").status as ExpectedStatus | undefined,
+      });
+      return c.json(rows as never, 200);
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: "get",
+      path: "/study-sites/{studySiteId}/enrollment",
+      security,
+      summary: "Latest as-reported enrollment for one site",
+      request: { params: z.object({ studySiteId: z.string().uuid() }) },
+      responses: { 200: json(z.array(SiteEnrollmentSchema), "Enrollment") },
+    }),
+    async (c) =>
+      c.json(
+        (await siteEnrollment(sql, c.req.valid("param").studySiteId)) as never,
+        200,
+      ),
+  );
+
+  app.openapi(
+    createRoute({
+      method: "get",
+      path: "/study-sites/{studySiteId}/delegation-log",
+      security,
+      summary: "Delegation-of-authority log with derived status",
+      description:
+        "Structured DoA entries (ADR-0023): who is delegated which tasks, from when, authorized by whom — with the derived cross-checks (did the authorizer hold an active PI role on the start date; does the delegate have open credential items). The signed DoA log document remains the authoritative Part 11 record.",
+      request: {
+        params: z.object({ studySiteId: z.string().uuid() }),
+        query: z.object({ status: DelegationStatusSchema.optional() }),
+      },
+      responses: { 200: json(z.array(DelegationSchema), "Delegation log") },
+    }),
+    async (c) =>
+      c.json(
+        (await delegationLog(sql, {
+          studySiteId: c.req.valid("param").studySiteId,
+          status: c.req.valid("query").status as DelegationStatus | undefined,
+        })) as never,
+        200,
+      ),
+  );
+
+  app.openapi(
+    createRoute({
+      method: "post",
+      path: "/study-sites/{studySiteId}/delegation-log",
+      security,
+      summary: "Record a delegation of authority",
+      description:
+        "A dated fact: delegate, tasks, start date, authorizing PI. Requires the 'log' operation (site_staff or admin) — the log is the site's record of itself.",
+      request: {
+        params: z.object({ studySiteId: z.string().uuid() }),
+        body: {
+          content: {
+            "application/json": {
+              schema: z.object({
+                person_id: z.string().uuid(),
+                delegated_tasks: z.array(z.string().trim().min(1)).min(1),
+                start_date: z.string().date(),
+                authorized_by: z.string().uuid(),
+              }),
+            },
+          },
+        },
+      },
+      responses: {
+        201: json(z.object({ id: z.string().uuid() }), "Recorded"),
+        400: json(ErrorSchema, "Invalid input"),
+      },
+    }),
+    async (c) => {
+      const body = c.req.valid("json");
+      try {
+        const created = await createDelegation(db, c.get("actor"), {
+          studySiteId: c.req.valid("param").studySiteId,
+          personId: body.person_id,
+          delegatedTasks: body.delegated_tasks,
+          startDate: body.start_date,
+          authorizedBy: body.authorized_by,
+        });
+        return c.json({ id: created.id }, 201);
+      } catch (e) {
+        return c.json({ error: e instanceof Error ? e.message : "record failed" }, 400);
+      }
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: "patch",
+      path: "/delegations/{delegationId}",
+      security,
+      summary: "End a delegation",
+      description: "Sets the end date — delegation entries are never deleted.",
+      request: {
+        params: z.object({ delegationId: z.string().uuid() }),
+        body: {
+          content: {
+            "application/json": { schema: z.object({ end_date: z.string().date() }) },
+          },
+        },
+      },
+      responses: {
+        200: json(z.object({ id: z.string().uuid() }), "Ended"),
+        404: json(ErrorSchema, "Not found or already ended"),
+      },
+    }),
+    async (c) => {
+      try {
+        const ended = await endDelegation(db, c.get("actor"), {
+          delegationId: c.req.valid("param").delegationId,
+          endDate: c.req.valid("json").end_date,
+        });
+        return c.json({ id: ended.id }, 200);
+      } catch (e) {
+        return c.json({ error: e instanceof Error ? e.message : "not found" }, 404);
+      }
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: "get",
+      path: "/study-sites/{studySiteId}/training-log",
+      security,
+      summary: "Training log with derived status",
+      request: {
+        params: z.object({ studySiteId: z.string().uuid() }),
+        query: z.object({ status: TrainingStatusSchema.optional() }),
+      },
+      responses: { 200: json(z.array(TrainingRecordSchema), "Training log") },
+    }),
+    async (c) =>
+      c.json(
+        (await trainingLog(sql, {
+          studySiteId: c.req.valid("param").studySiteId,
+          status: c.req.valid("query").status as TrainingStatus | undefined,
+        })) as never,
+        200,
+      ),
+  );
+
+  app.openapi(
+    createRoute({
+      method: "post",
+      path: "/study-sites/{studySiteId}/training-log",
+      security,
+      summary: "Record a training completion",
+      description:
+        "A dated fact: person, topic, completion date, optional expiry and a link to the filed certificate document. Requires 'log' (site_staff or admin).",
+      request: {
+        params: z.object({ studySiteId: z.string().uuid() }),
+        body: {
+          content: {
+            "application/json": {
+              schema: z.object({
+                person_id: z.string().uuid(),
+                topic: z.string().trim().min(1).max(500),
+                trained_on: z.string().date(),
+                expires_at: z.string().date().optional(),
+                document_id: z.string().uuid().optional(),
+              }),
+            },
+          },
+        },
+      },
+      responses: {
+        201: json(z.object({ id: z.string().uuid() }), "Recorded"),
+        400: json(ErrorSchema, "Invalid input"),
+      },
+    }),
+    async (c) => {
+      const body = c.req.valid("json");
+      try {
+        const created = await recordTraining(db, c.get("actor"), {
+          studySiteId: c.req.valid("param").studySiteId,
+          personId: body.person_id,
+          topic: body.topic,
+          trainedOn: body.trained_on,
+          expiresAt: body.expires_at ?? null,
+          documentId: body.document_id ?? null,
+        });
+        return c.json({ id: created.id }, 201);
+      } catch (e) {
+        return c.json({ error: e instanceof Error ? e.message : "record failed" }, 400);
+      }
+    },
   );
 
   app.openapi(

@@ -40,7 +40,16 @@ export const signatureMeaning = pgEnum("signature_meaning", ["author", "review",
 // study_site_role, which records site staffing facts. See ADR-0008.
 // 'ingest' is the machine-identity role for source-system filing (ADR-0011):
 // read + upload only — a service can never sign or approve.
-export const accessRole = pgEnum("access_role", ["admin", "trial_ops", "monitor", "read_only", "ingest"]);
+// 'site_staff' is the site seat (ADR-0023): granted with a study-site scope,
+// it reads, uploads, signs, and writes the site's own logs.
+export const accessRole = pgEnum("access_role", [
+  "admin",
+  "trial_ops",
+  "monitor",
+  "read_only",
+  "ingest",
+  "site_staff",
+]);
 // How the signer re-authenticated at signing time (§11.200). seed_fixture marks
 // demo signatures fabricated by the seed, not a real signing ceremony.
 export const reauthMethod = pgEnum("reauth_method", [
@@ -528,6 +537,59 @@ export const studyMilestone = pgTable(
   },
   // UNIQUE NULLS NOT DISTINCT (study_id, study_site_id, name) added in SQL migration.
   (t) => [index("study_milestone_study_idx").on(t.studyId)],
+);
+
+// ---------------------------------------------------------------------------
+// Site-seat logs (ADR-0023): delegation-of-authority and training records as
+// dated facts. Status is derived (v_delegation_log, v_training_log in the SQL
+// migration); the signed DoA log document stays the authoritative Part 11
+// record — these rows are the queryable layer beside it.
+// ---------------------------------------------------------------------------
+
+export const delegation = pgTable(
+  "delegation",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    studySiteId: uuid("study_site_id")
+      .notNull()
+      .references(() => studySite.id),
+    personId: uuid("person_id")
+      .notNull()
+      .references(() => person.id),
+    delegatedTasks: text("delegated_tasks").array().notNull(),
+    startDate: date("start_date").notNull(),
+    endDate: date("end_date"), // ending is a dated fact, never a delete
+    authorizedBy: uuid("authorized_by")
+      .notNull()
+      .references(() => person.id),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("delegation_site_idx").on(t.studySiteId),
+    index("delegation_person_idx").on(t.personId),
+  ],
+);
+
+export const trainingRecord = pgTable(
+  "training_record",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    studySiteId: uuid("study_site_id")
+      .notNull()
+      .references(() => studySite.id),
+    personId: uuid("person_id")
+      .notNull()
+      .references(() => person.id),
+    topic: text("topic").notNull(),
+    trainedOn: date("trained_on").notNull(),
+    expiresAt: date("expires_at"),
+    documentId: uuid("document_id").references(() => document.id), // filed certificate
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index("training_record_site_idx").on(t.studySiteId),
+    index("training_record_person_idx").on(t.personId),
+  ],
 );
 
 // ---------------------------------------------------------------------------

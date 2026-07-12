@@ -54,12 +54,13 @@ or Python straight at the database — see [direct SQL access](sql-access.qmd).
 
 ## Your first query
 
-Three dev bearer tokens map to seeded people: `dev-admin-token` (admin
+Four dev bearer tokens map to seeded people: `dev-admin-token` (admin
 grant), `dev-monitor-token` (monitor grant — can read, upload, and sign, but
-not approve or administer), and `dev-service-token` (the EDC filing machine
-identity — read and upload only, see ADR-0011). Every request needs one. This is the demo's
-`AUTH_MODE=dev`; a pilot runs `AUTH_MODE=oidc` against a real identity
-provider instead (see `.env.example`).
+not approve or administer), `dev-service-token` (the EDC filing machine
+identity — read and upload only, see ADR-0011), and `dev-site-token` (the
+site 001 coordinator's site-scoped seat, see ADR-0023). Every request needs
+one. This is the demo's `AUTH_MODE=dev`; a pilot runs `AUTH_MODE=oidc`
+against a real identity provider instead (see `.env.example`).
 
 ::: {.panel-tabset}
 

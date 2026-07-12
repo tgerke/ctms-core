@@ -63,6 +63,12 @@ export function configureTokens(): void {
     email: "edc.filing@corc.example",
     roleLabel: "service",
   });
+  // The site seat (ADR-0023): the seeded site 001 coordinator, whose only
+  // grant is site_staff scoped to CORC-2201 site 001.
+  tokenToEmail.set(process.env.API_TOKEN_SITE ?? "dev-site-token", {
+    email: "dana.kim@site001.example",
+    roleLabel: "site staff",
+  });
 }
 
 // --- oidc mode ----------------------------------------------------------------

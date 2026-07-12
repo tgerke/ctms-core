@@ -49,6 +49,7 @@ const ACCESS_ROLE_LABEL: Record<AccessRole, string> = {
   monitor: "Monitor",
   read_only: "Read-only",
   ingest: "Ingest (machine)",
+  site_staff: "Site staff",
 };
 
 const STAFF_ROLES: StaffRole[] = [

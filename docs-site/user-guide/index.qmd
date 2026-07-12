@@ -64,9 +64,10 @@ alone; the full set is listed in [what the statuses mean](statuses.qmd).
 ## The pages under the dashboard
 
 - A **site page** (click any site) holds the site's staff roster — each
-  person with their role and a count of their open document items — plus
-  visits, issues, enrollment reporting, and the site's expected documents
-  grouped by TMF zone, each with an upload button where one is needed.
+  person with their role and a count of their open document items — plus the
+  [delegation of authority and training logs](site-logs.qmd), visits, issues,
+  enrollment reporting, and the site's expected documents grouped by TMF
+  zone, each with an upload button where one is needed.
 - A **visit page** (click any visit) walks a monitoring visit from scheduled
   through conducted, trip report, action items, and completion.
 - A **document page** (click any document) shows its versions, signatures,
@@ -83,7 +84,7 @@ times — if the record had ever been tampered with, the badge would read
 ## Who can do what
 
 Every account (and every connected system) holds an access role, optionally
-limited to one study or one site. The app shows the same pages to everyone —
+limited to one study or one site. Oversight roles all see the same pages —
 what the role controls is *actions*, checked at the moment you act. If you try
 something your role doesn't allow, you'll see a permission message; nothing is
 lost.
@@ -94,10 +95,14 @@ lost.
 | **Trial operations** | Read, upload, sign, and approve documents |
 | **Monitor** | Read, upload, and sign — but not approve |
 | **Read-only** | View everything, change nothing (the auditor's seat) |
+| **Site staff** | Their own site only: read, upload, sign, and keep the site's logs |
 | **Ingest** | Read and upload only — held by connected systems, never people |
 
-Two of these deserve a note. **Read-only** is how an auditor or inspector is
-given the run of the record without any risk of changing it. **Ingest** is for
+Three of these deserve a note. **Read-only** is how an auditor or inspector is
+given the run of the record without any risk of changing it. **Site staff** is
+the one role with a different surface: a person scoped to a single site lands
+on that site's page and works entirely there — see
+[the site seat and its logs](site-logs.qmd). **Ingest** is for
 software: when another system (an EDC, for example) files documents
 automatically, it does so under this role, which can never sign or approve —
 an electronic signature always requires a person. See
@@ -116,6 +121,8 @@ how those filings appear.
 - [Administration](administration.qmd) — onboarding sites, staffing them,
   granting access, adjusting requirement rules, and waiving expected
   documents.
+- [The site seat and its logs](site-logs.qmd) — the site-scoped view, and
+  the delegation of authority and training logs.
 - [What the statuses mean](statuses.qmd) — every chip in the app, and what to
   do about each.
 - [Glossary](../glossary.qmd) — the trial and system terms used throughout.

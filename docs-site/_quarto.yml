@@ -36,6 +36,7 @@ website:
           - user-guide/issues.qmd
           - user-guide/enrollment-milestones.qmd
           - user-guide/administration.qmd
+          - user-guide/site-logs.qmd
           - user-guide/statuses.qmd
       - section: "Technical guide"
         contents:

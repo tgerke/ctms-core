@@ -240,7 +240,7 @@ export const StaffRoleSchema = z
   .openapi("StaffRole");
 
 export const AccessRoleSchema = z
-  .enum(["admin", "trial_ops", "monitor", "read_only", "ingest"])
+  .enum(["admin", "trial_ops", "monitor", "read_only", "ingest", "site_staff"])
   .openapi("AccessRole");
 
 export const OrganizationSchema = z
@@ -430,6 +430,97 @@ export const MilestoneSchema = z
     status: z.enum(["achieved", "overdue", "upcoming"]),
   })
   .openapi("Milestone");
+
+// --- Site seat (ADR-0023) ------------------------------------------------------
+
+export const MeSchema = z
+  .object({
+    person_id: z.string().uuid(),
+    given_name: z.string(),
+    family_name: z.string(),
+    grants: z.array(
+      z.object({
+        role: AccessRoleSchema,
+        study_id: z.string().uuid().nullable(),
+        study_site_id: z.string().uuid().nullable(),
+      }),
+    ),
+  })
+  .openapi("Me");
+
+export const SiteOverviewSchema = z
+  .object({
+    study_site_id: z.string().uuid(),
+    study_id: z.string().uuid(),
+    site_number: z.string(),
+    status: z.enum(["pending", "active", "closed"]),
+    activated_at: z.string().nullable(),
+    target_enrollment: z.number().int().nullable(),
+    site_name: z.string(),
+    city: z.string().nullable(),
+    state: z.string().nullable(),
+    protocol_number: z.string(),
+    study_title: z.string(),
+    total: z.number().int(),
+    current_count: z.number().int(),
+    expiring_soon_count: z.number().int(),
+    pending_review_count: z.number().int(),
+    returned_count: z.number().int(),
+    expired_count: z.number().int(),
+    missing_count: z.number().int(),
+    waived_count: z.number().int(),
+    pct_current: z.number(),
+  })
+  .openapi("SiteOverview");
+
+export const DelegationStatusSchema = z.enum(["active", "ended"]).openapi("DelegationStatus");
+
+export const DelegationSchema = z
+  .object({
+    delegation_id: z.string().uuid(),
+    study_id: z.string().uuid(),
+    study_site_id: z.string().uuid(),
+    site_number: z.string(),
+    site_name: z.string(),
+    person_id: z.string().uuid(),
+    given_name: z.string(),
+    family_name: z.string(),
+    credentials: z.string().nullable(),
+    delegated_tasks: z.array(z.string()),
+    start_date: z.string(),
+    end_date: z.string().nullable(),
+    authorized_by: z.string().uuid(),
+    authorizer_given_name: z.string(),
+    authorizer_family_name: z.string(),
+    authorizer_was_pi: z.boolean(),
+    credential_open_items: z.number().int(),
+    status: DelegationStatusSchema,
+  })
+  .openapi("Delegation");
+
+export const TrainingStatusSchema = z
+  .enum(["current", "expiring_soon", "expired"])
+  .openapi("TrainingStatus");
+
+export const TrainingRecordSchema = z
+  .object({
+    training_record_id: z.string().uuid(),
+    study_id: z.string().uuid(),
+    study_site_id: z.string().uuid(),
+    site_number: z.string(),
+    site_name: z.string(),
+    person_id: z.string().uuid(),
+    given_name: z.string(),
+    family_name: z.string(),
+    credentials: z.string().nullable(),
+    topic: z.string(),
+    trained_on: z.string(),
+    expires_at: z.string().nullable(),
+    document_id: z.string().uuid().nullable(),
+    document_status: z.string().nullable(),
+    status: TrainingStatusSchema,
+  })
+  .openapi("TrainingRecord");
 
 export const VisitDetailSchema = z
   .object({

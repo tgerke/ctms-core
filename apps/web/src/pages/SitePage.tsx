@@ -1,24 +1,41 @@
-import { ArrowLeft, CircleSlash, Undo2, Upload, UserPlus } from "lucide-react";
+import {
+  ArrowLeft,
+  CircleSlash,
+  GraduationCap,
+  Undo2,
+  Upload,
+  UserCheck,
+  UserPlus,
+} from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import {
+  isSiteSeat,
   useAssignSiteRole,
+  useCreateDelegation,
+  useDelegationLog,
+  useEndDelegation,
   useEndSiteRole,
-  useEnrollment,
-  useExpected,
   useIssues,
+  useMe,
   usePeople,
+  useRecordTraining,
   useRevokeWaiver,
-  useSites,
+  useSiteEnrollment,
+  useSiteExpected,
+  useSiteOverview,
   useStaff,
   useSyncExpected,
+  useTrainingLog,
   useUpload,
   useVisits,
   useWaive,
+  type Delegation,
   type ExpectedDocument,
   type StaffMember,
   type StaffRole,
   type Study,
+  type TrainingRecord,
 } from "../api";
 import {
   EnrollmentBars,
@@ -31,7 +48,7 @@ import {
   ScheduleVisitForm,
   VisitListItem,
 } from "../ops";
-import { StatusChip } from "../status";
+import { DELEGATION_STATUS, SpecChip, StatusChip } from "../status";
 
 const ROLE_LABEL: Record<string, string> = {
   principal_investigator: "Principal Investigator",
@@ -43,15 +60,19 @@ const ROLE_LABEL: Record<string, string> = {
 
 export default function SitePage({ study }: { study: Study | undefined }) {
   const { studySiteId } = useParams();
-  const sitesQuery = useSites(study?.id);
-  const sites = sitesQuery.data;
-  const site = sites?.find((s) => s.study_site_id === studySiteId);
-  const { data: expected } = useExpected(study?.id, { studySiteId });
+  const { data: me } = useMe();
+  // The site seat (ADR-0023) reads only site-scoped endpoints; study-wide
+  // sections (visits, issues) are the oversight seat's and stay hidden.
+  const siteSeat = isSiteSeat(me);
+  // Oversight-only queries wait for /me so a site persona never fires them.
+  const oversightStudyId = me && !siteSeat ? study?.id : undefined;
+  const overviewQuery = useSiteOverview(studySiteId);
+  const site = overviewQuery.data;
+  const { data: expected } = useSiteExpected(studySiteId);
   const { data: staff } = useStaff(studySiteId);
-  const { data: visits } = useVisits(study?.id, { studySiteId });
-  const { data: issues } = useIssues(study?.id, { studySiteId });
-  const { data: enrollment } = useEnrollment(study?.id);
-  const siteEnrollment = enrollment?.filter((e) => e.study_site_id === studySiteId);
+  const { data: visits } = useVisits(oversightStudyId, { studySiteId });
+  const { data: issues } = useIssues(oversightStudyId, { studySiteId });
+  const { data: enrollment } = useSiteEnrollment(studySiteId);
 
   const byZone = useMemo(() => {
     const zones = new Map<string, ExpectedDocument[]>();
@@ -62,14 +83,20 @@ export default function SitePage({ study }: { study: Study | undefined }) {
     return zones;
   }, [expected]);
 
-  if (!study || !site) return <PageState query={sitesQuery} label="site" />;
+  if (!site) return <PageState query={overviewQuery} label="site" />;
 
   return (
     <div className="space-y-6">
       <div>
-        <Link to="/" className="inline-flex items-center gap-1 text-sm text-ink2 hover:underline">
-          <ArrowLeft size={14} aria-hidden /> {study.protocol_number}
-        </Link>
+        {siteSeat ? (
+          <span className="text-sm text-ink2">
+            {site.protocol_number} · your site
+          </span>
+        ) : (
+          <Link to="/" className="inline-flex items-center gap-1 text-sm text-ink2 hover:underline">
+            <ArrowLeft size={14} aria-hidden /> {site.protocol_number}
+          </Link>
+        )}
         <div className="mt-1 flex flex-wrap items-baseline gap-x-3">
           <h1 className="text-xl font-semibold">
             Site {site.site_number} — {site.site_name}
@@ -95,47 +122,73 @@ export default function SitePage({ study }: { study: Study | undefined }) {
         <h2 className="border-b border-hairline px-4 py-3 font-medium">Staff</h2>
         <ul className="divide-y divide-hairline">
           {staff?.map((m) => (
-            <StaffRow key={m.role_id} m={m} />
+            <StaffRow key={m.role_id} m={m} readOnly={siteSeat} />
           ))}
         </ul>
-        <div className="border-t border-hairline px-4 py-3">
-          <AddStaffForm studyId={study.id} studySiteId={site.study_site_id} />
-        </div>
-      </section>
-
-      <section className="card">
-        <div className="flex flex-wrap items-center gap-3 border-b border-hairline px-4 py-3">
-          <h2 className="font-medium">Monitoring visits</h2>
-          <div className="ml-auto">
-            <ScheduleVisitForm studyId={study.id} studySiteId={site.study_site_id} />
+        {!siteSeat && study && (
+          <div className="border-t border-hairline px-4 py-3">
+            <AddStaffForm studyId={study.id} studySiteId={site.study_site_id} />
           </div>
-        </div>
-        {visits?.length === 0 ? (
-          <p className="px-4 py-3 text-sm text-muted">No visits yet.</p>
-        ) : (
-          <ul className="divide-y divide-hairline">
-            {visits?.map((v) => (
-              <VisitListItem key={v.monitoring_visit_id} v={v} />
-            ))}
-          </ul>
         )}
       </section>
 
       <section className="card">
-        <h2 className="border-b border-hairline px-4 py-3 font-medium">Issues & deviations</h2>
-        {issues?.length === 0 ? (
-          <p className="px-4 py-3 text-sm text-muted">No issues at this site.</p>
-        ) : (
-          <ul className="divide-y divide-hairline">
-            {issues?.map((i) => (
-              <IssueListItem key={i.id} issue={i} />
-            ))}
-          </ul>
-        )}
-        <div className="border-t border-hairline px-4 py-3">
-          <NewIssueForm studyId={study.id} studySiteId={site.study_site_id} />
-        </div>
+        <h2 className="border-b border-hairline px-4 py-3 font-medium">
+          Delegation of authority{" "}
+          <span className="text-xs font-normal text-muted">
+            structured entries beside the signed DoA log (ADR-0023)
+          </span>
+        </h2>
+        <DelegationLog studySiteId={site.study_site_id} staff={staff} />
       </section>
+
+      <section className="card">
+        <h2 className="border-b border-hairline px-4 py-3 font-medium">
+          Training log{" "}
+          <span className="text-xs font-normal text-muted">
+            dated facts; expiry is derived, never stored
+          </span>
+        </h2>
+        <TrainingLog studySiteId={site.study_site_id} staff={staff} />
+      </section>
+
+      {me && !siteSeat && study && (
+        <section className="card">
+          <div className="flex flex-wrap items-center gap-3 border-b border-hairline px-4 py-3">
+            <h2 className="font-medium">Monitoring visits</h2>
+            <div className="ml-auto">
+              <ScheduleVisitForm studyId={study.id} studySiteId={site.study_site_id} />
+            </div>
+          </div>
+          {visits?.length === 0 ? (
+            <p className="px-4 py-3 text-sm text-muted">No visits yet.</p>
+          ) : (
+            <ul className="divide-y divide-hairline">
+              {visits?.map((v) => (
+                <VisitListItem key={v.monitoring_visit_id} v={v} />
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
+
+      {me && !siteSeat && study && (
+        <section className="card">
+          <h2 className="border-b border-hairline px-4 py-3 font-medium">Issues & deviations</h2>
+          {issues?.length === 0 ? (
+            <p className="px-4 py-3 text-sm text-muted">No issues at this site.</p>
+          ) : (
+            <ul className="divide-y divide-hairline">
+              {issues?.map((i) => (
+                <IssueListItem key={i.id} issue={i} />
+              ))}
+            </ul>
+          )}
+          <div className="border-t border-hairline px-4 py-3">
+            <NewIssueForm studyId={study.id} studySiteId={site.study_site_id} />
+          </div>
+        </section>
+      )}
 
       <section className="card">
         <h2 className="border-b border-hairline px-4 py-3 font-medium">
@@ -144,11 +197,11 @@ export default function SitePage({ study }: { study: Study | undefined }) {
             as-reported aggregates; corrections are audited
           </span>
         </h2>
-        <EnrollmentBars rows={siteEnrollment ?? []} />
+        <EnrollmentBars rows={enrollment ?? []} />
         <div className="border-t border-hairline px-4 py-3">
           <ReportEnrollmentForm
             studySiteId={site.study_site_id}
-            latest={siteEnrollment?.[0]}
+            latest={enrollment?.[0]}
           />
         </div>
       </section>
@@ -160,7 +213,7 @@ export default function SitePage({ study }: { study: Study | undefined }) {
           </h2>
           <ul className="divide-y divide-hairline">
             {rows.map((r) => (
-              <ExpectedRow key={r.expected_document_id} row={r} />
+              <ExpectedRow key={r.expected_document_id} row={r} canWaive={!siteSeat} />
             ))}
           </ul>
         </section>
@@ -169,7 +222,341 @@ export default function SitePage({ study }: { study: Study | undefined }) {
   );
 }
 
-function ExpectedRow({ row }: { row: ExpectedDocument }) {
+// --- Delegation of authority (ADR-0023) --------------------------------------
+
+function DelegationLog({
+  studySiteId,
+  staff,
+}: {
+  studySiteId: string;
+  staff: StaffMember[] | undefined;
+}) {
+  const { data: entries } = useDelegationLog(studySiteId);
+  return (
+    <>
+      {entries?.length === 0 ? (
+        <p className="px-4 py-3 text-sm text-muted">No delegations recorded.</p>
+      ) : (
+        <ul className="divide-y divide-hairline">
+          {entries?.map((d) => (
+            <DelegationRow key={d.delegation_id} d={d} />
+          ))}
+        </ul>
+      )}
+      <div className="border-t border-hairline px-4 py-3">
+        <NewDelegationForm studySiteId={studySiteId} staff={staff} />
+      </div>
+    </>
+  );
+}
+
+function DelegationRow({ d }: { d: Delegation }) {
+  const endDelegation = useEndDelegation();
+  const [err, setErr] = useState<unknown>(null);
+  const ended = d.status === "ended";
+  // An entry ended today is still derived-active through its end date, but
+  // the end fact is set — ending twice would only earn a 409.
+  const endable = d.end_date === null;
+  return (
+    <li className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2.5">
+      <div className="min-w-0">
+        <span className={`text-sm font-medium ${ended ? "text-muted line-through" : ""}`}>
+          {d.given_name} {d.family_name}
+          {d.credentials ? `, ${d.credentials}` : ""}
+        </span>
+        <div className="text-xs text-ink2">{d.delegated_tasks.join(" · ")}</div>
+        <div className="text-xs text-muted">
+          from {d.start_date}
+          {d.end_date ? ` to ${d.end_date}` : ""} · authorized by{" "}
+          {d.authorizer_given_name} {d.authorizer_family_name}
+          {!d.authorizer_was_pi && (
+            <span style={{ color: "var(--status-serious)" }}>
+              {" "}
+              — not an active PI at this site on the start date
+            </span>
+          )}
+        </div>
+      </div>
+      <span className="ml-auto flex items-center gap-2 text-xs">
+        {!ended && d.credential_open_items > 0 && (
+          <span style={{ color: "var(--status-serious)" }}>
+            {d.credential_open_items} open credential item
+            {d.credential_open_items > 1 ? "s" : ""}
+          </span>
+        )}
+        {endable && (
+          <button
+            onClick={() => {
+              setErr(null);
+              endDelegation.mutate(
+                { delegationId: d.delegation_id, endDate: localToday() },
+                { onError: (e) => setErr(e) },
+              );
+            }}
+            disabled={endDelegation.isPending}
+            className="rounded-md border border-hairline px-2 py-1 text-xs text-ink2 hover:bg-page disabled:opacity-50"
+            title="Records today as the delegation's end date — entries are never deleted"
+          >
+            {endDelegation.isPending ? "Ending…" : "End"}
+          </button>
+        )}
+        <SpecChip spec={DELEGATION_STATUS[d.status]} />
+      </span>
+      <ErrorNote error={err} className="w-full" />
+    </li>
+  );
+}
+
+function NewDelegationForm({
+  studySiteId,
+  staff,
+}: {
+  studySiteId: string;
+  staff: StaffMember[] | undefined;
+}) {
+  const create = useCreateDelegation();
+  const active = staff?.filter((m) => m.end_date === null) ?? [];
+  const pis = active.filter((m) => m.role === "principal_investigator");
+  const [personId, setPersonId] = useState("");
+  const [tasks, setTasks] = useState("");
+  const [start, setStart] = useState(localToday());
+  const [authorizedBy, setAuthorizedBy] = useState("");
+  const [err, setErr] = useState<unknown>(null);
+  const authorizer = authorizedBy || pis[0]?.person_id || "";
+  return (
+    <form
+      className="flex flex-wrap items-center gap-2"
+      onSubmit={(e) => {
+        e.preventDefault();
+        const taskList = tasks
+          .split(",")
+          .map((t) => t.trim())
+          .filter((t) => t.length > 0);
+        if (!personId || !authorizer || taskList.length === 0) return;
+        setErr(null);
+        create.mutate(
+          { studySiteId, personId, delegatedTasks: taskList, startDate: start, authorizedBy: authorizer },
+          {
+            onError: (e) => setErr(e),
+            onSuccess: () => {
+              setPersonId("");
+              setTasks("");
+            },
+          },
+        );
+      }}
+    >
+      <select
+        value={personId}
+        onChange={(e) => setPersonId(e.target.value)}
+        className="rounded-md border border-hairline bg-surface px-2 py-1 text-xs"
+        aria-label="Delegate"
+      >
+        <option value="">Delegate to…</option>
+        {active.map((m) => (
+          <option key={m.role_id} value={m.person_id}>
+            {m.family_name}, {m.given_name} ({ROLE_LABEL[m.role] ?? m.role})
+          </option>
+        ))}
+      </select>
+      <input
+        value={tasks}
+        onChange={(e) => setTasks(e.target.value)}
+        placeholder="Tasks, comma-separated"
+        className="w-56 rounded-md border border-hairline bg-surface px-2 py-1 text-xs"
+        aria-label="Delegated tasks"
+      />
+      <label className="flex items-center gap-1.5 text-xs text-ink2">
+        from
+        <input
+          type="date"
+          value={start}
+          onChange={(e) => setStart(e.target.value)}
+          className="rounded-md border border-hairline bg-surface px-2 py-1 text-xs"
+          aria-label="Start date"
+          required
+        />
+      </label>
+      <label className="flex items-center gap-1.5 text-xs text-ink2">
+        authorized by
+        <select
+          value={authorizer}
+          onChange={(e) => setAuthorizedBy(e.target.value)}
+          className="rounded-md border border-hairline bg-surface px-2 py-1 text-xs"
+          aria-label="Authorizing investigator"
+        >
+          {active.map((m) => (
+            <option key={m.role_id} value={m.person_id}>
+              {m.family_name}, {m.given_name}
+            </option>
+          ))}
+        </select>
+      </label>
+      <button
+        type="submit"
+        disabled={create.isPending || !personId || !authorizer || !tasks.trim()}
+        className="inline-flex items-center gap-1.5 rounded-md border border-hairline px-2 py-1 text-xs text-ink2 hover:bg-page disabled:opacity-50"
+      >
+        <UserCheck size={12} aria-hidden />
+        {create.isPending ? "Recording…" : "Record delegation"}
+      </button>
+      <ErrorNote error={err} className="w-full" />
+    </form>
+  );
+}
+
+// --- Training log (ADR-0023) --------------------------------------------------
+
+function TrainingLog({
+  studySiteId,
+  staff,
+}: {
+  studySiteId: string;
+  staff: StaffMember[] | undefined;
+}) {
+  const { data: entries } = useTrainingLog(studySiteId);
+  return (
+    <>
+      {entries?.length === 0 ? (
+        <p className="px-4 py-3 text-sm text-muted">No training recorded.</p>
+      ) : (
+        <ul className="divide-y divide-hairline">
+          {entries?.map((t) => (
+            <TrainingRow key={t.training_record_id} t={t} />
+          ))}
+        </ul>
+      )}
+      <div className="border-t border-hairline px-4 py-3">
+        <NewTrainingForm studySiteId={studySiteId} staff={staff} />
+      </div>
+    </>
+  );
+}
+
+function TrainingRow({ t }: { t: TrainingRecord }) {
+  return (
+    <li className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2.5">
+      <div className="min-w-0">
+        <span className="text-sm font-medium">
+          {t.given_name} {t.family_name}
+          {t.credentials ? `, ${t.credentials}` : ""}
+        </span>
+        <span className="ml-2 text-sm text-ink2">{t.topic}</span>
+        <div className="text-xs text-muted">
+          completed {t.trained_on}
+          {t.expires_at ? ` · expires ${t.expires_at}` : ""}
+          {t.document_id && (
+            <>
+              {" · "}
+              <Link to={`/documents/${t.document_id}`} className="hover:underline">
+                certificate on file
+              </Link>
+            </>
+          )}
+        </div>
+      </div>
+      <span className="ml-auto">
+        <StatusChip status={t.status} />
+      </span>
+    </li>
+  );
+}
+
+function NewTrainingForm({
+  studySiteId,
+  staff,
+}: {
+  studySiteId: string;
+  staff: StaffMember[] | undefined;
+}) {
+  const record = useRecordTraining();
+  const active = staff?.filter((m) => m.end_date === null) ?? [];
+  const [personId, setPersonId] = useState("");
+  const [topic, setTopic] = useState("");
+  const [trained, setTrained] = useState(localToday());
+  const [expires, setExpires] = useState("");
+  const [err, setErr] = useState<unknown>(null);
+  return (
+    <form
+      className="flex flex-wrap items-center gap-2"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (!personId || !topic.trim()) return;
+        setErr(null);
+        record.mutate(
+          {
+            studySiteId,
+            personId,
+            topic: topic.trim(),
+            trainedOn: trained,
+            ...(expires ? { expiresAt: expires } : {}),
+          },
+          {
+            onError: (e) => setErr(e),
+            onSuccess: () => {
+              setPersonId("");
+              setTopic("");
+              setExpires("");
+            },
+          },
+        );
+      }}
+    >
+      <select
+        value={personId}
+        onChange={(e) => setPersonId(e.target.value)}
+        className="rounded-md border border-hairline bg-surface px-2 py-1 text-xs"
+        aria-label="Person trained"
+      >
+        <option value="">Person…</option>
+        {active.map((m) => (
+          <option key={m.role_id} value={m.person_id}>
+            {m.family_name}, {m.given_name}
+          </option>
+        ))}
+      </select>
+      <input
+        value={topic}
+        onChange={(e) => setTopic(e.target.value)}
+        placeholder="Training topic"
+        className="w-56 rounded-md border border-hairline bg-surface px-2 py-1 text-xs"
+        aria-label="Training topic"
+      />
+      <label className="flex items-center gap-1.5 text-xs text-ink2">
+        completed
+        <input
+          type="date"
+          value={trained}
+          onChange={(e) => setTrained(e.target.value)}
+          className="rounded-md border border-hairline bg-surface px-2 py-1 text-xs"
+          aria-label="Completion date"
+          required
+        />
+      </label>
+      <label className="flex items-center gap-1.5 text-xs text-ink2">
+        expires
+        <input
+          type="date"
+          value={expires}
+          onChange={(e) => setExpires(e.target.value)}
+          className="rounded-md border border-hairline bg-surface px-2 py-1 text-xs"
+          aria-label="Expiry date (optional)"
+        />
+      </label>
+      <button
+        type="submit"
+        disabled={record.isPending || !personId || !topic.trim()}
+        className="inline-flex items-center gap-1.5 rounded-md border border-hairline px-2 py-1 text-xs text-ink2 hover:bg-page disabled:opacity-50"
+      >
+        <GraduationCap size={12} aria-hidden />
+        {record.isPending ? "Recording…" : "Record training"}
+      </button>
+      <ErrorNote error={err} className="w-full" />
+    </form>
+  );
+}
+
+function ExpectedRow({ row, canWaive }: { row: ExpectedDocument; canWaive: boolean }) {
   const upload = useUpload();
   const waive = useWaive();
   const liftWaiver = useRevokeWaiver();
@@ -203,7 +590,7 @@ function ExpectedRow({ row }: { row: ExpectedDocument }) {
         )}
       </div>
       <div className="ml-auto flex items-center gap-2">
-        {row.status === "missing" && (
+        {canWaive && row.status === "missing" && (
           <ReasonAction
             icon={CircleSlash}
             label="Waive"
@@ -219,7 +606,7 @@ function ExpectedRow({ row }: { row: ExpectedDocument }) {
             }}
           />
         )}
-        {row.status === "waived" && (
+        {canWaive && row.status === "waived" && (
           <ReasonAction
             icon={Undo2}
             label="Lift waiver"
@@ -347,7 +734,7 @@ function ReasonAction({
   );
 }
 
-function StaffRow({ m }: { m: StaffMember }) {
+function StaffRow({ m, readOnly }: { m: StaffMember; readOnly: boolean }) {
   const endRole = useEndSiteRole();
   const [err, setErr] = useState<unknown>(null);
   const ended = m.end_date !== null;
@@ -370,7 +757,7 @@ function StaffRow({ m }: { m: StaffMember }) {
               {m.open_items} open item{m.open_items > 1 ? "s" : ""}
             </span>
           ))}
-        {!ended && (
+        {!ended && !readOnly && (
           <button
             onClick={() => {
               setErr(null);

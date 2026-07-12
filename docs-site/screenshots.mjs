@@ -188,6 +188,17 @@ await navigate(`${WEB}/sites/${gappySite.study_site_id}`);
 await shoot("site-detail.png");
 await shootSections({ "Issues & deviations": "site-issues-form.png" });
 
+// The site seat (ADR-0023): the seeded coordinator persona lands on site 001,
+// whose delegation and training logs carry the seeded cross-check stories.
+await evaluate("localStorage.setItem('ctms_token', 'dev-site-token'); true");
+await navigate(WEB + "/");
+await shoot("site-seat.png");
+await shootSections({
+  "Delegation of authority": "delegation-log.png",
+  "Training log": "training-log.png",
+});
+await evaluate("localStorage.setItem('ctms_token', 'dev-admin-token'); true");
+
 await navigate(`${WEB}/visits/${visit.monitoring_visit_id}`);
 await shoot("visit-page.png");
 

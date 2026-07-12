@@ -21,7 +21,8 @@ at `http://localhost:8787/docs`.
 Auth: `Authorization: Bearer <token>`. Two modes, selected by `AUTH_MODE`:
 
 - **`dev`** — static tokens from `.env.example` (`dev-admin-token`,
-  `dev-monitor-token`, `dev-service-token`) map to seeded people. Demo only.
+  `dev-monitor-token`, `dev-service-token`, `dev-site-token`) map to seeded
+  people. Demo only.
 - **`oidc`** — the token is a JWT from your identity provider
   (`OIDC_ISSUER`/`OIDC_AUDIENCE`); its verified email claim resolves to a
   person record. Any OIDC-compliant IdP works (Okta, Entra ID, Auth0,
@@ -29,10 +30,12 @@ Auth: `Authorization: Bearer <token>`. Two modes, selected by `AUTH_MODE`:
   claim) resolve by subject instead, via `API_SERVICE_SUBJECTS` (ADR-0011).
 
 Either way the identity must hold an `access_grant` row: roles
-(`admin`, `trial_ops`, `monitor`, `read_only`, `ingest`) map to operations
-(read / upload / sign / approve / administer; `ingest` is read + upload for
-source-system filing), optionally scoped to one study or study-site
-(ADR-0008). Denials are 403 and name the missing permission.
+(`admin`, `trial_ops`, `monitor`, `read_only`, `ingest`, `site_staff`) map to
+operations (read / upload / sign / approve / administer / log; `ingest` is
+read + upload for source-system filing, `site_staff` is the site seat —
+ADR-0023), optionally scoped to one study or study-site (ADR-0008). Denials
+are 403 and name the missing permission. `GET /me` returns the caller's
+person and grants, so a client can decide which surface to render.
 
 ## The monitor's morning, from R
 
@@ -262,6 +265,46 @@ completeness denominator, and carries who/when/why on the view. A filed
 document always beats the waiver, and
 `POST /expected-documents/{id}/revoke-waiver` (reason required) lifts it as a
 recorded fact — the waiver history is never deleted (ADR-0016).
+
+## The site seat (ADR-0023)
+
+A person whose grant is `site_staff` scoped to one study-site works entirely
+through site-scoped endpoints — study-wide reads (including `/portfolio`) are
+403 for them. `GET /study-sites/{id}` is the landing read (site, study
+context, completeness rollup); `/expected-documents`, `/enrollment`, `/staff`
+hang off the same path. The structured logs live beside the signed documents:
+
+```r
+site <- function(path, ...) {
+  request("http://localhost:8787") |>
+    req_url_path_append("study-sites", ss_id, path, ...) |>
+    req_auth_bearer_token("dev-site-token") |>
+    req_perform() |> resp_body_json(simplifyVector = TRUE) |> as_tibble()
+}
+
+# The DoA log with its derived cross-checks: is the authorizer really the
+# active PI, and does the delegate have open credential items?
+site("delegation-log") |>
+  filter(status == "active", credential_open_items > 0 | !authorizer_was_pi) |>
+  select(family_name, delegated_tasks, start_date,
+         authorizer_was_pi, credential_open_items)
+
+# Training with derived expiry — same 60-day window as documents
+site("training-log") |>
+  filter(status != "current") |>
+  select(family_name, topic, trained_on, expires_at, status)
+```
+
+Writes take the `log` operation (`site_staff` or `admin` — a monitor reads
+the logs but never authors a site's own record):
+`POST /study-sites/{id}/delegation-log` (`person_id`, `delegated_tasks[]`,
+`start_date`, `authorized_by`), `PATCH /delegations/{id}` with an `end_date`
+(entries are never deleted), and `POST /study-sites/{id}/training-log`
+(`person_id`, `topic`, `trained_on`, optional `expires_at` and a
+`document_id` linking the filed certificate). The signed DoA log document
+(artifact 05.03.01) stays the authoritative Part 11 record; the rows are the
+queryable layer beside it, and every write is a hash-chained audit event
+attributed to the site person.
 
 ## Skip the API entirely: the views are the contract
 

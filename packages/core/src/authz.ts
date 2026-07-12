@@ -7,17 +7,27 @@ import type { Sql } from "@ctms/db";
  * data model (ADR-0001).
  */
 
-export type Operation = "read" | "upload" | "sign" | "approve" | "administer";
-export type AccessRole = "admin" | "trial_ops" | "monitor" | "read_only" | "ingest";
+export type Operation = "read" | "upload" | "sign" | "approve" | "administer" | "log";
+export type AccessRole =
+  | "admin"
+  | "trial_ops"
+  | "monitor"
+  | "read_only"
+  | "ingest"
+  | "site_staff";
 
 const ROLE_OPERATIONS: Record<AccessRole, readonly Operation[]> = {
-  admin: ["read", "upload", "sign", "approve", "administer"],
+  admin: ["read", "upload", "sign", "approve", "administer", "log"],
   trial_ops: ["read", "upload", "sign", "approve"],
   monitor: ["read", "upload", "sign"],
   read_only: ["read"],
   // Machine identities filing from source systems (ADR-0011): a service can
   // read and upload but never sign — signatures need a human ceremony.
   ingest: ["read", "upload"],
+  // The site seat (ADR-0023), granted with a study-site scope. 'log' writes
+  // the site's own DoA/training entries — oversight roles read logs but do
+  // not author them; the log is the site's record of itself.
+  site_staff: ["read", "upload", "sign", "log"],
 };
 
 export interface Grant {
@@ -70,7 +80,8 @@ export type ScopeParam =
   | "roleId"
   | "grantId"
   | "ruleId"
-  | "expectedDocumentId";
+  | "expectedDocumentId"
+  | "delegationId";
 
 /**
  * Resolve a path parameter to the study/site it belongs to (one indexed
@@ -155,6 +166,12 @@ export async function resolveScope(
       return r
         ? { studyId: r.study_id, studySiteId: r.study_site_id ?? undefined }
         : null;
+    }
+    case "delegationId": {
+      const [r] = await sql`
+        SELECT ss.study_id, d.study_site_id FROM delegation d
+        JOIN study_site ss ON ss.id = d.study_site_id WHERE d.id = ${id}`;
+      return r ? { studyId: r.study_id, studySiteId: r.study_site_id } : null;
     }
   }
 }
