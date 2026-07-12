@@ -15,6 +15,7 @@ pnpm validation:iq           # installation qualification vs the live env
 pnpm validation:artifacts    # OQ report + traceability matrix (runs the suite)
 pnpm db:import-tmf -- file.xlsx   # official CDISC TMF RM spreadsheet, verbatim
 pnpm digest                  # oversight digest email per study (ADR-0017)
+pnpm export-tmf -- --study CORC-2201   # verifiable transfer/inspection package (ADR-0020)
 ```
 
 API :8787, web :5173, Postgres :5433, MinIO :9000, mailpit SMTP :1025 /

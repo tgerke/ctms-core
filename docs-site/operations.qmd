@@ -130,6 +130,17 @@ dev stack ships [mailpit](https://mailpit.axllent.org/) on
 `smtp://localhost:1025`, inbox UI on `:8025`), and without it the job
 prints to stdout.
 
+## Handing over the TMF
+
+When the study transfers, archives, or gets inspected, `pnpm export-tmf`
+(ADR-0020) writes one verifiable package: every document version's bytes
+(named by their sha256), the full metadata — signatures carrying the exact
+content hash they signed, returns, waivers, the completeness snapshot —
+and the entire hash-chained audit trail. The receiving party checks it with
+nothing but `shasum -a 256 -c manifest.sha256`; a single altered byte fails.
+It is deliberately not CDISC eTMF-EMS exchange.xml yet — the
+[decision log](decisions.qmd) records why and what unblocks that.
+
 ## Reading it all from code
 
 Every capability here ships in the OpenAPI spec, and the four `v_*` views are

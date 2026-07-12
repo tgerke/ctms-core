@@ -104,6 +104,24 @@ mailpit on `smtp://localhost:1025` for dev, inbox UI on :8025),
 list. Without `SMTP_URL` the job prints to stdout instead of sending
 (`--dry-run` forces that; `--study <protocol>` limits to one study).
 
+## Handing over the TMF
+
+`pnpm export-tmf -- --study <protocol> [--out <dir>]` (ADR-0020) writes the
+study's complete transfer/inspection package: content-addressed document
+bytes, full metadata (versions, signatures with their §11.70 hashes,
+returns, waivers, the completeness snapshot), and the entire hash-chained
+audit trail. The receiving side verifies with stock tooling — no ctms-core
+software required:
+
+```sh
+cd <package> && shasum -a 256 -c manifest.sha256
+```
+
+The exporter re-hashes every blob as it copies and exits non-zero on any
+mismatch, missing file, or broken audit chain. The package is versioned by
+its `format` marker (`ctms-core-tmf-export/1`); it is deliberately not
+CDISC eTMF-EMS exchange.xml — see ADR-0020 for why and what unblocks that.
+
 ## Backups and verification
 
 - Postgres: continuous archiving or the managed service's PITR; test restore

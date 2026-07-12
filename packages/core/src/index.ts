@@ -24,6 +24,7 @@ export {
   renderDigest,
   type DigestData,
 } from "./digest.js";
+export { collectTmfExport, type TmfExportData } from "./export.js";
 export {
   achieveMilestone,
   createActionItem,

@@ -86,6 +86,17 @@ feature comparison is meaningless without them.
   No index to drift: search is a query over the record. What remains is
   content full-text (extracting and indexing the PDF text — safe to add
   later because versions are immutable) and Excel export of result sets.
+- **TMF transfer and inspection export** — shipped as a verifiable package
+  (ADR-0020): `pnpm export-tmf` writes every document version's
+  content-addressed bytes, the full metadata (signatures with their §11.70
+  hashes, returns, waivers, completeness snapshot), and the entire
+  hash-chained audit trail, with a `shasum -c` compatible manifest — a
+  flipped byte fails verification with stock tooling. Deliberately not
+  claimed as CDISC eTMF-EMS output: the EMS text is not in the verified
+  source library, and per ADR-0012 its exchange.xml layout is not written
+  from model memory. EMS serialization is the remaining step, unblocked the
+  day the standard's text is on hand; purpose-built in-app auditor UX also
+  remains.
 
 ## Genuine gaps
 
@@ -96,17 +107,6 @@ Cross-study portfolio views are a standard CTMS selling point (Medidata
 Visual Analytics combines data across studies). A study switcher is the
 small version; portfolio rollups across `v_study_site_completeness` are the
 real version, and the views make them queries.
-
-### TMF transfer and inspection export
-
-There is no bulk export: no way to hand the TMF to a successor system, an
-archive, or an inspector as a package. CDISC publishes the eTMF Exchange
-Mechanism Standard (exchange.xml inventory + XSD + per-file checksums)
-precisely because sponsor–CRO transfers between vendor systems kept failing.
-The content-addressed store makes this tractable — every version already has
-the sha256 the standard's checksum verification wants. Related and smaller:
-inspectors currently get the `read_only` role and the audit endpoints, where
-Veeva advertises purpose-built auditor access and an inspection-ready flag.
 
 ### Site-seat log workflows
 
@@ -121,14 +121,15 @@ structured DoA/training logs would be its first real test.
 
 ## If we built next
 
-1. **TMF transfer and inspection export.** The CDISC Exchange Mechanism
-   package; the content-addressed store already has every checksum the
-   standard wants.
-2. **Multi-study operation in the UI.** A study switcher first; portfolio
+1. **Multi-study operation in the UI.** A study switcher first; portfolio
    rollups across `v_study_site_completeness` after.
-3. **Content full-text search.** The metadata search's larger second step:
+2. **Content full-text search.** The metadata search's larger second step:
    extract and index PDF text — safe derived state, since versions are
    immutable.
+3. **eTMF-EMS serialization of the export package.** Blocked on getting the
+   EMS v1.0.x text into the verified source library (ADR-0012/0020); once
+   there, exchange.xml is a mapping over the manifest the exporter already
+   writes.
 
 ## Sources
 

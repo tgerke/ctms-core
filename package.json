@@ -15,6 +15,7 @@
     "validation:iq": "pnpm --filter @ctms/db iq",
     "validation:artifacts": "tsx tools/validation-artifacts.ts",
     "digest": "tsx tools/digest.ts",
+    "export-tmf": "tsx tools/export-tmf.ts",
     "typecheck": "pnpm -r typecheck"
   },
   "devDependencies": {

@@ -220,6 +220,20 @@ generated indexed column is the documented scale path. Content full-text
 stays on the roadmap — safe to add later precisely because versions are
 immutable.
 
+## ADR-0020 — TMF transfer is a verifiable package; EMS waits for the source text
+
+`pnpm export-tmf` writes a study's complete handover package — content-
+addressed bytes, versions, signatures with their §11.70 hashes, returns,
+waivers, the completeness snapshot, and the whole hash-chained audit trail —
+verifiable on the receiving side with nothing but
+`shasum -a 256 -c manifest.sha256`. It deliberately does not claim CDISC
+eTMF-EMS conformance: the EMS text is not in the verified source library,
+and this project does not write a standard's file layout from model memory
+(ADR-0012) — a plausible exchange.xml that misnames one element is worse
+than an honest package that never claimed it. The manifest carries the
+fields an EMS serializer would map; obtaining the EMS v1.0.x text is the
+unblock.
+
 ---
 
 Three of these — ADR-0004, ADR-0006, and ADR-0010 — are the same idea applied
