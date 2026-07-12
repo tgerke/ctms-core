@@ -73,6 +73,13 @@ export const VISIT_STAGE: Record<VisitStage, Omit<StatusSpec, "rank">> = {
   complete: { label: "Complete", icon: Check, cssVar: "--status-good" },
 };
 
+/** Delegation entries (ADR-0023): active/ended, derived from dated facts.
+ * Training statuses reuse STATUS — current/expiring_soon/expired are shared. */
+export const DELEGATION_STATUS: Record<"active" | "ended", Omit<StatusSpec, "rank">> = {
+  active: { label: "Active", icon: Check, cssVar: "--status-good" },
+  ended: { label: "Ended", icon: Archive, cssVar: "--muted" },
+};
+
 export const ISSUE_STATUS: Record<IssueStatus, Omit<StatusSpec, "rank">> = {
   overdue: { label: "Overdue", icon: CircleAlert, cssVar: "--status-critical" },
   open: { label: "Open", icon: CircleDot, cssVar: "--status-warn" },

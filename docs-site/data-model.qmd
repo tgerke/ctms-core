@@ -39,6 +39,12 @@ erDiagram
     monitoring_visit o|--o{ issue : identifies
     study_site ||--o{ enrollment_report : reports
     study ||--o{ study_milestone : plans
+    study_site ||--o{ delegation : logs
+    person ||--o{ delegation : delegate
+    person ||--o{ delegation : authorizes
+    study_site ||--o{ training_record : logs
+    person ||--o{ training_record : trainee
+    document o|--o{ training_record : certifies
 ```
 
 ## Reference taxonomy
@@ -74,9 +80,12 @@ no schema change.
   identity maps onto persons at the API layer, so the identity provider is
   swappable without touching the regulated facts.
 - **access_grant** — what a person may *do* through the API: a role
-  (`admin | trial_ops | monitor | read_only | ingest`), optionally scoped to one study
-  or one study-site, mapping to operations (read / upload / sign / approve /
-  administer). Revocation is a timestamp, never a delete, and every grant
+  (`admin | trial_ops | monitor | read_only | ingest | site_staff`), optionally scoped
+  to one study or one study-site, mapping to operations (read / upload / sign /
+  approve / administer / log). `site_staff` is the site seat (ADR-0023): a
+  person whose every grant is site-scoped works entirely through their site's
+  page, and `log` gates writing that site's own DoA/training entries.
+  Revocation is a timestamp, never a delete, and every grant
   change lands in the audit trail — an access review is a query. Deliberately
   separate from `study_site_role`, which records regulated staffing facts.
 
@@ -163,6 +172,18 @@ Monitoring visits, issues, enrollment, and milestones follow the same rule:
 facts in tables, lifecycle in views. The [operational layer guide](operations.qmd)
 covers them in full; the derived views are `v_monitoring_visit_status`,
 `v_issue_status`, `v_site_enrollment`, and `v_milestone_status`.
+
+The site-seat logs (ADR-0023) extend the same pattern to the site's own
+records: **delegation** (delegate, delegated tasks, start/end dates,
+authorizing PI — CHECKs forbid self-delegation and unordered dates) and
+**training_record** (person, topic, completion date, optional expiry and a
+link to the filed certificate document). `v_delegation_log` derives
+`active | ended` plus two cross-checks — whether the authorizer held an
+active PI role at that site on the start date, and the delegate's count of
+open credential items from `v_expected_document_status`. `v_training_log`
+derives `current | expiring_soon (≤60 days) | expired`. The signed DoA log
+document stays the authoritative Part 11 record; these rows are the
+queryable layer beside it.
 
 ## Audit trail
 

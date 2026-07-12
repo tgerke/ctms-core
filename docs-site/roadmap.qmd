@@ -109,6 +109,15 @@ restated here because a feature comparison is meaningless without them.
   from model memory. EMS serialization is the remaining step, unblocked the
   day the standard's text is on hand; purpose-built in-app auditor UX also
   remains.
+- **Site-seat log workflows** — shipped as structured facts on a site-scoped
+  seat (ADR-0023): a `site_staff` grant lands its holder on their site's page
+  and nowhere else, and delegation-of-authority and training logs are dated
+  fact rows whose status is derived beside the document record — a delegation
+  whose authorizer never held the PI role, or whose delegate's license has
+  expired, flags itself. The signed DoA log document stays the authoritative
+  Part 11 record. What remains of the original gap is the rest of the
+  site-side catalog (screening logs, EMR-routed certified copies) and
+  entry-level e-signatures on log rows.
 - **Multi-study operation in the UI** — shipped as a persisted study
   switcher plus a portfolio page over `GET /portfolio` (ADR-0021): one
   rollup query across the same views the study dashboards read —
@@ -121,16 +130,13 @@ restated here because a feature comparison is meaningless without them.
 
 ## Genuine gaps
 
-### Site-seat log workflows
+### Site-side depth beyond the first logs
 
-Florence's bread and butter — delegation-of-authority logs, training
-attestation logs, screening logs, certified copies routed from the EMR —
-is the site coordinator's seat, which ADR-0001 deliberately did not build
-for. Partial coverage exists where the oversight seat needs it: per-person
-credential expiry (CV, GCP training) falls out of person-scoped requirement
-rules, and enrollment aggregates are first-class. A future site-facing
-surface (ADR-0001 names it as a possibility) would reuse the same schema;
-structured DoA/training logs would be its first real test.
+The site seat now exists (ADR-0023), but Florence still ships more of the
+coordinator's day: screening logs, certified copies routed from the EMR,
+entry-level e-signatures on log rows, and in-app PHI redaction. The seat's
+schema is shared with oversight, so each of these is an increment, not a
+new system.
 
 ## If we built next
 
@@ -138,9 +144,6 @@ structured DoA/training logs would be its first real test.
    EMS v1.0.x text into the verified source library (ADR-0012/0020); once
    there, exchange.xml is a mapping over the manifest the exporter already
    writes.
-2. **Site-seat log workflows.** The one seat this system deliberately hasn't
-   built for (ADR-0001); structured DoA/training logs would be a future
-   site-facing surface's first real test.
 
 ## Sources
 

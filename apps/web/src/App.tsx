@@ -1,7 +1,8 @@
 import { FileCheck2, Moon, Search, ShieldCheck, ShieldX, Sun } from "lucide-react";
 import { useEffect, useState } from "react";
-import { Link, Route, Routes, useNavigate } from "react-router-dom";
-import { useChainStatus, useStudies } from "./api";
+import { Link, Navigate, Route, Routes, useNavigate } from "react-router-dom";
+import { isSiteSeat, useChainStatus, useMe, useStudies } from "./api";
+import { authMode } from "./auth";
 import AdminPage from "./pages/AdminPage";
 import AuditPage from "./pages/AuditPage";
 import PortfolioPage from "./pages/PortfolioPage";
@@ -52,6 +53,37 @@ function HeaderSearch() {
   );
 }
 
+// Dev-mode persona switcher (ADR-0023): the seeded tokens are the demo's
+// seats. Rendered only when the API runs with static dev tokens.
+const DEV_PERSONAS: { token: string; label: string }[] = [
+  { token: "dev-admin-token", label: "Nora Feld — trial ops" },
+  { token: "dev-monitor-token", label: "Ravi Patel — monitor" },
+  { token: "dev-site-token", label: "Dana Kim — site 001" },
+];
+
+function DevPersonaSwitcher() {
+  if (authMode !== "dev") return null;
+  const current = localStorage.getItem("ctms_token") ?? "dev-admin-token";
+  return (
+    <select
+      value={DEV_PERSONAS.some((p) => p.token === current) ? current : "dev-admin-token"}
+      onChange={(e) => {
+        localStorage.setItem("ctms_token", e.target.value);
+        window.location.assign("/");
+      }}
+      className="hidden rounded-md border border-hairline bg-surface px-2 py-1 text-xs text-ink2 md:inline"
+      aria-label="Switch dev persona"
+      title="Dev-mode persona (static tokens; see .env.example)"
+    >
+      {DEV_PERSONAS.map((p) => (
+        <option key={p.token} value={p.token}>
+          {p.label}
+        </option>
+      ))}
+    </select>
+  );
+}
+
 function ChainBadge() {
   const { data } = useChainStatus();
   if (!data) return null;
@@ -78,6 +110,11 @@ function ChainBadge() {
 export default function App() {
   const { dark, toggle } = useTheme();
   const { data: studies } = useStudies();
+  // The site seat (ADR-0023): a person whose every grant is site-scoped lands
+  // on their site page; study-wide navigation would only render 403s.
+  const { data: me } = useMe();
+  const siteSeat = isSiteSeat(me);
+  const homeSiteId = me?.grants.find((g) => g.study_site_id)?.study_site_id;
   // Multi-study (ADR-0021): the selected study persists across visits;
   // re-seeds regenerate ids, so an unknown stored id falls back to the first
   // study (list is ordered by protocol number).
@@ -98,7 +135,7 @@ export default function App() {
             <FileCheck2 size={20} style={{ color: "var(--info)" }} aria-hidden />
             <span>ctms-core</span>
           </Link>
-          {studies && studies.length > 1 ? (
+          {siteSeat ? null : studies && studies.length > 1 ? (
             <select
               value={study?.id ?? ""}
               onChange={(e) => selectStudy(e.target.value)}
@@ -119,26 +156,30 @@ export default function App() {
             )
           )}
           <div className="ml-auto flex items-center gap-2">
-            <HeaderSearch />
+            {!siteSeat && <HeaderSearch />}
             <ChainBadge />
-            <Link
-              to="/portfolio"
-              className="rounded-md px-2 py-1 text-sm text-ink2 hover:bg-surface"
-            >
-              Portfolio
-            </Link>
-            <Link
-              to="/queue"
-              className="rounded-md px-2 py-1 text-sm text-ink2 hover:bg-surface"
-            >
-              Review queue
-            </Link>
-            <Link
-              to="/admin"
-              className="rounded-md px-2 py-1 text-sm text-ink2 hover:bg-surface"
-            >
-              Admin
-            </Link>
+            {!siteSeat && (
+              <>
+                <Link
+                  to="/portfolio"
+                  className="rounded-md px-2 py-1 text-sm text-ink2 hover:bg-surface"
+                >
+                  Portfolio
+                </Link>
+                <Link
+                  to="/queue"
+                  className="rounded-md px-2 py-1 text-sm text-ink2 hover:bg-surface"
+                >
+                  Review queue
+                </Link>
+                <Link
+                  to="/admin"
+                  className="rounded-md px-2 py-1 text-sm text-ink2 hover:bg-surface"
+                >
+                  Admin
+                </Link>
+              </>
+            )}
             <Link
               to="/audit"
               className="rounded-md px-2 py-1 text-sm text-ink2 hover:bg-surface"
@@ -153,6 +194,7 @@ export default function App() {
             >
               API docs
             </a>
+            <DevPersonaSwitcher />
             <button
               onClick={toggle}
               aria-label="Toggle theme"
@@ -165,7 +207,16 @@ export default function App() {
       </header>
       <main className="mx-auto max-w-6xl px-4 py-6">
         <Routes>
-          <Route path="/" element={<StudyPage study={study} />} />
+          <Route
+            path="/"
+            element={
+              me === undefined ? null : siteSeat && homeSiteId ? (
+                <Navigate to={`/sites/${homeSiteId}`} replace />
+              ) : (
+                <StudyPage study={study} />
+              )
+            }
+          />
           <Route path="/sites/:studySiteId" element={<SitePage study={study} />} />
           <Route path="/visits/:visitId" element={<VisitPage />} />
           <Route path="/documents/:documentId" element={<DocumentPage />} />

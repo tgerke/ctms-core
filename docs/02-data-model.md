@@ -42,6 +42,12 @@ erDiagram
     monitoring_visit o|--o{ issue : identifies
     study_site ||--o{ enrollment_report : reports
     study ||--o{ study_milestone : plans
+    study_site ||--o{ delegation : logs
+    person ||--o{ delegation : delegate
+    person ||--o{ delegation : authorizes
+    study_site ||--o{ training_record : logs
+    person ||--o{ training_record : trainee
+    document o|--o{ training_record : certifies
 ```
 
 ## Reference taxonomy
@@ -74,12 +80,14 @@ facts (`end_date`, `revoked_at`), never deletes.
   pharmacist, research nurse) at a study-site, with start/end dates. Role assignments
   are auditable facts and the anchor for person-scoped requirements.
 - **access_grant** — API authorization (ADR-0008): a person holds a role
-  (`admin | trial_ops | monitor | read_only | ingest`), optionally scoped to one study or one
-  study-site. Roles map to operations (read / upload / sign / approve / administer)
-  in `packages/core/src/authz.ts`. Revocation is a `revoked_at` timestamp, never a
-  delete, and grant changes are audited like any other row. Distinct from
-  `study_site_role` on purpose: that table records regulated staffing facts;
-  this one records system access.
+  (`admin | trial_ops | monitor | read_only | ingest | site_staff`), optionally scoped to one
+  study or one study-site. Roles map to operations
+  (read / upload / sign / approve / administer / log) in
+  `packages/core/src/authz.ts`; `site_staff` is the site seat (ADR-0023), and
+  `log` gates writing a site's own DoA/training entries. Revocation is a
+  `revoked_at` timestamp, never a delete, and grant changes are audited like
+  any other row. Distinct from `study_site_role` on purpose: that table
+  records regulated staffing facts; this one records system access.
 
 ## Documents
 
@@ -176,13 +184,25 @@ views** (ADR-0006). No table in this layer has a status column.
   a firm scope boundary. Corrections are audited UPDATEs, not silent overwrites.
   `study_site.target_enrollment` holds the site's target.
 - **study_milestone** — planned vs actual dates, study- or site-scoped.
+- **delegation** — a DoA log entry (ADR-0023): delegate, `delegated_tasks`
+  (non-empty array), `start_date`/`end_date`, `authorized_by`. CHECKs: dates
+  ordered, no self-delegation. Ending sets `end_date`, never deletes. The
+  signed DoA log document (artifact 05.03.01) remains the authoritative
+  Part 11 record; these rows are the queryable layer beside it.
+- **training_record** — a training log entry: person, topic (non-blank),
+  `trained_on`, optional `expires_at` and a link to the filed certificate
+  document. Insert-only through the API.
 
 Derived views: **v_monitoring_visit_status** (stage: `scheduled → overdue →
 awaiting_report → report_pending_review → follow_up → complete`, computed from the
 dates, the linked trip report's document status, and open action items; a
 returned trip report drops the visit back to `awaiting_report`, ADR-0015),
 **v_issue_status** (`open | overdue | resolved`), **v_site_enrollment** (latest report
-per site vs target), **v_milestone_status** (`achieved | overdue | upcoming`).
+per site vs target), **v_milestone_status** (`achieved | overdue | upcoming`),
+**v_delegation_log** (`active | ended`, plus two derived cross-checks: whether
+the authorizer held an active PI role at that site on the start date, and the
+delegate's count of open credential items from `v_expected_document_status`),
+**v_training_log** (`current | expiring_soon (≤60d) | expired`).
 
 ### Views are public API
 

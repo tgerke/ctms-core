@@ -61,6 +61,17 @@ export {
   type StudySiteStatus,
 } from "./admin.js";
 export {
+  createDelegation,
+  delegationLog,
+  endDelegation,
+  recordTraining,
+  siteEnrollment,
+  siteOverview,
+  trainingLog,
+  type DelegationStatus,
+  type TrainingStatus,
+} from "./logs.js";
+export {
   auditEvents,
   documentAuditTrail,
   documentDetail,

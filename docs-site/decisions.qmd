@@ -13,9 +13,9 @@ The system's center of gravity is sponsor/CRO-side oversight across many sites,
 not the site coordinator's day-to-day binder. The relational questions that
 motivate the product (cross-site completeness, gaps, expirations) live in the
 oversight seat, and site-side eISF is a crowded, commoditizing market.
-Site-facing workflows exist but are minimal; a future site-facing surface would
-reuse the same schema, because site vs. sponsor is a permission scope, not a
-different data model.
+Site-facing workflows started minimal; ADR-0023 later built the site seat
+exactly the way this record predicted — as a permission scope over the same
+schema, not a different data model.
 
 ## ADR-0002 — TypeScript + Postgres; R is a client, not the implementation
 
@@ -258,6 +258,25 @@ image-only PDFs simply match by metadata alone (OCR is a non-feature until
 a pilot needs it). Query semantics stay ADR-0019's substring-AND — each
 word must match the metadata haystack *or* the content — and results carry
 a snippet of the content match.
+
+## ADR-0023 — Site-seat log workflows: structured logs as facts, the seat as a permission scope
+
+The one seat ADR-0001 deliberately skipped now exists, built the way that
+record predicted: a `site_staff` access role granted with a study-site
+scope, not a second application. A person whose every grant is site-scoped
+lands on their site's page and nowhere else; the site page reads
+site-scoped endpoints that serve the oversight seat identically.
+Delegation-of-authority and training logs are dated fact rows with derived
+status — **delegation** (delegate, tasks, dates, authorizing PI) and
+**training_record** (person, topic, completion, optional expiry and
+certificate link) — and the views carry the cross-checks the oversight seat
+wants: whether the authorizer actually held an active PI role on the start
+date, and whether the delegate has open credential items in the document
+record next door. Writing a log entry takes a new `log` operation held by
+site_staff and admin only: monitors read every log, but the log is the
+site's record of itself. The signed DoA log document (artifact 05.03.01)
+remains the authoritative Part 11 record; entry-level e-signatures are
+named future work, not claimed.
 
 ---
 

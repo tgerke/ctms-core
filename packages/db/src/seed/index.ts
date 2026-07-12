@@ -34,7 +34,7 @@ await sql`SELECT set_config('ctms.actor_label', 'seed', false)`;
 
 await sql`TRUNCATE audit_event, signature, document_return, document_version, document_content_text, expected_document,
   monitoring_visit_document, visit_action_item, issue, monitoring_visit,
-  enrollment_report, study_milestone, access_grant,
+  enrollment_report, study_milestone, access_grant, delegation, training_record,
   document, requirement_rule, study_site_role, study_site, protocol_version,
   requirement_rule, person, site, study, organization,
   tmf_artifact, tmf_section, tmf_zone RESTART IDENTITY CASCADE`;
@@ -200,6 +200,14 @@ await db.insert(s.accessGrant).values([
   // Least privilege for the machine identity: ingest (read + upload, never
   // sign), scoped to the one study it files for.
   { personId: personId.get("edc")!, role: "ingest", studyId },
+  // The site seat (ADR-0023): site 001's coordinator sees exactly her site.
+  // dev-site-token maps to this person.
+  {
+    personId: personId.get("kim")!,
+    role: "site_staff",
+    studyId,
+    studySiteId: studySiteId.get("001")!,
+  },
 ]);
 
 // --- Requirement rules -------------------------------------------------------
@@ -353,7 +361,7 @@ await addDoc({ artifact: "06.01.02", title: "IP Accountability Log — Site 001"
 // Staff 001
 await addDoc({ artifact: "05.02.01", title: "CV — Elena Vasquez, MD", site: "001", person: "vasquez", effective: monthsAgo(6) });
 await addDoc({ artifact: "05.02.02", title: "Medical License — Vasquez (OR)", site: "001", person: "vasquez", effective: monthsAgo(3) });
-await addDoc({ artifact: "05.02.03", title: "GCP Certificate — Vasquez", site: "001", person: "vasquez", effective: monthsAgo(12) });
+const docGcpVasquez = await addDoc({ artifact: "05.02.03", title: "GCP Certificate — Vasquez", site: "001", person: "vasquez", effective: monthsAgo(12) });
 await addDoc({ artifact: "05.02.04", title: "Financial Disclosure — Vasquez", site: "001", person: "vasquez", effective: monthsAgo(8) });
 await addDoc({ artifact: "05.02.01", title: "CV — Marcus Webb, MD, PhD", site: "001", person: "webb", effective: monthsAgo(10) });
 // Webb's license: effective 13 months ago with 12-month validity -> EXPIRED
@@ -642,6 +650,69 @@ for (const m of milestoneSpecs) {
     name: m.name,
     plannedDate: m.planned,
     actualDate: m.actual ?? null,
+  });
+}
+
+// --- Site-seat logs (ADR-0023): delegation and training facts ------------------
+// The structured layer beside the signed DoA log documents. The stories the
+// derived cross-checks should tell: Webb holds active delegated tasks while
+// his medical license is expired (credential_open_items > 0), and site 002's
+// coordinator is delegated consent duties with no GCP certificate on file.
+const delegationSpecs: {
+  site: string;
+  person: string;
+  tasks: string[];
+  start: string;
+  end?: string;
+  authorizedBy: string;
+}[] = [
+  { site: "001", person: "kim", tasks: ["informed consent", "study visit scheduling", "eCRF data entry", "IP accountability review"], start: monthsAgo(8), authorizedBy: "vasquez" },
+  { site: "001", person: "webb", tasks: ["eligibility assessment", "AE/SAE assessment", "prescribing study treatment"], start: monthsAgo(8), authorizedBy: "vasquez" },
+  { site: "001", person: "reyes", tasks: ["IP dispensing", "IP storage and temperature monitoring"], start: monthsAgo(8), authorizedBy: "vasquez" },
+  // Kim briefly covered IP dispensing while Reyes was on leave — an ended fact.
+  { site: "001", person: "kim", tasks: ["IP dispensing"], start: monthsAgo(3), end: monthsAgo(2), authorizedBy: "vasquez" },
+  // Authorized by the sub-investigator, not the PI — the exact mistake the
+  // derived authorizer_was_pi check exists to surface.
+  { site: "001", person: "reyes", tasks: ["specimen shipping"], start: daysAgo(10), authorizedBy: "webb" },
+  { site: "002", person: "oduya", tasks: ["informed consent", "eCRF data entry"], start: monthsAgo(7), authorizedBy: "raman" },
+  { site: "002", person: "lin", tasks: ["study drug administration", "vital signs and sample collection"], start: monthsAgo(7), authorizedBy: "raman" },
+];
+for (const d of delegationSpecs) {
+  await db.insert(s.delegation).values({
+    studySiteId: studySiteId.get(d.site)!,
+    personId: personId.get(d.person)!,
+    delegatedTasks: d.tasks,
+    startDate: d.start,
+    endDate: d.end ?? null,
+    authorizedBy: personId.get(d.authorizedBy)!,
+  });
+}
+
+const trainingSpecs: {
+  site: string;
+  person: string;
+  topic: string;
+  trained: string;
+  expires?: string;
+  documentId?: string;
+}[] = [
+  { site: "001", person: "vasquez", topic: "GCP refresher (ICH E6 R2)", trained: monthsAgo(12), expires: monthsFromNow(24), documentId: docGcpVasquez.id },
+  { site: "001", person: "kim", topic: "Protocol v2.0 (Amendment 1) training", trained: monthsAgo(4) },
+  { site: "001", person: "webb", topic: "Protocol v2.0 (Amendment 1) training", trained: monthsAgo(4) },
+  // Expiring soon: IATA recertification is due within the 60-day window.
+  { site: "001", person: "kim", topic: "IATA specimen shipping certification", trained: monthsAgo(23), expires: daysFromNow(30) },
+  // Expired: human-subjects training lapsed last month.
+  { site: "001", person: "reyes", topic: "Human subjects protection (CITI)", trained: monthsAgo(37), expires: monthsAgo(1) },
+  { site: "002", person: "lin", topic: "Protocol v2.0 (Amendment 1) training", trained: monthsAgo(4) },
+];
+for (const t of trainingSpecs) {
+  await db.insert(s.trainingRecord).values({
+    studySiteId: studySiteId.get(t.site)!,
+    personId: personId.get(t.person)!,
+    topic: t.topic,
+    trainedOn: t.trained,
+    expiresAt: t.expires ?? null,
+    documentId: t.documentId ?? null,
   });
 }
 

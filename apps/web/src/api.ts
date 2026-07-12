@@ -325,7 +325,13 @@ export type StaffRole =
   | "study_coordinator"
   | "pharmacist"
   | "research_nurse";
-export type AccessRole = "admin" | "trial_ops" | "monitor" | "read_only" | "ingest";
+export type AccessRole =
+  | "admin"
+  | "trial_ops"
+  | "monitor"
+  | "read_only"
+  | "ingest"
+  | "site_staff";
 
 export interface Organization {
   id: string;
@@ -379,6 +385,81 @@ export interface TmfArtifact {
   name: string;
   section_name: string;
   zone_name: string;
+}
+
+// --- Site seat (ADR-0023) ----------------------------------------------------
+
+export interface Me {
+  person_id: string;
+  given_name: string;
+  family_name: string;
+  grants: {
+    role: AccessRole;
+    study_id: string | null;
+    study_site_id: string | null;
+  }[];
+}
+
+export interface SiteOverview {
+  study_site_id: string;
+  study_id: string;
+  site_number: string;
+  status: "pending" | "active" | "closed";
+  activated_at: string | null;
+  target_enrollment: number | null;
+  site_name: string;
+  city: string | null;
+  state: string | null;
+  protocol_number: string;
+  study_title: string;
+  total: number;
+  current_count: number;
+  expiring_soon_count: number;
+  pending_review_count: number;
+  returned_count: number;
+  expired_count: number;
+  missing_count: number;
+  waived_count: number;
+  pct_current: number;
+}
+
+export interface Delegation {
+  delegation_id: string;
+  study_id: string;
+  study_site_id: string;
+  site_number: string;
+  site_name: string;
+  person_id: string;
+  given_name: string;
+  family_name: string;
+  credentials: string | null;
+  delegated_tasks: string[];
+  start_date: string;
+  end_date: string | null;
+  authorized_by: string;
+  authorizer_given_name: string;
+  authorizer_family_name: string;
+  authorizer_was_pi: boolean;
+  credential_open_items: number;
+  status: "active" | "ended";
+}
+
+export interface TrainingRecord {
+  training_record_id: string;
+  study_id: string;
+  study_site_id: string;
+  site_number: string;
+  site_name: string;
+  person_id: string;
+  given_name: string;
+  family_name: string;
+  credentials: string | null;
+  topic: string;
+  trained_on: string;
+  expires_at: string | null;
+  document_id: string | null;
+  document_status: string | null;
+  status: "current" | "expiring_soon" | "expired";
 }
 
 export class ApiError extends Error {
@@ -1067,6 +1148,109 @@ export const useSyncExpected = (studyId: string | undefined) => {
     onSuccess: () => qc.invalidateQueries(),
   });
 };
+
+// --- Site seat hooks (ADR-0023) ----------------------------------------------
+
+export const useMe = () =>
+  useQuery({ queryKey: ["me"], queryFn: () => api<Me>("/me"), staleTime: Infinity });
+
+/** Every grant is site-scoped: render the site seat, not the study dashboard. */
+export const isSiteSeat = (me: Me | undefined) =>
+  !!me && me.grants.length > 0 && me.grants.every((g) => g.study_site_id !== null);
+
+export const useSiteOverview = (studySiteId: string | undefined) =>
+  useQuery({
+    queryKey: ["site-overview", studySiteId],
+    queryFn: () => api<SiteOverview>(`/study-sites/${studySiteId}`),
+    enabled: !!studySiteId,
+  });
+
+export const useSiteExpected = (studySiteId: string | undefined) =>
+  useQuery({
+    queryKey: ["site-expected", studySiteId],
+    queryFn: () =>
+      api<ExpectedDocument[]>(`/study-sites/${studySiteId}/expected-documents`),
+    enabled: !!studySiteId,
+  });
+
+export const useSiteEnrollment = (studySiteId: string | undefined) =>
+  useQuery({
+    queryKey: ["site-enrollment", studySiteId],
+    queryFn: () => api<SiteEnrollment[]>(`/study-sites/${studySiteId}/enrollment`),
+    enabled: !!studySiteId,
+  });
+
+export const useDelegationLog = (studySiteId: string | undefined) =>
+  useQuery({
+    queryKey: ["delegation-log", studySiteId],
+    queryFn: () => api<Delegation[]>(`/study-sites/${studySiteId}/delegation-log`),
+    enabled: !!studySiteId,
+  });
+
+export const useTrainingLog = (studySiteId: string | undefined) =>
+  useQuery({
+    queryKey: ["training-log", studySiteId],
+    queryFn: () => api<TrainingRecord[]>(`/study-sites/${studySiteId}/training-log`),
+    enabled: !!studySiteId,
+  });
+
+export function useCreateDelegation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      studySiteId: string;
+      personId: string;
+      delegatedTasks: string[];
+      startDate: string;
+      authorizedBy: string;
+    }) =>
+      api<{ id: string }>(
+        `/study-sites/${input.studySiteId}/delegation-log`,
+        jsonInit("POST", {
+          person_id: input.personId,
+          delegated_tasks: input.delegatedTasks,
+          start_date: input.startDate,
+          authorized_by: input.authorizedBy,
+        }),
+      ),
+    onSuccess: () => qc.invalidateQueries(),
+  });
+}
+
+export function useEndDelegation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { delegationId: string; endDate: string }) =>
+      api<{ id: string }>(
+        `/delegations/${input.delegationId}`,
+        jsonInit("PATCH", { end_date: input.endDate }),
+      ),
+    onSuccess: () => qc.invalidateQueries(),
+  });
+}
+
+export function useRecordTraining() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      studySiteId: string;
+      personId: string;
+      topic: string;
+      trainedOn: string;
+      expiresAt?: string;
+    }) =>
+      api<{ id: string }>(
+        `/study-sites/${input.studySiteId}/training-log`,
+        jsonInit("POST", {
+          person_id: input.personId,
+          topic: input.topic,
+          trained_on: input.trainedOn,
+          ...(input.expiresAt ? { expires_at: input.expiresAt } : {}),
+        }),
+      ),
+    onSuccess: () => qc.invalidateQueries(),
+  });
+}
 
 /** Waive an expected document: the absence is explained, not a gap (ADR-0016). */
 export function useWaive() {
