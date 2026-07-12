@@ -5,9 +5,10 @@ import { useDocumentSearch, type ExpectedStatus, type Study } from "../api";
 import { ErrorNote, PageState } from "../ops";
 import { StatusChip } from "../status";
 
-// Document search (ADR-0019): metadata only — title, artifact taxonomy,
-// site, person, uploader, file names, filing source, status. Every word must
-// match; content full-text is a deliberate non-feature for now.
+// Document search (ADR-0019 + ADR-0022): every word must match the
+// document's metadata — title, artifact taxonomy, site, person, uploader,
+// file names, filing source, status — or the extracted text inside its
+// versions. Content matches show a snippet of the surrounding text.
 
 const DOC_STATUSES = ["pending_review", "effective", "returned", "superseded"] as const;
 
@@ -44,8 +45,9 @@ export default function SearchPage({ study }: { study: Study | undefined }) {
         <h1 className="text-xl font-semibold">Document search</h1>
         <p className="mt-1 max-w-3xl text-sm text-ink2">
           Searches every document's title, TMF artifact, site, person,
-          uploader, and file names in {study.protocol_number}. Every word must
-          match — try "raman license" or "04.01 site 002".
+          uploader, file names, and the text inside each version in{" "}
+          {study.protocol_number}. Every word must match — try "raman license"
+          or a phrase from inside a document.
         </p>
       </div>
 
@@ -125,6 +127,11 @@ export default function SearchPage({ study }: { study: Study | undefined }) {
                       {r.effective_date ? ` · effective ${r.effective_date}` : ""}
                       {r.expires_at ? ` · expires ${r.expires_at}` : ""}
                     </div>
+                    {r.content_snippet && (
+                      <div className="mt-0.5 text-xs italic text-ink2">
+                        “{r.content_snippet}”
+                      </div>
+                    )}
                   </div>
                   <span className="ml-auto">
                     <StatusChip status={chipFor(r.status)} />

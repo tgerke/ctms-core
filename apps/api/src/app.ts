@@ -594,9 +594,9 @@ export function buildApp(db: Db, sql: Sql) {
       method: "get",
       path: "/studies/{studyId}/document-search",
       security,
-      summary: "Search documents by metadata",
+      summary: "Search documents by metadata and content",
       description:
-        "Metadata search (ADR-0019): every whitespace token in q must appear in the document's title, artifact taxonomy, site, person, uploader, file names, filing source, or status — 'raman license' finds Dr. Raman's medical license, '04.01 site 002' finds site 002's IRB documents. Content full-text is deliberately out of scope.",
+        "Document search (ADR-0019, ADR-0022): every whitespace token in q must appear in the document's metadata (title, artifact taxonomy, site, person, uploader, file names, filing source, status) or in its versions' extracted text — 'raman license' finds Dr. Raman's medical license, a phrase from inside the protocol finds the protocol. Content matches carry a snippet of the surrounding text.",
       request: {
         params: z.object({ studyId: z.string().uuid() }),
         query: z.object({

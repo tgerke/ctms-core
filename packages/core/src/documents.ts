@@ -2,8 +2,10 @@ import { createHash } from "node:crypto";
 import {
   accessGrant,
   document,
+  documentContentText,
   documentReturn,
   documentVersion,
+  extractContentText,
   reviewAssignment,
   signature,
   putBlob,
@@ -39,6 +41,23 @@ export interface UploadInput {
  */
 export async function uploadDocument(db: Db, actor: Actor, input: UploadInput) {
   const { sha256, sizeBytes } = await putBlob(input.bytes);
+  // Content text (ADR-0022): derived search state, one row per content hash.
+  // A failure here must never block the upload — the record is the bytes.
+  try {
+    const extracted = await extractContentText(input.bytes, input.mimeType);
+    await db
+      .insert(documentContentText)
+      .values({
+        sha256,
+        status: extracted.status,
+        content: extracted.content,
+        extractor: extracted.extractor,
+        charCount: extracted.content?.length ?? null,
+      })
+      .onConflictDoNothing();
+  } catch {
+    // leave it to pnpm db:extract-text to retry
+  }
   return withActor(db, actor, async (tx) => {
     const scopeSite = input.studySiteId ?? null;
     const scopePerson = input.personId ?? null;

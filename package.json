@@ -8,6 +8,7 @@
     "db:migrate": "pnpm --filter @ctms/db migrate",
     "db:seed": "pnpm --filter @ctms/db seed",
     "db:import-tmf": "pnpm --filter @ctms/db import-tmf",
+    "db:extract-text": "pnpm --filter @ctms/db extract-text",
     "db:reset": "docker compose down -v && docker compose up -d --wait && pnpm db:migrate && pnpm db:seed",
     "dev": "pnpm --parallel --filter @ctms/api --filter @ctms/web dev",
     "build": "pnpm -r build",

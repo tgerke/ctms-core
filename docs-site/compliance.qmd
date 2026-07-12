@@ -87,7 +87,9 @@ exactly these mutations and assert they fail.
 4. **Single tenant** — one deployment per customer; multi-tenancy hardening
    remains a non-goal of this phase.
 5. **`expected_document` churn is unaudited by design** — placeholders are
-   derived state; the ground truth they derive from is fully audited.
+   derived state; the ground truth they derive from is fully audited. The
+   same stance covers extracted search text (ADR-0022): rebuildable at any
+   time from the immutable, audited bytes.
 
 Resolved since the first draft of this page: dev-token-only auth (now
 OIDC + RBAC), stubbed signing re-authentication, unblocked TRUNCATE

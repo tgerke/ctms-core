@@ -162,6 +162,10 @@ export interface SearchResult {
   latest_uploaded_at: string;
   uploader_given_name: string | null;
   uploader_family_name: string | null;
+  // Content full-text (ADR-0022): did the extracted document text match, and
+  // the text around that match.
+  matched_in_content: boolean;
+  content_snippet: string | null;
 }
 
 // --- Review queue (ADR-0018) -------------------------------------------------

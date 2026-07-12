@@ -275,6 +275,19 @@ export const documentVersion = pgTable(
   (t) => [uniqueIndex("document_version_number_idx").on(t.documentId, t.versionNumber)],
 );
 
+// Extracted document text (ADR-0022): derived search state keyed by the same
+// content hash as the blob store. Deliberately outside the audited record —
+// no audit trigger, no immutability trigger — because it can be re-derived
+// from the immutable bytes at any time (pnpm db:extract-text).
+export const documentContentText = pgTable("document_content_text", {
+  sha256: char("sha256", { length: 64 }).primaryKey(),
+  status: text("status").notNull(), // extracted | unsupported | failed (CHECK in migration 0011)
+  content: text("content"),
+  extractor: text("extractor"),
+  charCount: integer("char_count"),
+  extractedAt: timestamp("extracted_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const signature = pgTable("signature", {
   id: uuid("id").primaryKey().defaultRandom(),
   documentVersionId: uuid("document_version_id")

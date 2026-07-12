@@ -111,7 +111,13 @@ Finding a document is a query too (ADR-0019): **v_document_search** flattens
 each document's metadata — title, artifact taxonomy, site, person, uploader,
 file names, filing source — into a searchable haystack, and search requires
 every word to match. There is no search index that could drift from the
-record.
+record. The view also carries each document's extracted text (ADR-0022):
+**document_content_text** holds the text of every stored blob, keyed by the
+same content hash as the blob store. It is derived state deliberately outside
+the audited record — extracted text of immutable bytes can never go stale,
+and it can be rebuilt from the bytes at any time (`pnpm db:extract-text`) —
+so a search word can match what a document says, not only what it is filed
+as.
 
 Review work is routed the same way (ADR-0018): a **review_assignment** row
 names who should review a pending version and when it is due, with no status

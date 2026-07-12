@@ -89,8 +89,15 @@ restated here because a feature comparison is meaningless without them.
   site, person, uploader, file names, or filing source — "1572 003" finds
   site 003's Form FDA 1572, from the UI header, the API, or read-only SQL.
   No index to drift: search is a query over the record. What remains is
-  content full-text (extracting and indexing the PDF text — safe to add
-  later because versions are immutable) and Excel export of result sets.
+  Excel export of result sets.
+- **Content full-text search** — shipped as derived text of immutable bytes
+  (ADR-0022): every version's text is extracted at upload (PDF and `text/*`;
+  failures recorded, never blocking) into a table keyed by the same content
+  hash as the blob store, deliberately outside the audited record and
+  rebuildable any time with `pnpm db:extract-text`. Search tokens now match
+  metadata *or* content, and results carry a snippet of the content match.
+  What remains is OCR for scanned image-only PDFs and relevance ranking —
+  results still order by latest upload.
 - **TMF transfer and inspection export** — shipped as a verifiable package
   (ADR-0020): `pnpm export-tmf` writes every document version's
   content-addressed bytes, the full metadata (signatures with their §11.70
@@ -127,14 +134,11 @@ structured DoA/training logs would be its first real test.
 
 ## If we built next
 
-1. **Content full-text search.** The metadata search's larger second step:
-   extract and index PDF text — safe derived state, since versions are
-   immutable.
-2. **eTMF-EMS serialization of the export package.** Blocked on getting the
+1. **eTMF-EMS serialization of the export package.** Blocked on getting the
    EMS v1.0.x text into the verified source library (ADR-0012/0020); once
    there, exchange.xml is a mapping over the manifest the exporter already
    writes.
-3. **Site-seat log workflows.** The one seat this system deliberately hasn't
+2. **Site-seat log workflows.** The one seat this system deliberately hasn't
    built for (ADR-0001); structured DoA/training logs would be a future
    site-facing surface's first real test.
 
