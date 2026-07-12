@@ -127,7 +127,7 @@ describe("OIDC signing re-authentication (§11.200)", () => {
     const form = new FormData();
     form.set("file", new File(["oidc fixture"], "fixture.pdf", { type: "application/pdf" }));
     form.set("tmf_artifact_id", String(artifact!.id));
-    const [study] = await sql`SELECT id FROM study LIMIT 1`;
+    const [study] = await sql`SELECT id FROM study WHERE protocol_number = 'CORC-2201'`;
     form.set("study_id", study!.id);
     form.set("title", "OIDC reauth fixture");
     const up = await app.request("/documents", {

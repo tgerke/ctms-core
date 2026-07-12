@@ -70,6 +70,7 @@ export {
   listSites,
   listStudies,
   listTmfArtifacts,
+  portfolio,
   reviewQueue,
   searchDocuments,
   studyRequirementRules,

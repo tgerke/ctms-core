@@ -62,7 +62,7 @@ beforeAll(async () => {
   resetOidcCache();
   app = buildApp(db, sql);
 
-  const [study] = await sql`SELECT id FROM study LIMIT 1`;
+  const [study] = await sql`SELECT id FROM study WHERE protocol_number = 'CORC-2201'`;
   studyId = study!.id;
 
   // Test-only artifact for fixtures (no requirement rule references it).

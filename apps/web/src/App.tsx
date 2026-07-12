@@ -4,6 +4,7 @@ import { Link, Route, Routes, useNavigate } from "react-router-dom";
 import { useChainStatus, useStudies } from "./api";
 import AdminPage from "./pages/AdminPage";
 import AuditPage from "./pages/AuditPage";
+import PortfolioPage from "./pages/PortfolioPage";
 import QueuePage from "./pages/QueuePage";
 import SearchPage from "./pages/SearchPage";
 import DocumentPage from "./pages/DocumentPage";
@@ -77,7 +78,17 @@ function ChainBadge() {
 export default function App() {
   const { dark, toggle } = useTheme();
   const { data: studies } = useStudies();
-  const study = studies?.[0];
+  // Multi-study (ADR-0021): the selected study persists across visits;
+  // re-seeds regenerate ids, so an unknown stored id falls back to the first
+  // study (list is ordered by protocol number).
+  const [studyId, setStudyId] = useState<string | null>(
+    () => localStorage.getItem("ctms_study"),
+  );
+  const selectStudy = (id: string) => {
+    setStudyId(id);
+    localStorage.setItem("ctms_study", id);
+  };
+  const study = studies?.find((s) => s.id === studyId) ?? studies?.[0];
 
   return (
     <div className="min-h-screen">
@@ -87,14 +98,35 @@ export default function App() {
             <FileCheck2 size={20} style={{ color: "var(--info)" }} aria-hidden />
             <span>ctms-core</span>
           </Link>
-          {study && (
-            <span className="hidden text-sm text-ink2 sm:inline">
-              {study.protocol_number} · {study.sponsor_name}
-            </span>
+          {studies && studies.length > 1 ? (
+            <select
+              value={study?.id ?? ""}
+              onChange={(e) => selectStudy(e.target.value)}
+              className="hidden rounded-md border border-hairline bg-surface px-2 py-1 text-sm text-ink2 sm:inline"
+              aria-label="Switch study"
+            >
+              {studies.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.protocol_number}
+                </option>
+              ))}
+            </select>
+          ) : (
+            study && (
+              <span className="hidden text-sm text-ink2 sm:inline">
+                {study.protocol_number} · {study.sponsor_name}
+              </span>
+            )
           )}
           <div className="ml-auto flex items-center gap-2">
             <HeaderSearch />
             <ChainBadge />
+            <Link
+              to="/portfolio"
+              className="rounded-md px-2 py-1 text-sm text-ink2 hover:bg-surface"
+            >
+              Portfolio
+            </Link>
             <Link
               to="/queue"
               className="rounded-md px-2 py-1 text-sm text-ink2 hover:bg-surface"
@@ -138,6 +170,7 @@ export default function App() {
           <Route path="/visits/:visitId" element={<VisitPage />} />
           <Route path="/documents/:documentId" element={<DocumentPage />} />
           <Route path="/search" element={<SearchPage study={study} />} />
+          <Route path="/portfolio" element={<PortfolioPage onSelectStudy={selectStudy} />} />
           <Route path="/queue" element={<QueuePage study={study} />} />
           <Route path="/admin" element={<AdminPage study={study} />} />
           <Route path="/audit" element={<AuditPage />} />

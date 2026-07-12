@@ -36,11 +36,14 @@ Want the morning-email view? Uncomment `SMTP_URL` in `.env` and run
 
 ## What the seed gives you
 
-A four-site oncology study with twelve staff across PI, sub-investigator,
-coordinator, pharmacist, and research nurse roles; requirement rules for the
-usual site- and person-scoped essentials; and deliberately realistic gaps — a
-missing IRB approval here, a GCP certificate expiring soon there — so the
-completeness views have something to say. The TMF taxonomy is an illustrative
+Two studies. CORC-2201 is a four-site Phase 2 oncology study with twelve
+staff across PI, sub-investigator, coordinator, pharmacist, and research
+nurse roles; requirement rules for the usual site- and person-scoped
+essentials; and deliberately realistic gaps — a missing IRB approval here, a
+GCP certificate expiring soon there — so the completeness views have
+something to say. CORC-2202 is a smaller Phase 1b in startup, sharing two of
+the same physical sites, so the study switcher and the portfolio page have a
+real contrast. The TMF taxonomy is an illustrative
 ~40-artifact subset of the CDISC TMF Reference Model, using official artifact
 numbers (see [the data model](data-model.qmd#reference-taxonomy)).
 

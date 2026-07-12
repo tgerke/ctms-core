@@ -17,7 +17,7 @@ const MONITOR = { Authorization: "Bearer dev-monitor-token" };
 beforeAll(async () => {
   process.env.AUTH_MODE = "dev";
   app = buildApp(db, sql);
-  const [study] = await sql`SELECT id FROM study LIMIT 1`;
+  const [study] = await sql`SELECT id FROM study WHERE protocol_number = 'CORC-2201'`;
   studyId = study!.id;
 });
 afterAll(() => sql.end());

@@ -23,7 +23,7 @@ const MONITOR = { Authorization: "Bearer dev-monitor-token" };
 beforeAll(async () => {
   process.env.AUTH_MODE = "dev";
   app = buildApp(db, sql);
-  const [study] = await sql`SELECT id FROM study LIMIT 1`;
+  const [study] = await sql`SELECT id FROM study WHERE protocol_number = 'CORC-2201'`;
   studyId = study!.id;
   const [site] = await sql`
     SELECT id FROM study_site WHERE study_id = ${studyId} ORDER BY site_number LIMIT 1`;

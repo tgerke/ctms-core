@@ -123,6 +123,33 @@ export const DocumentDetailSchema = z
   })
   .openapi("DocumentDetail");
 
+// --- Portfolio (ADR-0021) ---------------------------------------------------------
+
+export const PortfolioEntrySchema = z
+  .object({
+    id: z.string().uuid(),
+    protocol_number: z.string(),
+    title: z.string(),
+    phase: z.string().nullable(),
+    status: z.string(),
+    sponsor_name: z.string(),
+    site_count: z.number().int(),
+    active_site_count: z.number().int(),
+    expected_total: z.number().int(),
+    current_count: z.number().int(),
+    missing_count: z.number().int(),
+    attention_count: z.number().int(),
+    pending_review_count: z.number().int(),
+    waived_count: z.number().int(),
+    pct_current: z.union([z.number(), z.string()]),
+    open_issues: z.number().int(),
+    overdue_visits: z.number().int(),
+    review_queue: z.number().int(),
+    enrolled: z.number().int(),
+    target_enrollment: z.number().int(),
+  })
+  .openapi("PortfolioEntry");
+
 // --- Document search (ADR-0019) --------------------------------------------------
 
 export const SearchResultSchema = z

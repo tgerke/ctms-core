@@ -40,7 +40,7 @@ afterAll(async () => {
 });
 
 async function ids() {
-  const [study] = await sql`SELECT id FROM study LIMIT 1`;
+  const [study] = await sql`SELECT id FROM study WHERE protocol_number = 'CORC-2201'`;
   const [site] = await sql`SELECT id FROM study_site WHERE site_number = '001'`;
   const [person] = await sql`
     SELECT id FROM person WHERE email = 'nora.feld@corc.example'`;

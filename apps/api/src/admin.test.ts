@@ -35,7 +35,7 @@ const patch = (path: string, body: unknown, headers = ADMIN) =>
 beforeAll(async () => {
   process.env.AUTH_MODE = "dev";
   app = buildApp(db, sql);
-  const [study] = await sql`SELECT id FROM study LIMIT 1`;
+  const [study] = await sql`SELECT id FROM study WHERE protocol_number = 'CORC-2201'`;
   studyId = study!.id;
 
   await sql`SELECT set_config('ctms.actor_label', 'vitest', false)`;

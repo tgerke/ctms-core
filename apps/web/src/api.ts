@@ -111,6 +111,31 @@ export interface DocumentDetail {
   assignments: Record<string, any>[];
 }
 
+// --- Portfolio (ADR-0021) ------------------------------------------------------
+
+export interface PortfolioEntry {
+  id: string;
+  protocol_number: string;
+  title: string;
+  phase: string | null;
+  status: string;
+  sponsor_name: string;
+  site_count: number;
+  active_site_count: number;
+  expected_total: number;
+  current_count: number;
+  missing_count: number;
+  attention_count: number;
+  pending_review_count: number;
+  waived_count: number;
+  pct_current: number | string;
+  open_issues: number;
+  overdue_visits: number;
+  review_queue: number;
+  enrolled: number;
+  target_enrollment: number;
+}
+
 // --- Document search (ADR-0019) ----------------------------------------------
 
 export interface SearchResult {
@@ -755,6 +780,11 @@ export function useReportEnrollment() {
     onSuccess: () => qc.invalidateQueries(),
   });
 }
+
+// --- Portfolio hook (ADR-0021) --------------------------------------------------
+
+export const usePortfolio = () =>
+  useQuery({ queryKey: ["portfolio"], queryFn: () => api<PortfolioEntry[]>("/portfolio") });
 
 // --- Document search hook (ADR-0019) ------------------------------------------
 

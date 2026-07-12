@@ -80,6 +80,11 @@ match the document's title, artifact taxonomy, site, person, uploader, file
 names, or filing source — `q=1572 003` finds site 003's Form FDA 1572.
 Metadata only; content full-text is on the roadmap.
 
+The cross-study view is `GET /portfolio` (ADR-0021): one row per study with
+completeness counts, attention items, review-queue size, open issues,
+overdue visits, and enrollment vs target — the same numbers the study
+dashboards derive, grouped. One GET is a portfolio report.
+
 ## Writing
 
 ```r

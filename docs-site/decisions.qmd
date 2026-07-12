@@ -234,6 +234,16 @@ than an honest package that never claimed it. The manifest carries the
 fields an EMS serializer would map; obtaining the EMS v1.0.x text is the
 unblock.
 
+## ADR-0021 — Multi-study is a rollup query and a selection, not a second system
+
+`GET /portfolio` returns one row per study — completeness, attention items,
+review-queue size, issues, enrollment vs target — computed by grouping the
+same views the study dashboards read, so the portfolio can never disagree
+with them. The header's study switcher is client state persisted like the
+theme, falling back to the first study when a re-seed regenerates ids, and
+the seed grew a second study (CORC-2202, a Phase 1b in startup) so the
+contrast is real. No portfolio tables, no aggregation jobs, nothing to sync.
+
 ---
 
 Three of these — ADR-0004, ADR-0006, and ADR-0010 — are the same idea applied

@@ -18,7 +18,7 @@ async function inRollback(fn: (tx: typeof sql) => Promise<void>) {
 }
 
 async function studyId(): Promise<string> {
-  const [row] = await sql`SELECT id FROM study LIMIT 1`;
+  const [row] = await sql`SELECT id FROM study WHERE protocol_number = 'CORC-2201'`;
   return row!.id;
 }
 

@@ -24,6 +24,7 @@ import {
   listSites,
   listStudies,
   listTmfArtifacts,
+  portfolio,
   reportEnrollment,
   resolveActionItem,
   resolveIssue,
@@ -82,6 +83,7 @@ import {
   OrganizationSchema,
   OrgKindSchema,
   PersonSchema,
+  PortfolioEntrySchema,
   QueueEntrySchema,
   QueueStatusSchema,
   RequirementRuleSchema,
@@ -146,6 +148,7 @@ export function buildApp(db: Db, sql: Sql) {
     c.req.method === "GET" ? ("read" as const) : ("upload" as const);
 
   app.use("/studies", auth, requirePermission(sql, "read"));
+  app.use("/portfolio", auth, requirePermission(sql, "read"));
   app.use(
     "/studies/:studyId/sync-expected-documents",
     auth,
@@ -281,6 +284,19 @@ export function buildApp(db: Db, sql: Sql) {
       responses: { 200: json(z.array(StudySchema), "Studies") },
     }),
     async (c) => c.json((await listStudies(sql)) as never, 200),
+  );
+
+  app.openapi(
+    createRoute({
+      method: "get",
+      path: "/portfolio",
+      security,
+      summary: "Cross-study rollup",
+      description:
+        "One row per study with the oversight numbers a portfolio needs — completeness, attention counts, open issues, overdue visits, review queue size, enrollment vs target — computed from the same views the per-study pages read (ADR-0021).",
+      responses: { 200: json(z.array(PortfolioEntrySchema), "Portfolio") },
+    }),
+    async (c) => c.json((await portfolio(sql)) as never, 200),
   );
 
   app.openapi(

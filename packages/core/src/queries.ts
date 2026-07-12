@@ -130,6 +130,68 @@ export async function reviewQueue(
              q.uploaded_at`;
 }
 
+// --- Portfolio rollup (ADR-0021) ----------------------------------------------
+
+/**
+ * One row per study: the oversight numbers a portfolio view needs, computed
+ * from the same views the per-study pages read. Multi-study is a rollup
+ * query, not a second bookkeeping system.
+ */
+export async function portfolio(sql: Sql) {
+  return sql`
+    SELECT st.id, st.protocol_number, st.title, st.phase, st.status,
+           o.name AS sponsor_name,
+           coalesce(sc.site_count, 0)::int AS site_count,
+           coalesce(sc.active_site_count, 0)::int AS active_site_count,
+           coalesce(ed.total, 0)::int AS expected_total,
+           coalesce(ed.current_count, 0)::int AS current_count,
+           coalesce(ed.missing_count, 0)::int AS missing_count,
+           coalesce(ed.attention_count, 0)::int AS attention_count,
+           coalesce(ed.pending_review_count, 0)::int AS pending_review_count,
+           coalesce(ed.waived_count, 0)::int AS waived_count,
+           CASE WHEN coalesce(ed.total, 0) - coalesce(ed.waived_count, 0) > 0
+             THEN round(100.0 * ed.current_count / (ed.total - ed.waived_count), 1)
+             ELSE 0 END AS pct_current,
+           coalesce(iss.open_issues, 0)::int AS open_issues,
+           coalesce(mv.overdue_visits, 0)::int AS overdue_visits,
+           coalesce(rq.queue_size, 0)::int AS review_queue,
+           coalesce(en.enrolled, 0)::int AS enrolled,
+           coalesce(en.target, 0)::int AS target_enrollment
+    FROM study st
+    JOIN organization o ON o.id = st.sponsor_org_id
+    LEFT JOIN LATERAL (
+      SELECT count(*) AS site_count,
+             count(*) FILTER (WHERE ss.status = 'active') AS active_site_count
+      FROM study_site ss WHERE ss.study_id = st.id
+    ) sc ON true
+    LEFT JOIN LATERAL (
+      SELECT count(*) AS total,
+             count(*) FILTER (WHERE v.status = 'current') AS current_count,
+             count(*) FILTER (WHERE v.status = 'missing') AS missing_count,
+             count(*) FILTER (WHERE v.status IN ('expired', 'expiring_soon')) AS attention_count,
+             count(*) FILTER (WHERE v.status = 'pending_review') AS pending_review_count,
+             count(*) FILTER (WHERE v.status = 'waived') AS waived_count
+      FROM v_expected_document_status v WHERE v.study_id = st.id
+    ) ed ON true
+    LEFT JOIN LATERAL (
+      SELECT count(*) AS open_issues
+      FROM v_issue_status i WHERE i.study_id = st.id AND i.status <> 'resolved'
+    ) iss ON true
+    LEFT JOIN LATERAL (
+      SELECT count(*) AS overdue_visits
+      FROM v_monitoring_visit_status m WHERE m.study_id = st.id AND m.stage = 'overdue'
+    ) mv ON true
+    LEFT JOIN LATERAL (
+      SELECT count(*) AS queue_size
+      FROM v_review_queue q WHERE q.study_id = st.id
+    ) rq ON true
+    LEFT JOIN LATERAL (
+      SELECT sum(e.enrolled) AS enrolled, sum(e.target_enrollment) AS target
+      FROM v_site_enrollment e WHERE e.study_id = st.id
+    ) en ON true
+    ORDER BY st.protocol_number`;
+}
+
 // --- Document search (ADR-0019) ---------------------------------------------
 
 /**

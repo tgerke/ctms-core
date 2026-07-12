@@ -20,7 +20,10 @@ refreshed, or reconciled, and a status can never be out of date.
 
 The dashboard is the study at a glance. Everything on it is clickable, and
 every filter you apply lands in the page address, so a filtered view can be
-pasted straight into an email or a chat.
+pasted straight into an email or a chat. Running more than one study? The
+dropdown in the header switches between them (the app remembers your
+choice), and the **Portfolio** page shows every study's numbers side by
+side.
 
 ![The study dashboard: document counts, milestones, enrollment, visits, issues, and the site document matrix.](../images/dashboard.png){.screenshot fig-alt="ctms-core study dashboard showing expected document counts, percent current, milestone chips, and enrollment progress bars per site"}
 

@@ -97,16 +97,17 @@ feature comparison is meaningless without them.
   from model memory. EMS serialization is the remaining step, unblocked the
   day the standard's text is on hand; purpose-built in-app auditor UX also
   remains.
+- **Multi-study operation in the UI** — shipped as a persisted study
+  switcher plus a portfolio page over `GET /portfolio` (ADR-0021): one
+  rollup query across the same views the study dashboards read —
+  completeness, attention items, review queue, issues, enrollment vs
+  target per study — with a second seeded study (CORC-2202) so the
+  contrast is real. What remains is cross-study *analytics* (trends,
+  custom dashboards à la Medidata Visual Analytics) and a grant-aware
+  study switcher; the rollup numbers are already on the API and in SQL for
+  anything downstream.
 
 ## Genuine gaps
-
-### Multi-study operation in the UI
-
-The schema is multi-study; the web app assumes the first study returned.
-Cross-study portfolio views are a standard CTMS selling point (Medidata
-Visual Analytics combines data across studies). A study switcher is the
-small version; portfolio rollups across `v_study_site_completeness` are the
-real version, and the views make them queries.
 
 ### Site-seat log workflows
 
@@ -121,15 +122,16 @@ structured DoA/training logs would be its first real test.
 
 ## If we built next
 
-1. **Multi-study operation in the UI.** A study switcher first; portfolio
-   rollups across `v_study_site_completeness` after.
-2. **Content full-text search.** The metadata search's larger second step:
+1. **Content full-text search.** The metadata search's larger second step:
    extract and index PDF text — safe derived state, since versions are
    immutable.
-3. **eTMF-EMS serialization of the export package.** Blocked on getting the
+2. **eTMF-EMS serialization of the export package.** Blocked on getting the
    EMS v1.0.x text into the verified source library (ADR-0012/0020); once
    there, exchange.xml is a mapping over the manifest the exporter already
    writes.
+3. **Site-seat log workflows.** The one seat this system deliberately hasn't
+   built for (ADR-0001); structured DoA/training logs would be a future
+   site-facing surface's first real test.
 
 ## Sources
 

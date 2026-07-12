@@ -17,7 +17,7 @@ const { sql } = createDb();
 let studyId: string;
 
 beforeAll(async () => {
-  const [study] = await sql`SELECT id FROM study LIMIT 1`;
+  const [study] = await sql`SELECT id FROM study WHERE protocol_number = 'CORC-2201'`;
   studyId = study!.id;
 });
 afterAll(() => sql.end());
