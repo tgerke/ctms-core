@@ -14,9 +14,11 @@ pnpm typecheck
 pnpm validation:iq           # installation qualification vs the live env
 pnpm validation:artifacts    # OQ report + traceability matrix (runs the suite)
 pnpm db:import-tmf -- file.xlsx   # official CDISC TMF RM spreadsheet, verbatim
+pnpm digest                  # oversight digest email per study (ADR-0017)
 ```
 
-API :8787, web :5173, Postgres :5433, MinIO :9000 (docker compose).
+API :8787, web :5173, Postgres :5433, MinIO :9000, mailpit SMTP :1025 /
+UI :8025 (docker compose).
 
 ## Constraints that will bite you
 

@@ -116,6 +116,20 @@ the same trigger-written, hash-chained audit trail records every change with
 full before and after images — and deleting a mis-scheduled visit leaves an
 audited tombstone rather than a silent gap.
 
+## Digest notifications
+
+Nothing here requires anyone to remember to look: `pnpm digest` (ADR-0017)
+emails each study's oversight summary — expiring and expired documents,
+overdue visits, action items, issues, and milestones, with a broken audit
+chain leading the message — to everyone holding study-wide admin or
+trial-ops access. The digest is a pure function of the same derived views
+the dashboard reads, computed at send time: no notification state, no
+subscription list, nothing that can drift from the record. Schedule it with
+cron at whatever cadence the team wants; `SMTP_URL` names the relay (the
+dev stack ships [mailpit](https://mailpit.axllent.org/) on
+`smtp://localhost:1025`, inbox UI on `:8025`), and without it the job
+prints to stdout.
+
 ## Reading it all from code
 
 Every capability here ships in the OpenAPI spec, and the four `v_*` views are

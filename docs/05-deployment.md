@@ -84,6 +84,26 @@ pnpm validation:artifacts                # OQ + traceability, file alongside
 
 Do **not** run `pnpm db:seed` against a pilot database — it truncates.
 
+## Digest notifications
+
+`pnpm digest` (ADR-0017) emails each study's oversight digest — expiring and
+expired documents, overdue visits, action items, issues, milestones, and any
+audit-chain failure — to everyone holding a study-wide `admin` or `trial_ops`
+grant. It is stateless: a pure function of the derived views at send time,
+safe to rerun, with nothing to sync. Schedule it with cron at whatever
+cadence the team wants:
+
+```cron
+# weekday mornings at 07:00 local
+0 7 * * 1-5  cd /srv/ctms-core && pnpm digest
+```
+
+Configuration is three env vars: `SMTP_URL` (the relay; the compose file's
+mailpit on `smtp://localhost:1025` for dev, inbox UI on :8025),
+`DIGEST_FROM`, and optionally `DIGEST_TO` to override the derived recipient
+list. Without `SMTP_URL` the job prints to stdout instead of sending
+(`--dry-run` forces that; `--study <protocol>` limits to one study).
+
 ## Backups and verification
 
 - Postgres: continuous archiving or the managed service's PITR; test restore

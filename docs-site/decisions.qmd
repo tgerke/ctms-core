@@ -182,6 +182,18 @@ waiver, waived rows leave the completeness denominator, and lifting a waiver
 is itself a recorded fact. This closed the roadmap's #1 and #3 gaps
 (ADR-0014) in the same change.
 
+## ADR-0017 — Digest notifications are a stateless job over the derived views
+
+`pnpm digest` queries the same views the dashboard reads, composes one
+plain-text oversight email per study (expiring/expired documents, overdue
+visits, action items, issues, milestones — a broken audit chain leads the
+message), and sends it to everyone holding a study-wide admin or trial-ops
+grant. No notification table, no subscription list, no read state: the
+digest is a pure function of the record at send time, so it can never
+disagree with the dashboard. Cron owns the cadence, the mail system owns
+delivery, and the dev stack ships mailpit for parity — the same pattern
+MinIO provides for object storage.
+
 ---
 
 Three of these — ADR-0004, ADR-0006, and ADR-0010 — are the same idea applied

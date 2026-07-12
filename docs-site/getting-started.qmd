@@ -17,7 +17,7 @@ Standing it up is a developer task; once it's running, the
 ```sh
 cp .env.example .env
 pnpm install
-pnpm db:up        # Postgres 16 in Docker, on port 5433
+pnpm db:up        # Docker: Postgres 16 (:5433), MinIO, mailpit (SMTP :1025, UI :8025)
 pnpm db:migrate
 pnpm db:seed      # demo study: 4 sites, 12 staff, realistic gaps
 pnpm dev          # API on :8787, web on :5173
@@ -29,6 +29,10 @@ Then open:
   visit lifecycle, audit timelines
 - <http://localhost:8787/docs> — interactive API reference, generated from the
   OpenAPI 3.1 spec at `/openapi.json`
+
+Want the morning-email view? Uncomment `SMTP_URL` in `.env` and run
+`pnpm digest` — the oversight digest for the demo study lands in mailpit at
+<http://localhost:8025>.
 
 ## What the seed gives you
 

@@ -17,6 +17,13 @@ export {
   type UploadInput,
 } from "./documents.js";
 export {
+  attentionCount,
+  collectDigest,
+  digestRecipients,
+  renderDigest,
+  type DigestData,
+} from "./digest.js";
+export {
   achieveMilestone,
   createActionItem,
   createIssue,

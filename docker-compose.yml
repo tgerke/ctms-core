@@ -35,6 +35,20 @@ services:
       timeout: 2s
       retries: 15
 
+  # Dev SMTP sink for digest notifications (ADR-0017): pnpm digest sends to
+  # :1025, the inbox UI is on :8025. Production points SMTP_URL at a real
+  # relay instead.
+  mailpit:
+    image: axllent/mailpit
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 2s
+      timeout: 2s
+      retries: 15
+
 volumes:
   pgdata:
   miniodata:

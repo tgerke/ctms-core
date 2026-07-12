@@ -63,6 +63,14 @@ feature comparison is meaningless without them.
   `waived` instead of `missing`, leaves the completeness denominator, and a
   filed document always wins over the waiver. Lifting a waiver is itself a
   recorded fact, never a delete.
+- **Notifications and scheduled reports** — shipped as the stateless digest
+  job (ADR-0017): `pnpm digest`, run from cron at whatever cadence the team
+  wants, emails each study's expiring/expired documents, overdue visits,
+  action items, issues, and milestones — with a broken audit chain leading
+  the message — to everyone holding study-wide admin/trial-ops access. What
+  remains is the per-user subscription and flash-report scheduling UI
+  incumbents ship (Veeva's any-frequency flash reports); the daily-use hole
+  — nothing emails anyone — is closed.
 
 ## Genuine gaps
 
@@ -73,16 +81,6 @@ Cross-study portfolio views are a standard CTMS selling point (Medidata
 Visual Analytics combines data across studies). A study switcher is the
 small version; portfolio rollups across `v_study_site_completeness` are the
 real version, and the views make them queries.
-
-### Notifications and scheduled reports
-
-Nothing emails anyone. Expiring credentials, overdue action items, overdue
-visits, and broken-chain alerts are all visible in the UI and the views, but
-only to someone who looks. Veeva schedules flash reports at any frequency;
-Medidata sends automatic notifications; Florence notifies on workflow
-distribution. A digest job consuming the existing `v_*` views is the obvious
-shape — the derived-status design means there is no state to sync, only a
-query to run and send.
 
 ### TMF transfer and inspection export
 
@@ -126,14 +124,14 @@ structured DoA/training logs would be its first real test.
 
 ## If we built next
 
-1. **Expiry/overdue digest notifications.** Highest oversight value per unit
-   effort — the views already compute everything; a scheduled job formats
-   and sends.
-2. **Task assignment and review queues.** With onboarding solved, the next
-   daily-use hole: pending review is a list, not a queue, and nothing is
-   assignable to a named reviewer with a due date.
-3. **Document search.** Metadata search first (the views make it a query);
+1. **Task assignment and review queues.** The next daily-use hole: pending
+   review is a list, not a queue, and nothing is assignable to a named
+   reviewer with a due date.
+2. **Document search.** Metadata search first (the views make it a query);
    full-text over document content is the larger second step.
+3. **TMF transfer and inspection export.** The CDISC Exchange Mechanism
+   package; the content-addressed store already has every checksum the
+   standard wants.
 
 ## Sources
 
