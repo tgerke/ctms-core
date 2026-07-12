@@ -24,7 +24,8 @@ export {
   renderDigest,
   type DigestData,
 } from "./digest.js";
-export { collectTmfExport, type TmfExportData } from "./export.js";
+export { blobExtension, collectTmfExport, type TmfExportData } from "./export.js";
+export { buildExchangeXml, EmsMappingError, sriSha256, type EmsOptions } from "./ems.js";
 export {
   achieveMilestone,
   createActionItem,

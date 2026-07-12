@@ -548,6 +548,7 @@ function DirectorySection() {
   const [siteOrg, setSiteOrg] = useState("");
   const [city, setCity] = useState("");
   const [state, setState] = useState("");
+  const [country, setCountry] = useState("");
   const [err, setErr] = useState<unknown>(null);
 
   return (
@@ -622,6 +623,7 @@ function DirectorySection() {
                 name: siteName.trim(),
                 city: city.trim() || undefined,
                 state: state.trim() || undefined,
+                country: country.trim().toUpperCase() || undefined,
               },
               {
                 onError: (e) => setErr(e),
@@ -629,6 +631,7 @@ function DirectorySection() {
                   setSiteName("");
                   setCity("");
                   setState("");
+                  setCountry("");
                 },
               },
             );
@@ -667,6 +670,15 @@ function DirectorySection() {
             placeholder="State"
             className={`w-16 ${inputCls}`}
             aria-label="State (optional)"
+          />
+          {/* ISO 3166-1 alpha-3; the eTMF-EMS <COUNTRYID> for the site's documents (ADR-0024) */}
+          <input
+            value={country}
+            onChange={(e) => setCountry(e.target.value)}
+            placeholder="USA"
+            maxLength={3}
+            className={`w-16 ${inputCls}`}
+            aria-label="Country code, ISO 3166-1 alpha-3 (optional)"
           />
           <button
             type="submit"

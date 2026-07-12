@@ -138,8 +138,17 @@ When the study transfers, archives, or gets inspected, `pnpm export-tmf`
 content hash they signed, returns, waivers, the completeness snapshot —
 and the entire hash-chained audit trail. The receiving party checks it with
 nothing but `shasum -a 256 -c manifest.sha256`; a single altered byte fails.
-It is deliberately not CDISC eTMF-EMS exchange.xml yet — the
-[decision log](decisions.qmd) records why and what unblocks that.
+
+Adding `--ems <agreement-id>` (ADR-0024) puts a CDISC eTMF-EMS v1.0.2
+`exchange.xml` in the package — the industry interchange inventory, one
+`<OBJECT>` per document version, validated against the official schema on
+every export. The agreement id is the SPECIFICATIONID of the exchange
+agreement between the parties; there is no default, because an export
+cannot claim an agreement nobody made. EMS output requires the verbatim
+TMF Reference Model import (`pnpm db:import-tmf`): the standard's mandatory
+unique IDs and model version are read from the licensed spreadsheet, never
+invented, and the export refuses — naming every gap — until they are on
+record.
 
 ## Reading it all from code
 

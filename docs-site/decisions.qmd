@@ -231,8 +231,8 @@ eTMF-EMS conformance: the EMS text is not in the verified source library,
 and this project does not write a standard's file layout from model memory
 (ADR-0012) — a plausible exchange.xml that misnames one element is worse
 than an honest package that never claimed it. The manifest carries the
-fields an EMS serializer would map; obtaining the EMS v1.0.x text is the
-unblock.
+fields an EMS serializer would map; obtaining the EMS v1.0.x text was the
+unblock, and ADR-0024 followed the day it landed.
 
 ## ADR-0021 — Multi-study is a rollup query and a selection, not a second system
 
@@ -277,6 +277,23 @@ site_staff and admin only: monitors read every log, but the log is the
 site's record of itself. The signed DoA log document (artifact 05.03.01)
 remains the authoritative Part 11 record; entry-level e-signatures are
 named future work, not claimed.
+
+## ADR-0024 — eTMF-EMS exchange.xml is a serialization over the export package, with nothing invented
+
+The conformance ADR-0020 deliberately left unclaimed, claimed the day it
+could be: the eTMF-EMS v1.0.2 spec and official XSD entered the verified
+source library, and `pnpm export-tmf -- --study <p> --ems <agreement-id>`
+now writes an `exchange.xml` — one `<OBJECT>` per document version over the
+same content-addressed files — validated against the official schema on
+every export. Reading the actual text vindicated ADR-0012 twice: the
+normative XSD spells two elements differently from the spec's own tables
+(`RENTENTIONDATE`, `USEROID`), exactly the kind of detail a from-memory
+serializer gets plausibly wrong. The standard's mandatory facts the schema
+didn't carry — TMF RM unique IDs, the model version, site countries — are
+recorded by the verbatim importer and the admin surface, never invented:
+the export refuses, listing every gap, until they are on record. What the
+standard's tags cannot express rides in its own `<METADATA>` extension
+point, so the mapping loses nothing.
 
 ---
 

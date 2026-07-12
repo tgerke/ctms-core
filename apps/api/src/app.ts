@@ -1711,6 +1711,7 @@ export function buildApp(db: Db, sql: Sql) {
                 name: z.string().trim().min(1),
                 city: z.string().optional(),
                 state: z.string().optional(),
+                country: z.string().regex(/^[A-Z]{3}$/, "ISO 3166-1 alpha-3").optional(),
               }),
             },
           },
@@ -1728,6 +1729,7 @@ export function buildApp(db: Db, sql: Sql) {
         name: body.name,
         city: body.city ?? null,
         state: body.state ?? null,
+        country: body.country ?? null,
       });
       return c.json({ id: created.id }, 201);
     },

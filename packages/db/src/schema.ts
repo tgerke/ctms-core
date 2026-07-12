@@ -112,9 +112,22 @@ export const tmfArtifact = pgTable(
     code: text("code").notNull(), // e.g. "01.01.01"
     name: text("name").notNull(),
     purpose: text("purpose"),
+    // TMF RM "Unique ID Number" column, the eTMF-EMS <UNIQUEID> (ADR-0024).
+    // Written only by the verbatim importer; NULL for the seeded illustrative
+    // subset (ADR-0005), which is why EMS export requires the import first.
+    uniqueId: integer("unique_id").unique(),
   },
   (t) => [uniqueIndex("tmf_artifact_code_idx").on(t.code)],
 );
+
+// Deployment-level reference facts, e.g. which TMF RM version the verbatim
+// importer loaded ('tmf_rm_version' — the eTMF-EMS TMFRMVERSION, ADR-0024).
+// Written by tooling, never by request handlers; audited like everything else.
+export const appMeta = pgTable("app_meta", {
+  key: text("key").primaryKey(),
+  value: text("value").notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
 
 // ---------------------------------------------------------------------------
 // Organizational spine
@@ -160,6 +173,9 @@ export const site = pgTable("site", {
   name: text("name").notNull(),
   city: text("city"),
   state: text("state"),
+  // ISO 3166-1 alpha-3, the eTMF-EMS <COUNTRYID> for site-level objects
+  // (ADR-0024). Nullable: EMS export fails loudly when a site lacks it.
+  country: text("country"),
 });
 
 export const studySite = pgTable(

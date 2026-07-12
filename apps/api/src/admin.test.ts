@@ -72,6 +72,9 @@ describe("site onboarding (ADR-0016)", () => {
       name: `Test Site ${suffix}`,
       city: "Testville",
       state: "OR",
+      // EMS <COUNTRYID> (ADR-0024): fixture sites carry a country so the
+      // exchange.xml test can serialize the study they attach to.
+      country: "USA",
     });
     expect(siteRes.status).toBe(201);
     siteId = ((await siteRes.json()) as { id: string }).id;

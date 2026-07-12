@@ -6,10 +6,9 @@ import { expectedDocuments } from "./queries.js";
 // record. The package is verifiable with standard tooling (per-file sha256
 // in the manifest and a shasum-format sidecar); the content-addressed store
 // means every document version already carries the hash the receiving side
-// checks. Deliberately NOT claimed as CDISC eTMF-EMS output: the EMS text
-// is not in the verified source library, and per ADR-0012 its exchange.xml
-// layout is not written from model memory — the manifest carries the fields
-// a conformant serializer would map.
+// checks. CDISC eTMF-EMS exchange.xml is an optional serialization over this
+// same data (ems.ts, ADR-0024), written only when the mandatory EMS facts —
+// imported TMF RM unique IDs, model version, site countries — are present.
 
 export interface TmfExportData {
   study: Record<string, unknown>;
@@ -19,6 +18,17 @@ export interface TmfExportData {
   chain: { events: number; valid: boolean; head_hash: string | null };
   /** Unique content hashes across all versions, with size and mime. */
   blobs: { sha256: string; size_bytes: number; mime_type: string }[];
+  /**
+   * TMF RM version the verbatim importer recorded (app_meta.tmf_rm_version),
+   * the eTMF-EMS TMFRMVERSION. Null until `pnpm db:import-tmf` has run —
+   * EMS serialization refuses without it (ADR-0024).
+   */
+  tmfRmVersion: string | null;
+}
+
+/** One extension per mime, shared by the package writer and exchange.xml. */
+export function blobExtension(mimeType: string): string {
+  return mimeType === "application/pdf" ? "pdf" : "bin";
 }
 
 export async function collectTmfExport(sql: Sql, studyId: string): Promise<TmfExportData> {
@@ -32,8 +42,10 @@ export async function collectTmfExport(sql: Sql, studyId: string): Promise<TmfEx
   const documents = await sql`
     SELECT d.id, d.title, d.status, d.effective_date, d.expires_at, d.created_at,
            ta.code AS artifact_code, ta.name AS artifact_name,
+           ta.unique_id AS artifact_unique_id,
            tsec.code AS section_code, tz.number AS zone_number, tz.name AS zone_name,
-           ss.site_number, si.name AS site_name,
+           ss.id AS study_site_id, ss.site_number, si.name AS site_name,
+           si.country AS site_country,
            p.given_name AS person_given_name, p.family_name AS person_family_name,
            p.email AS person_email,
            coalesce(v.versions, '[]'::json) AS versions,
@@ -48,6 +60,7 @@ export async function collectTmfExport(sql: Sql, studyId: string): Promise<TmfEx
     LEFT JOIN person p ON p.id = d.person_id
     LEFT JOIN LATERAL (
       SELECT json_agg(json_build_object(
+               'id', dv.id,
                'version_number', dv.version_number, 'sha256', dv.sha256,
                'file_name', dv.file_name, 'mime_type', dv.mime_type,
                'size_bytes', dv.size_bytes, 'uploaded_at', dv.uploaded_at,
@@ -105,6 +118,9 @@ export async function collectTmfExport(sql: Sql, studyId: string): Promise<TmfEx
     WHERE d.study_id = ${studyId}
     ORDER BY dv.sha256`;
 
+  const [rmVersion] = await sql`
+    SELECT value FROM app_meta WHERE key = 'tmf_rm_version'`;
+
   return {
     study: study as Record<string, unknown>,
     documents: documents as unknown as Record<string, unknown>[],
@@ -116,5 +132,6 @@ export async function collectTmfExport(sql: Sql, studyId: string): Promise<TmfEx
       head_hash: (last?.hash as string | undefined) ?? null,
     },
     blobs: blobs as unknown as TmfExportData["blobs"],
+    tmfRmVersion: (rmVersion?.value as string | undefined) ?? null,
   };
 }

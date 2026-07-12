@@ -4,6 +4,7 @@
  *
  *   pnpm export-tmf -- --study CORC-2201            # into ./tmf-export-…
  *   pnpm export-tmf -- --study CORC-2201 --out /tmp/handover
+ *   pnpm export-tmf -- --study CORC-2201 --ems <agreement-id> [--event <id>]
  *
  * Package layout:
  *   manifest.json        study, counts, audit-chain head, format marker
@@ -11,19 +12,24 @@
  *   expected-status.json v_expected_document_status snapshot (incl. waivers)
  *   audit-trail.jsonl    the full hash-chained audit trail, one event/line
  *   files/<sha256>.<ext> content-addressed document bytes
+ *   exchange.xml         CDISC eTMF-EMS v1.0.2 batch (only with --ems)
  *   manifest.sha256      shasum -c compatible checksums of every file above
  *
  * Verify on the receiving side:  shasum -a 256 -c manifest.sha256
  *
- * Not CDISC eTMF-EMS output (deliberately unclaimed — ADR-0020): the
- * manifest carries the metadata and per-file checksums a conformant
- * exchange.xml serializer would map once the standard's text is in the
- * verified source library.
+ * --ems <agreement-id> adds CDISC eTMF-EMS serialization (ADR-0024): the
+ * argument is the SPECIFICATIONID, the identifier of the exchange agreement
+ * between the transferring parties (spec §4.3). It requires the verbatim
+ * TMF RM import (`pnpm db:import-tmf`) — unique IDs and the model version
+ * are never invented — and the XML is validated against the official XSD
+ * (tools/ems/) before the export claims success.
  */
+import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { mkdirSync, writeFileSync } from "node:fs";
-import { join, resolve } from "node:path";
-import { collectTmfExport } from "@ctms/core";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { blobExtension, buildExchangeXml, collectTmfExport, EmsMappingError } from "@ctms/core";
 import { createDb, getBlob, loadEnv } from "@ctms/db";
 
 loadEnv();
@@ -35,9 +41,13 @@ const flag = (name: string) => {
 };
 const studyFilter = flag("--study");
 if (!studyFilter) {
-  console.error("usage: pnpm export-tmf -- --study <protocol_number|id> [--out <dir>]");
+  console.error(
+    "usage: pnpm export-tmf -- --study <protocol_number|id> [--out <dir>] [--ems <agreement-id>] [--event <id>]",
+  );
   process.exit(1);
 }
+const emsAgreementId = flag("--ems");
+const emsEventId = flag("--event");
 
 const { sql } = createDb();
 const [study] = await sql`
@@ -73,7 +83,7 @@ for (const blob of data.blobs) {
     missing++;
     continue;
   }
-  const ext = blob.mime_type === "application/pdf" ? "pdf" : "bin";
+  const ext = blobExtension(blob.mime_type);
   const actual = sha256Of(new Uint8Array(bytes));
   if (actual !== blob.sha256) {
     console.error(`HASH MISMATCH ${blob.sha256}: store returned ${actual}`);
@@ -87,9 +97,53 @@ writeFile("documents.json", JSON.stringify(data.documents, null, 2));
 writeFile("expected-status.json", JSON.stringify(data.expected, null, 2));
 writeFile("audit-trail.jsonl", data.auditEvents.map((e) => JSON.stringify(e)).join("\n") + "\n");
 
+// CDISC eTMF-EMS batch (ADR-0024), validated against the official XSD
+// before the export claims success (spec §4.1). Written before the manifest
+// so its checksum is covered like every other file.
+let emsValidated = false;
+if (emsAgreementId) {
+  let xml: string;
+  try {
+    xml = buildExchangeXml(data, { agreementId: emsAgreementId, eventId: emsEventId });
+  } catch (e) {
+    if (e instanceof EmsMappingError) {
+      console.error(e.message);
+      await sql.end();
+      process.exit(1);
+    }
+    throw e;
+  }
+  writeFile("exchange.xml", xml);
+  const xsd = join(dirname(fileURLToPath(import.meta.url)), "ems", "TmfReferenceModelExchange.xsd");
+  try {
+    execFileSync("xmllint", ["--noout", "--schema", xsd, join(out, "exchange.xml")], {
+      stdio: ["ignore", "ignore", "pipe"],
+    });
+    emsValidated = true;
+  } catch (e) {
+    const err = e as NodeJS.ErrnoException & { stderr?: Buffer };
+    if (err.code === "ENOENT") {
+      console.error("xmllint not found — exchange.xml written but NOT schema-validated");
+    } else {
+      console.error(`exchange.xml FAILS XSD validation:\n${err.stderr?.toString() ?? err}`);
+    }
+    process.exitCode = 1;
+  }
+}
+
 const manifest = {
   format: "ctms-core-tmf-export/1",
   generated_at: new Date().toISOString(),
+  ...(emsAgreementId
+    ? {
+        ems: {
+          standard: "CDISC eTMF-EMS 1.0.2",
+          specification_id: emsAgreementId,
+          tmf_rm_version: data.tmfRmVersion,
+          xsd_validated: emsValidated,
+        },
+      }
+    : {}),
   study: data.study,
   counts: {
     documents: data.documents.length,
@@ -113,6 +167,12 @@ console.log(
     `${manifest.counts.unique_files} files, ${manifest.counts.audit_events} audit events ` +
     `(chain ${data.chain.valid ? "verified" : "BROKEN"}) → ${out}`,
 );
+if (emsAgreementId) {
+  console.log(
+    `exchange.xml: eTMF-EMS 1.0.2, TMF RM ${data.tmfRmVersion}, agreement ${emsAgreementId} ` +
+      `(XSD ${emsValidated ? "validated" : "NOT validated"})`,
+  );
+}
 console.log(`verify with:  cd ${out} && shasum -a 256 -c manifest.sha256`);
 if (missing > 0) {
   console.error(`${missing} blob(s) missing or mismatched — package is INCOMPLETE`);

@@ -55,3 +55,8 @@ worse than an honest package that never claimed conformance.
   additional serialization of the same collected data, not a rework.
 - Action for the source library: obtaining eTMF-EMS v1.0.2 (tmfrefmodel.com/ems)
   and adding it under `sources/CDISC/TMF/` is the unblock for conformance.
+
+**Follow-through (2026-07-12)**: the EMS text and official XSD landed in the
+source library and the serialization shipped exactly as point 4 anticipated —
+`--ems <agreement-id>` adds a schema-validated exchange.xml over the same
+collected data (ADR-0024).

@@ -16,6 +16,7 @@ pnpm validation:artifacts    # OQ report + traceability matrix (runs the suite)
 pnpm db:import-tmf -- file.xlsx   # official CDISC TMF RM spreadsheet, verbatim
 pnpm digest                  # oversight digest email per study (ADR-0017)
 pnpm export-tmf -- --study CORC-2201   # verifiable transfer/inspection package (ADR-0020)
+pnpm export-tmf -- --study CORC-2201 --ems <agreement-id>  # + eTMF-EMS exchange.xml; needs db:import-tmf first (ADR-0024)
 pnpm db:extract-text         # backfill content search text for pre-existing versions (ADR-0022)
 ```
 
