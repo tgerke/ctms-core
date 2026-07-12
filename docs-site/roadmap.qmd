@@ -103,12 +103,20 @@ restated here because a feature comparison is meaningless without them.
   content-addressed bytes, the full metadata (signatures with their §11.70
   hashes, returns, waivers, completeness snapshot), and the entire
   hash-chained audit trail, with a `shasum -c` compatible manifest — a
-  flipped byte fails verification with stock tooling. Deliberately not
-  claimed as CDISC eTMF-EMS output: the EMS text is not in the verified
-  source library, and per ADR-0012 its exchange.xml layout is not written
-  from model memory. EMS serialization is the remaining step, unblocked the
-  day the standard's text is on hand; purpose-built in-app auditor UX also
-  remains.
+  flipped byte fails verification with stock tooling. Initially shipped
+  without CDISC eTMF-EMS output (the EMS text was not yet in the verified
+  source library — ADR-0012); what remains is purpose-built in-app auditor
+  UX.
+- **eTMF-EMS serialization** — shipped as a schema-validated layer over the
+  export package (ADR-0024): `pnpm export-tmf -- --study <p> --ems
+  <agreement-id>` adds an exchange.xml (eTMF-EMS v1.0.2) validated against
+  the official XSD on every export. The three facts the standard demands
+  that the schema didn't carry — TMF RM unique IDs, the model version, site
+  countries — arrive via the verbatim importer and the admin surface, never
+  from model memory: export refuses, listing every gap, until
+  `pnpm db:import-tmf` has loaded the licensed spreadsheet. What remains is
+  the import side (reading a partner's exchange.xml into the filing
+  endpoint, ADR-0011).
 - **Site-seat log workflows** — shipped as structured facts on a site-scoped
   seat (ADR-0023): a `site_staff` grant lands its holder on their site's page
   and nowhere else, and delegation-of-authority and training logs are dated
@@ -140,10 +148,9 @@ new system.
 
 ## If we built next
 
-1. **eTMF-EMS serialization of the export package.** Blocked on getting the
-   EMS v1.0.x text into the verified source library (ADR-0012/0020); once
-   there, exchange.xml is a mapping over the manifest the exporter already
-   writes.
+Nothing is queued: eTMF-EMS serialization, the last listed item, shipped
+2026-07-12 (ADR-0024). Candidates live in the "what remains" notes above —
+EMS import, auditor UX, site-side depth, cross-study analytics.
 
 ## Sources
 
@@ -155,3 +162,8 @@ Vendor and standards pages verified 2026-07-10 (ADR-0014):
 - [Florence eBinders FAQ](https://www.florencehc.com/florence-ebinders-faq/)
 - TMF Reference Model, ["Exchange Mechanism Standard"](https://tmfrefmodel.com/ems)
 - CDISC, ["Exchange Mechanism"](https://www.cdisc.org/standards/exchange-mechanism)
+
+Added 2026-07-12 (ADR-0024): eTMF-EMS Specification v1.0.2 and the official
+XSD are in the verified source library
+(`~/claude-clinical-skills/sources/CDISC/TMF/`, hashes in its manifest); the
+public-domain XSD is vendored at `tools/ems/`.

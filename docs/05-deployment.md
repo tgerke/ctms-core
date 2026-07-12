@@ -119,8 +119,16 @@ cd <package> && shasum -a 256 -c manifest.sha256
 
 The exporter re-hashes every blob as it copies and exits non-zero on any
 mismatch, missing file, or broken audit chain. The package is versioned by
-its `format` marker (`ctms-core-tmf-export/1`); it is deliberately not
-CDISC eTMF-EMS exchange.xml — see ADR-0020 for why and what unblocks that.
+its `format` marker (`ctms-core-tmf-export/1`).
+
+Adding `--ems <agreement-id>` (ADR-0024) includes a CDISC eTMF-EMS v1.0.2
+`exchange.xml`, validated against the official schema (vendored at
+`tools/ems/`) before the export claims success. The agreement id is the
+SPECIFICATIONID of the exchange agreement between the transferring parties;
+there is no default. It requires the verbatim TMF RM import
+(`pnpm db:import-tmf`), which records the model version and the per-artifact
+unique IDs the standard mandates — the export refuses, naming every gap,
+rather than invent them.
 
 ## Backups and verification
 

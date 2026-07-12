@@ -988,13 +988,20 @@ export const useCreateOrganization = () =>
 
 export const useCreateSite = () =>
   useAdminMutation(
-    (input: { organizationId: string; name: string; city?: string; state?: string }) => [
+    (input: {
+      organizationId: string;
+      name: string;
+      city?: string;
+      state?: string;
+      country?: string;
+    }) => [
       "/sites",
       jsonInit("POST", {
         organization_id: input.organizationId,
         name: input.name,
         ...(input.city ? { city: input.city } : {}),
         ...(input.state ? { state: input.state } : {}),
+        ...(input.country ? { country: input.country } : {}),
       }),
     ],
   );

@@ -37,7 +37,7 @@ await sql`TRUNCATE audit_event, signature, document_return, document_version, do
   enrollment_report, study_milestone, access_grant, delegation, training_record,
   document, requirement_rule, study_site_role, study_site, protocol_version,
   requirement_rule, person, site, study, organization,
-  tmf_artifact, tmf_section, tmf_zone RESTART IDENTITY CASCADE`;
+  tmf_artifact, tmf_section, tmf_zone, app_meta RESTART IDENTITY CASCADE`;
 
 // --- TMF taxonomy -----------------------------------------------------------
 const artifactId = new Map<string, number>();
@@ -114,7 +114,7 @@ for (const spec of siteSpecs) {
     .returning();
   const [site] = await db
     .insert(s.site)
-    .values({ organizationId: org!.id, name: spec.name, city: spec.city, state: spec.state })
+    .values({ organizationId: org!.id, name: spec.name, city: spec.city, state: spec.state, country: "USA" })
     .returning();
   const [ss] = await db
     .insert(s.studySite)

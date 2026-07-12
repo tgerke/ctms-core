@@ -22,6 +22,8 @@ interface ArtifactRow {
   artifactCode: string;
   artifactName: string;
   purpose: string | null;
+  /** TMF RM "Unique ID Number" — the eTMF-EMS <UNIQUEID> (ADR-0024). */
+  uniqueId: number | null;
 }
 
 const ARTIFACT_CODE = /^(\d{2})\.(\d{2})\.(\d{2,})$/;
@@ -45,6 +47,7 @@ interface HeaderMap {
     artifactNumber: number;
     artifactName: number;
     purpose?: number;
+    uniqueId?: number;
   };
 }
 
@@ -80,9 +83,28 @@ function findHeader(sheet: ExcelJS.Worksheet): HeaderMap | null {
           sectionNumber: find(/section/, /(number|num\b|#)/),
           sectionName: find(/section/, /name/),
           purpose: find(/purpose/),
+          uniqueId: find(/unique/, /id/),
         },
       };
     }
+  }
+  return null;
+}
+
+/**
+ * The model version as the sheet states it (e.g. a "Version 3.3.1" banner
+ * cell above the header row) — recorded to app_meta as the eTMF-EMS
+ * TMFRMVERSION (ADR-0024). Verbatim or nothing; never guessed.
+ */
+function findModelVersion(sheet: ExcelJS.Worksheet, headerRow: number): string | null {
+  for (let r = 1; r < headerRow; r++) {
+    const row = sheet.getRow(r);
+    let found: string | null = null;
+    row.eachCell((cell) => {
+      const m = cellText(cell.value).match(/version\s*:?\s*(\d+(?:\.\d+){0,2})\b/i);
+      if (m && !found) found = m[1]!;
+    });
+    if (found) return found;
   }
   return null;
 }
@@ -91,6 +113,7 @@ export function parseWorkbook(workbook: ExcelJS.Workbook): {
   rows: ArtifactRow[];
   skipped: number;
   sheetName: string;
+  modelVersion: string | null;
 } {
   for (const sheet of workbook.worksheets) {
     const header = findHeader(sheet);
@@ -119,6 +142,7 @@ export function parseWorkbook(workbook: ExcelJS.Workbook): {
         skipped++;
         continue;
       }
+      const uniqueIdText = at(cols.uniqueId);
       rows.push({
         zoneNumber: Number(match[1]),
         zoneName: lastZoneName || `Zone ${Number(match[1])}`,
@@ -127,9 +151,17 @@ export function parseWorkbook(workbook: ExcelJS.Workbook): {
         artifactCode: code,
         artifactName: name,
         purpose: at(cols.purpose) || null,
+        uniqueId: /^\d+$/.test(uniqueIdText) ? Number(uniqueIdText) : null,
       });
     }
-    if (rows.length > 0) return { rows, skipped, sheetName: sheet.name };
+    if (rows.length > 0) {
+      return {
+        rows,
+        skipped,
+        sheetName: sheet.name,
+        modelVersion: findModelVersion(sheet, header.headerRow),
+      };
+    }
   }
   const sheets = workbook.worksheets.map((s) => s.name).join(", ");
   throw new Error(
@@ -141,6 +173,7 @@ export function parseWorkbook(workbook: ExcelJS.Workbook): {
 export async function importRows(
   sql: ReturnType<typeof createDb>["sql"],
   rows: ArtifactRow[],
+  modelVersion?: string | null,
 ): Promise<{ zones: number; sections: number; artifacts: number }> {
   const zones = new Map<number, string>();
   const sections = new Map<string, { zoneNumber: number; name: string }>();
@@ -164,11 +197,18 @@ export async function importRows(
     }
     for (const row of rows) {
       await tx`
-        INSERT INTO tmf_artifact (section_id, code, name, purpose)
-        VALUES ((SELECT id FROM tmf_section WHERE code = ${row.sectionCode}), ${row.artifactCode}, ${row.artifactName}, ${row.purpose})
+        INSERT INTO tmf_artifact (section_id, code, name, purpose, unique_id)
+        VALUES ((SELECT id FROM tmf_section WHERE code = ${row.sectionCode}), ${row.artifactCode}, ${row.artifactName}, ${row.purpose}, ${row.uniqueId})
         ON CONFLICT (code) DO UPDATE
           SET name = EXCLUDED.name, section_id = EXCLUDED.section_id,
-              purpose = coalesce(EXCLUDED.purpose, tmf_artifact.purpose)`;
+              purpose = coalesce(EXCLUDED.purpose, tmf_artifact.purpose),
+              unique_id = coalesce(EXCLUDED.unique_id, tmf_artifact.unique_id)`;
+    }
+    if (modelVersion) {
+      await tx`
+        INSERT INTO app_meta (key, value, updated_at)
+        VALUES ('tmf_rm_version', ${modelVersion}, now())
+        ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`;
     }
   });
   return { zones: zones.size, sections: sections.size, artifacts: rows.length };
@@ -182,12 +222,17 @@ async function main() {
   }
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.readFile(path);
-  const { rows, skipped, sheetName } = parseWorkbook(workbook);
+  const { rows, skipped, sheetName, modelVersion } = parseWorkbook(workbook);
 
   const { sql } = createDb();
-  const counts = await importRows(sql, rows);
+  const counts = await importRows(sql, rows, modelVersion);
 
   console.log(`sheet: ${sheetName}`);
+  console.log(
+    modelVersion
+      ? `model version: ${modelVersion} (recorded as app_meta.tmf_rm_version)`
+      : "model version: not found in sheet — EMS export will refuse until app_meta.tmf_rm_version is set",
+  );
   console.log(
     `imported: ${counts.zones} zones, ${counts.sections} sections, ${counts.artifacts} artifacts` +
       (skipped ? ` (${skipped} non-artifact rows skipped, e.g. sub-artifacts/notes)` : ""),

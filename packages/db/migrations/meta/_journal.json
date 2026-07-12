@@ -92,6 +92,13 @@
       "when": 1784084400000,
       "tag": "0012_site_seat_logs",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1784170800000,
+      "tag": "0013_ems_serialization",
+      "breakpoints": true
     }
   ]
 }

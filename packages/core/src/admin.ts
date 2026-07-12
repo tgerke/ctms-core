@@ -45,7 +45,14 @@ export async function createOrganization(
 export async function createSite(
   db: Db,
   actor: Actor,
-  input: { organizationId: string; name: string; city?: string | null; state?: string | null },
+  input: {
+    organizationId: string;
+    name: string;
+    city?: string | null;
+    state?: string | null;
+    /** ISO 3166-1 alpha-3 — the eTMF-EMS <COUNTRYID> for the site's documents (ADR-0024). */
+    country?: string | null;
+  },
 ) {
   return withActor(db, actor, async (tx) => {
     const rows = await tx
@@ -55,6 +62,7 @@ export async function createSite(
         name: input.name,
         city: input.city ?? null,
         state: input.state ?? null,
+        country: input.country ?? null,
       })
       .returning();
     return rows[0]!;
