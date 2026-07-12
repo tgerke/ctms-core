@@ -195,31 +195,66 @@ export async function portfolio(sql: Sql) {
 // --- Document search (ADR-0019) ---------------------------------------------
 
 /**
- * Metadata search over v_document_search: every whitespace token must appear
- * somewhere in the document's haystack (title, artifact taxonomy, site,
- * person, uploader, file names, filing source, status). Predictable
- * substring semantics — "04.01" finds the IRB zone, "raman license" finds
- * Dr. Raman's license — with no index to drift from the record.
+ * Search over v_document_search: every whitespace token must appear in the
+ * document's metadata haystack (title, artifact taxonomy, site, person,
+ * uploader, file names, filing source, status) or in its versions' extracted
+ * text (ADR-0022). Predictable substring semantics — "04.01" finds the IRB
+ * zone, "raman license" finds Dr. Raman's license, a phrase from inside the
+ * protocol finds the protocol — with no index to drift from the record.
  */
 export async function searchDocuments(
   sql: Sql,
   filter: { studyId: string; q: string; status?: string; limit?: number },
 ) {
-  const tokens = filter.q
+  const words = filter.q
     .toLowerCase()
     .split(/\s+/)
-    .filter((t) => t.length > 0)
-    .map((t) => `%${t.replace(/[%_\\]/g, (c) => `\\${c}`)}%`);
+    .filter((t) => t.length > 0);
+  const tokens = words.map((t) => `%${t.replace(/[%_\\]/g, (c) => `\\${c}`)}%`);
   if (tokens.length === 0) return [];
   const limit = Math.min(filter.limit ?? 50, 200);
-  return sql`
+  const rows = await sql`
     SELECT s.*
     FROM v_document_search s
     WHERE s.study_id = ${filter.studyId}
-      AND s.haystack LIKE ALL(${tokens})
+      AND concat_ws(' ', s.haystack, lower(coalesce(s.content_text, ''))) LIKE ALL(${tokens})
       AND (${filter.status ?? null}::text IS NULL OR s.status::text = ${filter.status ?? null})
     ORDER BY s.latest_uploaded_at DESC NULLS LAST, s.artifact_code
     LIMIT ${limit}`;
+  // The full extracted text stays in SQL (the view has it); the API carries a
+  // snippet around the content match instead.
+  return rows.map(({ content_text, haystack, ...row }) => {
+    const snippet = contentSnippet(content_text, haystack, words);
+    return {
+      ...row,
+      haystack,
+      matched_in_content: snippet !== null,
+      content_snippet: snippet,
+    };
+  });
+}
+
+/**
+ * Context around the first word found in the extracted text, preferring
+ * words the metadata alone would not explain (they are why the result is
+ * here). Null when the match is metadata-only.
+ */
+function contentSnippet(
+  content: string | null,
+  haystack: string,
+  words: string[],
+): string | null {
+  if (!content) return null;
+  const lower = content.toLowerCase();
+  const ordered = [...words.filter((w) => !haystack.includes(w)), ...words];
+  for (const word of ordered) {
+    const at = lower.indexOf(word);
+    if (at < 0) continue;
+    const start = Math.max(0, at - 60);
+    const end = Math.min(content.length, at + word.length + 100);
+    return `${start > 0 ? "…" : ""}${content.slice(start, end).trim()}${end < content.length ? "…" : ""}`;
+  }
+  return null;
 }
 
 // --- Admin directory reads (ADR-0016) --------------------------------------

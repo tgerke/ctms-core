@@ -11,6 +11,7 @@
     "migrate": "tsx src/migrate.ts",
     "seed": "tsx src/seed/index.ts",
     "import-tmf": "tsx src/import-tmf.ts",
+    "extract-text": "tsx src/extract-text.ts",
     "typecheck": "tsc --noEmit",
     "iq": "tsx src/iq.ts"
   },
@@ -18,7 +19,8 @@
     "@aws-sdk/client-s3": "^3.1083.0",
     "drizzle-orm": "^0.36.4",
     "exceljs": "^4.4.0",
-    "postgres": "^3.4.5"
+    "postgres": "^3.4.5",
+    "unpdf": "^1.6.2"
   },
   "devDependencies": {
     "drizzle-kit": "^0.28.1",

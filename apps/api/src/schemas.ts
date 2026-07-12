@@ -178,6 +178,11 @@ export const SearchResultSchema = z
     uploader_given_name: z.string().nullable(),
     uploader_family_name: z.string().nullable(),
     haystack: z.string(),
+    // Content full-text (ADR-0022): whether the extracted document text
+    // matched, and context around that match. The full text is SQL-only
+    // (v_document_search.content_text).
+    matched_in_content: z.boolean(),
+    content_snippet: z.string().nullable(),
   })
   .openapi("SearchResult");
 

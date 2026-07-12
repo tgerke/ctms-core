@@ -49,6 +49,8 @@ validation effort inherits architecture instead of retrofit.
    (isolation, per-tenant keys) remains a non-goal of this phase.
 5. **`expected_document` churn is unaudited by design** — placeholders are
    derived state (ADR-0004); the ground truth they derive from is fully audited.
+   The same stance covers `document_content_text` (ADR-0022): extracted search
+   text is rebuildable from the immutable, audited bytes at any time.
 
 Resolved since the first draft of this document: dev-token-only auth (now
 OIDC + RBAC, ADR-0008), stubbed signing re-authentication (§11.200 row above),

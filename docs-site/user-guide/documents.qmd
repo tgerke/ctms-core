@@ -10,12 +10,13 @@ version.
 ## Finding a document
 
 The search box in the header (or the search page it opens) looks across
-every document's title, TMF artifact, site, person, uploader, and file
-names. Every word you type must match, which makes narrowing natural: "1572"
-lists every Form FDA 1572, "1572 003" is site 003's. Artifact codes, site
-numbers, and people's names all work. Search covers the document *metadata*
-— what a document is, where it belongs, who it's about — not the text inside
-the files.
+every document's title, TMF artifact, site, person, uploader, file names —
+and the text inside the files themselves. Every word you type must match,
+which makes narrowing natural: "1572" lists every Form FDA 1572, "1572 003"
+is site 003's, and a phrase you remember from inside the monitoring plan
+finds the monitoring plan. When the match came from inside a document, the
+result shows a snippet of the surrounding text. (Scanned image-only PDFs
+have no extractable text, so they match by metadata only.)
 
 ## Uploading a document
 

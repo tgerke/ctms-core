@@ -17,9 +17,9 @@ const record = (level: Level, check: string, detail: string) =>
 const ok = (cond: boolean, check: string, detail: string) =>
   record(cond ? "PASS" : "FAIL", check, detail);
 
-// expected_document is derived state, deliberately unaudited (ADR-0004);
-// audit_event cannot audit itself.
-const AUDIT_EXEMPT = new Set(["expected_document", "audit_event"]);
+// expected_document (ADR-0004) and document_content_text (ADR-0022) are
+// derived state, deliberately unaudited; audit_event cannot audit itself.
+const AUDIT_EXEMPT = new Set(["expected_document", "document_content_text", "audit_event"]);
 
 async function main() {
   const { sql } = createDb();

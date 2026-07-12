@@ -217,7 +217,7 @@ sync: a search index is derived state that can drift from the record, which
 is the failure mode this system exists to avoid. Substring semantics keep
 codes and site numbers predictable ("04.01 002"); Postgres FTS with a
 generated indexed column is the documented scale path. Content full-text
-stays on the roadmap — safe to add later precisely because versions are
+followed as ADR-0022 — safe to add precisely because versions are
 immutable.
 
 ## ADR-0020 — TMF transfer is a verifiable package; EMS waits for the source text
@@ -243,6 +243,21 @@ with them. The header's study switcher is client state persisted like the
 theme, falling back to the first study when a re-seed regenerates ids, and
 the seed grew a second study (CORC-2202, a Phase 1b in startup) so the
 contrast is real. No portfolio tables, no aggregation jobs, nothing to sync.
+
+## ADR-0022 — Content full-text search is derived text of immutable bytes
+
+Search now reads what a document *says*, not only what it is filed as.
+Every uploaded version's text is extracted (PDF via pdf.js, `text/*`
+directly) into **document_content_text**, keyed by the same content hash as
+the blob store — extracted text of immutable bytes can never go stale, the
+property ADR-0019 named when it scoped this out. The table is derived state
+deliberately outside the audited record: no audit trigger, no immutability
+trigger, rebuildable any time with `pnpm db:extract-text`. Failures and
+unsupported types are recorded as rows, never block an upload, and scanned
+image-only PDFs simply match by metadata alone (OCR is a non-feature until
+a pilot needs it). Query semantics stay ADR-0019's substring-AND — each
+word must match the metadata haystack *or* the content — and results carry
+a snippet of the content match.
 
 ---
 

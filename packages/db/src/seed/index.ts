@@ -7,6 +7,7 @@
  * would not hold TRUNCATE).
  */
 import { createDb } from "../client.js";
+import { backfillContentText } from "../content-text.js";
 import * as s from "../schema.js";
 import { putBlob } from "../storage.js";
 import { makePdf } from "./pdf.js";
@@ -31,7 +32,7 @@ const monthsFromNow = (n: number) => monthsAgo(-n);
 // Attribute all seed writes in the audit trail.
 await sql`SELECT set_config('ctms.actor_label', 'seed', false)`;
 
-await sql`TRUNCATE audit_event, signature, document_return, document_version, expected_document,
+await sql`TRUNCATE audit_event, signature, document_return, document_version, document_content_text, expected_document,
   monitoring_visit_document, visit_action_item, issue, monitoring_visit,
   enrollment_report, study_milestone, access_grant,
   document, requirement_rule, study_site_role, study_site, protocol_version,
@@ -792,6 +793,14 @@ await sql`DO $$ BEGIN
 EXCEPTION WHEN duplicate_object THEN NULL; END $$`;
 await sql`GRANT USAGE ON SCHEMA public TO ctms_readonly`;
 await sql`GRANT SELECT ON ALL TABLES IN SCHEMA public TO ctms_readonly`;
+
+// --- Content text (ADR-0022) ---------------------------------------------------
+// Seed inserts versions directly, so derive their search text the same way a
+// first deployment would: the idempotent backfill.
+const contentCounts = await backfillContentText(sql);
+console.log(
+  `content text: ${contentCounts.extracted} extracted, ${contentCounts.failed} failed`,
+);
 
 // --- Summary -----------------------------------------------------------------
 const summary = await sql`

@@ -75,10 +75,12 @@ No pagination-by-folder, no per-document round trips, no XML exports: the
 completeness of a 4-site trial is three GETs.
 
 Finding a specific document is one more
-(`GET /studies/{id}/document-search?q=`, ADR-0019): every word in `q` must
-match the document's title, artifact taxonomy, site, person, uploader, file
-names, or filing source — `q=1572 003` finds site 003's Form FDA 1572.
-Metadata only; content full-text is on the roadmap.
+(`GET /studies/{id}/document-search?q=`, ADR-0019 + ADR-0022): every word in
+`q` must match the document's metadata (title, artifact taxonomy, site,
+person, uploader, file names, filing source) or the extracted text inside
+its versions — `q=1572 003` finds site 003's Form FDA 1572, and a phrase
+from inside the monitoring plan finds the monitoring plan. Content matches
+carry `matched_in_content` and a `content_snippet` of the surrounding text.
 
 The cross-study view is `GET /portfolio` (ADR-0021): one row per study with
 completeness counts, attention items, review-queue size, open issues,
