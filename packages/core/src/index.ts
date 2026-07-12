@@ -27,6 +27,21 @@ export {
 export { blobExtension, collectTmfExport, type TmfExportData } from "./export.js";
 export { buildExchangeXml, EmsMappingError, sriSha256, type EmsOptions } from "./ems.js";
 export {
+  emsSourceRef,
+  EmsImportError,
+  executeEmsImport,
+  mimeFromFileName,
+  parseExchangeXml,
+  parseSri,
+  planEmsImport,
+  type EmsBatch,
+  type EmsImportPlan,
+  type EmsImportResult,
+  type EmsObject,
+  type ImportContext,
+  type PlannedVersion,
+} from "./ems-import.js";
+export {
   achieveMilestone,
   createActionItem,
   createIssue,
@@ -77,6 +92,7 @@ export {
   documentAuditTrail,
   documentDetail,
   expectedDocuments,
+  filedVersions,
   listOrganizations,
   listPeople,
   listSites,

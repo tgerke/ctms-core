@@ -21,6 +21,7 @@ export const SiteCompletenessSchema = z
     site_name: z.string(),
     city: z.string().nullable(),
     state: z.string().nullable(),
+    country: z.string().nullable(),
     total: z.number().int(),
     current_count: z.number().int(),
     expiring_soon_count: z.number().int(),
@@ -304,10 +305,27 @@ export const TmfArtifactSchema = z
     id: z.number().int(),
     code: z.string(),
     name: z.string(),
+    // TMF RM "Unique ID Number": present only after the verbatim import
+    // (ADR-0024); the eTMF-EMS primary artifact-mapping key (ADR-0025).
+    unique_id: z.number().int().nullable(),
     section_name: z.string(),
     zone_name: z.string(),
   })
   .openapi("TmfArtifact");
+
+// What a source system already filed (ADR-0025): the read half of idempotent
+// filing over the ADR-0011 interface.
+export const FiledVersionSchema = z
+  .object({
+    document_id: z.string().uuid(),
+    document_status: z.string(),
+    version_id: z.string().uuid(),
+    version_number: z.number().int(),
+    source_ref: z.string().nullable(),
+    sha256: z.string().length(64),
+    uploaded_at: z.string(),
+  })
+  .openapi("FiledVersion");
 
 // --- Operational layer -------------------------------------------------------
 

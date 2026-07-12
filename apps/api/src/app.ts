@@ -20,6 +20,7 @@ import {
   endDelegation,
   endSiteRole,
   expectedDocuments,
+  filedVersions,
   recordTraining,
   siteEnrollment,
   siteOverview,
@@ -85,6 +86,7 @@ import {
   ErrorSchema,
   ExpectedDocumentSchema,
   ExpectedStatusSchema,
+  FiledVersionSchema,
   IssueCategorySchema,
   IssueSchema,
   IssueSeveritySchema,
@@ -709,6 +711,11 @@ export function buildApp(db: Db, sql: Sql) {
                 study_site_id: z.string().uuid().optional(),
                 person_id: z.string().uuid().optional(),
                 title: z.string().min(1),
+                // Always create a fresh document, even when a non-superseded
+                // one with the same artifact + scope exists — a filing system
+                // importing a partner's record must not merge it into a local
+                // one (ADR-0025).
+                force_new: z.enum(["true", "false"]).optional(),
                 // Filing provenance (ADR-0011): set by source systems (e.g. an
                 // EDC's filing worker), omitted for human uploads.
                 source_system: z.string().min(1).max(200).optional(),
@@ -750,6 +757,7 @@ export function buildApp(db: Db, sql: Sql) {
         fileName: form.file.name,
         mimeType: form.file.type || "application/octet-stream",
         bytes,
+        forceNew: form.force_new === "true",
         sourceSystem: form.source_system ?? null,
         sourceRef: form.source_ref ?? null,
       });
@@ -781,6 +789,78 @@ export function buildApp(db: Db, sql: Sql) {
       const detail = await documentDetail(sql, c.req.valid("param").documentId);
       if (!detail) return c.json({ error: "document not found" }, 404);
       return c.json(detail as never, 200);
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: "post",
+      path: "/documents/{documentId}/versions",
+      security,
+      summary: "Upload a new version of a specific document (multipart)",
+      description:
+        "Appends a version to exactly this document (ADR-0025) — no artifact/scope resolution, so a filing system can thread a partner record's iterations onto the document it created. The document goes back through review; a superseded document refuses.",
+      request: {
+        params: z.object({ documentId: z.string().uuid() }),
+        body: {
+          content: {
+            "multipart/form-data": {
+              schema: z.object({
+                file: z.custom<File>((v) => v instanceof File, "file required"),
+                source_system: z.string().min(1).max(200).optional(),
+                source_ref: z.string().min(1).max(500).optional(),
+              }),
+            },
+          },
+        },
+      },
+      responses: {
+        201: json(
+          z.object({
+            document_id: z.string().uuid(),
+            version_id: z.string().uuid(),
+            version_number: z.number().int(),
+            sha256: z.string().length(64),
+          }),
+          "Created",
+        ),
+        404: json(ErrorSchema, "Not found"),
+        409: json(ErrorSchema, "Document is superseded"),
+      },
+    }),
+    async (c) => {
+      const documentId = c.req.valid("param").documentId;
+      const form = c.req.valid("form");
+      const detail = await documentDetail(sql, documentId);
+      if (!detail) return c.json({ error: "document not found" }, 404);
+      const doc = detail.document as Record<string, unknown>;
+      const bytes = new Uint8Array(await form.file.arrayBuffer());
+      try {
+        const result = await uploadDocument(db, c.get("actor"), {
+          documentId,
+          tmfArtifactId: doc.tmf_artifact_id as number,
+          studyId: doc.study_id as string,
+          studySiteId: (doc.study_site_id as string | null) ?? null,
+          personId: (doc.person_id as string | null) ?? null,
+          title: doc.title as string,
+          fileName: form.file.name,
+          mimeType: form.file.type || "application/octet-stream",
+          bytes,
+          sourceSystem: form.source_system ?? null,
+          sourceRef: form.source_ref ?? null,
+        });
+        return c.json(
+          {
+            document_id: result.document.id,
+            version_id: result.version.id,
+            version_number: result.version.versionNumber,
+            sha256: result.sha256,
+          },
+          201,
+        );
+      } catch (e) {
+        return c.json({ error: e instanceof Error ? e.message : "upload failed" }, 409);
+      }
     },
   );
 
@@ -939,6 +1019,31 @@ export function buildApp(db: Db, sql: Sql) {
       });
       return c.json(rows as never, 200);
     },
+  );
+
+  app.openapi(
+    createRoute({
+      method: "get",
+      path: "/studies/{studyId}/filings",
+      security,
+      summary: "Versions a source system already filed into this study",
+      description:
+        "The read half of idempotent filing (ADR-0025): a source system asks what it has filed — by source_system and the source_ref values it chose (ADR-0011) — before re-sending, so interim transfers and re-runs never duplicate. The eTMF-EMS importer reads this before executing a batch.",
+      request: {
+        params: z.object({ studyId: z.string().uuid() }),
+        query: z.object({ source_system: z.string().trim().min(1) }),
+      },
+      responses: { 200: json(z.array(FiledVersionSchema), "Filed versions") },
+    }),
+    async (c) =>
+      c.json(
+        (await filedVersions(
+          sql,
+          c.req.valid("param").studyId,
+          c.req.valid("query").source_system,
+        )) as never,
+        200,
+      ),
   );
 
   // --- Review queue (ADR-0018) ---------------------------------------------

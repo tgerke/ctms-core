@@ -130,6 +130,22 @@ there is no default. It requires the verbatim TMF RM import
 unique IDs the standard mandates — the export refuses, naming every gap,
 rather than invent them.
 
+## Receiving a partner's TMF
+
+The other direction (ADR-0025): `pnpm import-ems -- --package <dir>` reads a
+partner's eTMF-EMS package and files it through the same audited endpoint
+every source system uses (ADR-0011), authenticating with an `ingest`-role
+token (`--token` or `CTMS_API_TOKEN`; dev: `dev-service-token`). It performs
+the standard's receiving-side checks first — XSD validation, checksum
+verification of every referenced file — and refuses the whole batch, naming
+every blocker at once, if anything cannot be mapped honestly: unknown TMF RM
+unique IDs, sites that don't exist on the study, country-level or RESTRICTED
+objects. Everything that files lands `pending_review` for human review, and
+re-running the same package is a no-op — the importer asks
+`GET /studies/{id}/filings` what it already filed. `--dry-run` prints the
+plan without filing; keep the received package as the partner's record — its
+signatures and audit trail are their testimony and are not replayed here.
+
 ## Backups and verification
 
 - Postgres: continuous archiving or the managed service's PITR; test restore

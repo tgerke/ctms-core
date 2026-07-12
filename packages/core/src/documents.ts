@@ -20,6 +20,10 @@ export interface UploadInput {
   studyId: string;
   studySiteId?: string | null;
   personId?: string | null;
+  // Append the version to exactly this document instead of resolving one by
+  // artifact + scope (ADR-0025); the fields above are ignored in that case —
+  // the document row already carries them.
+  documentId?: string | null;
   title: string;
   fileName: string;
   mimeType: string;
@@ -61,9 +65,11 @@ export async function uploadDocument(db: Db, actor: Actor, input: UploadInput) {
   return withActor(db, actor, async (tx) => {
     const scopeSite = input.studySiteId ?? null;
     const scopePerson = input.personId ?? null;
-    const existing = input.forceNew
-      ? []
-      : await tx
+    const existing = input.documentId
+      ? await tx.select().from(document).where(eq(document.id, input.documentId)).limit(1)
+      : input.forceNew
+        ? []
+        : await tx
           .select()
           .from(document)
           .where(
@@ -78,6 +84,13 @@ export async function uploadDocument(db: Db, actor: Actor, input: UploadInput) {
           .limit(1);
 
     let doc = existing[0];
+    if (input.documentId) {
+      if (!doc) throw new Error("document not found");
+      // A superseded document is closed history; its record never grows.
+      if (doc.status === "superseded") {
+        throw new Error("document is superseded; upload a new document instead");
+      }
+    }
     if (!doc) {
       const inserted = await tx
         .insert(document)

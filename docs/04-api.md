@@ -127,6 +127,17 @@ two optional provenance fields, `source_system` and `source_ref`, for
 source-system filing (ADR-0011): filed versions land as `pending_review` like
 any upload and show a "filed by" chip in the UI.
 
+The filing surface is complete enough to build an idempotent integration on
+(ADR-0025): `force_new=true` makes the upload create a fresh document even
+when a non-superseded one with the same artifact and scope exists (an
+imported partner record must not merge into a local one),
+`POST /documents/{id}/versions` appends a version to exactly that document
+(a superseded document answers 409 — closed history stays closed), and
+`GET /studies/{id}/filings?source_system=` returns what that source already
+filed, `source_ref` by `source_ref`, so a re-run can skip instead of
+duplicate. The eTMF-EMS importer (`pnpm import-ems`) is exactly such a
+client and nothing more.
+
 Review work routes through the same two outcomes (ADR-0018):
 `POST /document-versions/{id}/assign-review` names a reviewer (who must hold
 approval authority for the document) with an optional `due_date`, and

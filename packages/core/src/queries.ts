@@ -56,7 +56,7 @@ export async function listStudies(sql: Sql) {
 export async function studySites(sql: Sql, studyId: string) {
   return sql`
     SELECT ss.id AS study_site_id, ss.site_number, ss.status, ss.activated_at,
-           si.name AS site_name, si.city, si.state,
+           si.name AS site_name, si.city, si.state, si.country,
            coalesce(c.total, 0)::int AS total,
            coalesce(c.current_count, 0)::int AS current_count,
            coalesce(c.expiring_soon_count, 0)::int AS expiring_soon_count,
@@ -306,11 +306,27 @@ export async function studyRequirementRules(sql: Sql, studyId: string) {
 
 export async function listTmfArtifacts(sql: Sql) {
   return sql`
-    SELECT ta.id, ta.code, ta.name, tsec.name AS section_name, tz.name AS zone_name
+    SELECT ta.id, ta.code, ta.name, ta.unique_id,
+           tsec.name AS section_name, tz.name AS zone_name
     FROM tmf_artifact ta
     JOIN tmf_section tsec ON tsec.id = ta.section_id
     JOIN tmf_zone tz ON tz.id = tsec.zone_id
     ORDER BY ta.code`;
+}
+
+/**
+ * What a source system already filed into a study (ADR-0025): the read half
+ * of idempotent filing. A partner integration — or the EMS importer — asks
+ * before re-sending, so interim transfers and re-runs never duplicate.
+ */
+export async function filedVersions(sql: Sql, studyId: string, sourceSystem: string) {
+  return sql`
+    SELECT dv.document_id, d.status AS document_status, dv.id AS version_id,
+           dv.version_number, dv.source_ref, dv.sha256, dv.uploaded_at
+    FROM document_version dv
+    JOIN document d ON d.id = dv.document_id
+    WHERE d.study_id = ${studyId} AND dv.source_system = ${sourceSystem}
+    ORDER BY dv.uploaded_at, dv.version_number`;
 }
 
 export async function documentDetail(sql: Sql, documentId: string) {
