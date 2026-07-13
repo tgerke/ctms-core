@@ -631,6 +631,7 @@ export function useVersionContent(versionId: string | undefined) {
     isPending: query.isPending,
     error: query.error,
     url,
+    blob: query.data?.blob,
     mime: query.data?.mime,
     fileName: query.data?.fileName,
     text: query.data?.text ?? null,

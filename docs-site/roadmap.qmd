@@ -141,8 +141,8 @@ restated here because a feature comparison is meaningless without them.
   `GET /document-versions/{id}/content`, which resolves the version's
   study/site scope so the site seat previews only its own site. Reading
   what you are about to sign now costs one click on the same page as the
-  ceremony. What remains is in-browser rendering for office formats (they
-  preview as a download offer); the broader auditor UX closed as ADR-0028.
+  ceremony. What remained — in-browser rendering for office formats — closed
+  as ADR-0030; the broader auditor UX closed as ADR-0028.
 - **In-app auditor UX** — shipped as a rendering of the record (ADR-0028):
   a binder page serving the study in the reference model's own zone →
   section → artifact order over one GET (`/studies/{id}/binder`, same
@@ -153,8 +153,18 @@ restated here because a feature comparison is meaningless without them.
   seat made real — seeded with `dev-auditor-token`, unscoped because pilots
   are single-tenant and the audit chain verifies end to end. The UI now
   renders every seat only the operations its grants hold, so the auditor
-  works a clean surface instead of collecting 403s. What remains is what
-  ADR-0027 left: office-format renditions, OCR, relevance ranking.
+  works a clean surface instead of collecting 403s. Of what ADR-0027 left,
+  office-format renditions closed as ADR-0030; OCR and relevance ranking
+  remain.
+- **Office-format preview renditions** — shipped as client-side renditions
+  of the signed bytes (ADR-0030): the queue's preview now renders Word and
+  Excel files as HTML computed in the viewer's browser — mammoth for docx, a
+  small OOXML reader for xlsx — inside a fully sandboxed iframe, labeled
+  "the downloaded file is the record." The server stores and serves nothing
+  new, so no rendition exists anywhere to drift from the record, and byte
+  verification (§11.70) keeps hashing fetched originals. What remains is OCR
+  for image-only PDFs and relevance ranking; legacy .doc/.xls and
+  presentations honestly stay download offers.
 - **Site-seat log workflows** — shipped as structured facts on a site-scoped
   seat (ADR-0023): a `site_staff` grant lands its holder on their site's page
   and nowhere else, and delegation-of-authority and training logs are dated
@@ -186,10 +196,10 @@ new system.
 
 ## If we built next
 
-Nothing is queued: in-app auditor UX, the last candidate pulled from the
-"what remains" notes, shipped 2026-07-12 (ADR-0028). Remaining candidates
-live in the notes above — site-side depth, cross-study analytics,
-office-format preview renditions.
+Nothing is queued: office-format preview renditions, the last candidate
+pulled from the "what remains" notes, shipped 2026-07-12 (ADR-0030).
+Remaining candidates live in the notes above — site-side depth,
+cross-study analytics, OCR for scanned documents.
 
 ## Sources
 

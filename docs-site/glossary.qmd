@@ -56,6 +56,24 @@ eISF / eBinder
 : Electronic investigator site file — the site-side counterpart of the eTMF.
 Named here mostly for contrast: this system takes the sponsor/CRO view.
 
+eTMF-EMS
+: The CDISC exchange mechanism standard for moving TMF content between
+systems. This system writes an eTMF-EMS package alongside its export, and
+files a partner's package in through the same upload-and-review path as any
+other document — imported files land pending review, nothing arrives
+pre-approved.
+
+Delegation of authority log
+: The site's record of which study tasks the investigator has delegated to
+whom, from when. Kept here as structured entries beside the signed log
+document, so the system can check that the authorizer actually held the PI
+role and whether each delegate's credentials are in order.
+
+Training log
+: The site's record of training completions — who, what topic, when, and
+until when — with current / expiring / expired status derived from the dates.
+An entry can link to the filed certificate document.
+
 EDC (Electronic Data Capture)
 : The system where subject-level clinical data is recorded. Deliberately not
 this system: ctms-core holds documents and site-reported aggregates only.
@@ -120,6 +138,28 @@ It has no "done" state of its own: approving or returning the version is
 what completes it, so the review queue can never disagree with the
 documents.
 
+Bulk review
+: Approving (or returning) a selection of queued documents in one ceremony:
+you re-authenticate once, and every selected version gets its own signature
+bound to its own file. The audit trail shows N signatures, never one
+signature waved over N documents.
+
+Site seat
+: Access scoped to a single site. A site-seat sign-in lands on that site's
+page and works entirely there — uploads, signatures, the logs, enrollment
+reporting — with no study-wide view to get lost in.
+
+Binder
+: The study rendered in TMF Reference Model order — zone, section, artifact —
+with filed documents and open gaps side by side. A single query over the same
+derived views as every other page: there is no binder to maintain, so none
+can drift.
+
+Export package
+: The transfer-and-inspection package the system exports: every version's
+bytes, the full metadata with signature hashes, and the entire audit chain,
+verifiable with standard checksum tools.
+
 Waived
 : An expected document an administrator has marked not applicable, with a
 recorded reason ("central IRB of record — no local approval letter"). A
@@ -169,4 +209,7 @@ chain continuously.
 
 Hash-bound signature
 : A signature stored with the fingerprint of the exact file content signed.
-If the file ever differed, the signature would visibly not match.
+If the file ever differed, the signature would visibly not match. The
+document page's **Verify bytes** control proves it on demand: the browser
+re-fetches the file, recomputes the hash locally, and compares it against the
+record and every signature bound to it.

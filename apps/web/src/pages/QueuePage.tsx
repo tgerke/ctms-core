@@ -8,6 +8,7 @@ import {
   UserCheck,
   UserPlus,
 } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import {
@@ -24,6 +25,7 @@ import {
   type Study,
 } from "../api";
 import { ErrorNote, PageState } from "../ops";
+import { renderRendition, renditionKind, type RenditionKind } from "../renditions";
 import { SpecChip, type StatusSpec } from "../status";
 
 // The review queue (ADR-0018): every document awaiting review, its latest
@@ -427,15 +429,18 @@ function QueueRow({
 /**
  * Inline view of the version awaiting review (ADR-0027): the exact immutable
  * bytes an approval signature would hash, fetched with the session credential
- * — there is no separate preview rendition to drift from the record. PDFs and
- * images render natively, text renders as text, anything else offers the
- * download.
+ * — the server stores no preview rendition that could drift from the record.
+ * PDFs and images render natively, text renders as text. Office formats
+ * (ADR-0030) convert to HTML in this browser, from those same bytes, inside a
+ * fully sandboxed iframe; anything else offers the download.
  */
 function PreviewPanel({ versionId }: { versionId: string }) {
-  const { isPending, error, url, mime, fileName, text } = useVersionContent(versionId);
+  const { isPending, error, url, blob, mime, fileName, text } =
+    useVersionContent(versionId);
   if (isPending) return <p className="mt-2 text-xs text-muted">Loading document…</p>;
   if (error) return <ErrorNote error={error} className="mt-2" />;
-  if (!url) return null;
+  if (!url || !blob) return null;
+  const officeKind = renditionKind(mime, fileName);
   return (
     <div className="mt-2 space-y-1.5">
       <div className="flex items-center gap-3 text-xs text-muted">
@@ -448,6 +453,12 @@ function PreviewPanel({ versionId }: { versionId: string }) {
           <Download size={11} aria-hidden />
           download
         </a>
+        {officeKind && (
+          <span>
+            Rendered in your browser for reading — the downloaded file is the
+            record.
+          </span>
+        )}
       </div>
       {mime === "application/pdf" ? (
         <iframe
@@ -465,6 +476,13 @@ function PreviewPanel({ versionId }: { versionId: string }) {
         <pre className="max-h-[28rem] overflow-auto whitespace-pre-wrap rounded-md border border-hairline bg-surface p-3 text-xs">
           {text}
         </pre>
+      ) : officeKind ? (
+        <OfficeRendition
+          versionId={versionId}
+          kind={officeKind}
+          blob={blob}
+          fileName={fileName ?? "document"}
+        />
       ) : (
         <p className="text-xs text-muted">
           No inline view for {mime ?? "this file type"} — use the download link
@@ -472,5 +490,47 @@ function PreviewPanel({ versionId }: { versionId: string }) {
         </p>
       )}
     </div>
+  );
+}
+
+/**
+ * The office-format rendition (ADR-0030): the fetched bytes converted to HTML
+ * client-side and shown in an iframe with an empty sandbox — no scripts, no
+ * origin, no navigation — so a hostile file renders text and tables and
+ * nothing else. Conversion failure falls back to the download offer.
+ */
+function OfficeRendition({
+  versionId,
+  kind,
+  blob,
+  fileName,
+}: {
+  versionId: string;
+  kind: RenditionKind;
+  blob: Blob;
+  fileName: string;
+}) {
+  const rendition = useQuery({
+    queryKey: ["rendition", versionId],
+    queryFn: async () => renderRendition(kind, await blob.arrayBuffer()),
+    staleTime: Infinity, // immutable bytes: the rendition can't go stale either
+    retry: false,
+  });
+  if (rendition.isPending)
+    return <p className="text-xs text-muted">Rendering document…</p>;
+  if (rendition.isError)
+    return (
+      <p className="text-xs text-muted">
+        This file couldn't be rendered in the browser — use the download link
+        above.
+      </p>
+    );
+  return (
+    <iframe
+      sandbox=""
+      srcDoc={rendition.data}
+      title={fileName}
+      className="h-[28rem] w-full rounded-md border border-hairline bg-white"
+    />
   );
 }

@@ -25,6 +25,8 @@ dropdown in the header switches between them (the app remembers your
 choice), and the **Portfolio** page shows every study's numbers side by
 side.
 
+![The portfolio: every study's completeness, attention items, and enrollment, computed by the same views the study pages read.](../images/portfolio.png){.screenshot fig-alt="Portfolio page showing two studies as cards, each with expected document counts, percent current, missing, expired, review queue, open issues, and enrollment totals"}
+
 ![The study dashboard: document counts, milestones, enrollment, visits, issues, and the site document matrix.](../images/dashboard.png){.screenshot fig-alt="ctms-core study dashboard showing expected document counts, percent current, milestone chips, and enrollment progress bars per site"}
 
 From top to bottom:
