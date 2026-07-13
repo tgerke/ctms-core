@@ -147,6 +147,15 @@ its latest assignment and a derived `queue_status`
 work" list). There is no completion call — approving or returning the
 version is what clears the queue entry.
 
+The queue's selection acts in bulk (ADR-0026):
+`POST /document-versions/bulk-approve` takes `version_ids` and one
+`reauth_token` — a §11.200(a)(1)(i) series of signings, one re-authentication
+opening the series and each version gaining its own signature bound to its
+own content hash — and `POST /document-versions/bulk-return` takes
+`version_ids` and one shared `reason`. Both are all-or-nothing: every
+version must be the latest of a `pending_review` document the caller may
+approve, and a refusal lists every blocker across the selection at once.
+
 Both calls leave hash-chained audit events attributed to the token's person;
 `GET /audit-chain/verify` confirms the chain end-to-end, and
 `GET /files/{sha256}` returns the exact bytes a signature covers — storage is

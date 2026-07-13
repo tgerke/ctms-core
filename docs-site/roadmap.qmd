@@ -126,9 +126,16 @@ restated here because a feature comparison is meaningless without them.
   no-ops (`GET /studies/{id}/filings` is the idempotency read), everything
   lands `pending_review`, and the partner's signatures and audit records
   stay in the retained package rather than being replayed into this record.
-  What remains is a bulk-review surface for large imported batches —
-  nothing becomes effective without a human, and today that human works
-  one document at a time.
+  The bulk-review surface followed as ADR-0026.
+- **Bulk review** — shipped as a series of signings (ADR-0026): checkboxes
+  on the review queue, and approval of the selection is one
+  §11.200(a)(1)(i) ceremony — one re-authentication opens the series,
+  every version still gains its own signature bound to its own content
+  hash. Bulk return shares one immutable reason. All-or-nothing with every
+  blocker listed, in one transaction, on the same code path as the
+  single-document ceremony. What remains is reviewer ergonomics beyond the
+  ceremony itself — inline document preview from the queue, so diligence
+  gets as cheap as the signature did.
 - **Site-seat log workflows** — shipped as structured facts on a site-scoped
   seat (ADR-0023): a `site_staff` grant lands its holder on their site's page
   and nowhere else, and delegation-of-authority and training logs are dated
@@ -160,10 +167,10 @@ new system.
 
 ## If we built next
 
-Nothing is queued: eTMF-EMS import, the last candidate pulled from the
-"what remains" notes, shipped 2026-07-12 (ADR-0025). Remaining candidates
-live in the notes above — auditor UX, bulk review of imported batches,
-site-side depth, cross-study analytics.
+Nothing is queued: bulk review, the last candidate pulled from the "what
+remains" notes, shipped 2026-07-12 (ADR-0026). Remaining candidates live in
+the notes above — auditor UX, queue-side document preview, site-side depth,
+cross-study analytics.
 
 ## Sources
 

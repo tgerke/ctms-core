@@ -12,7 +12,7 @@ import {
   type Db,
 } from "@ctms/db";
 import { and, eq, isNull, ne, sql } from "drizzle-orm";
-import { withActor, type Actor } from "./actor.js";
+import { withActor, type Actor, type Tx } from "./actor.js";
 import { permits, type Grant } from "./authz.js";
 
 export interface UploadInput {
@@ -137,28 +137,32 @@ export async function uploadDocument(db: Db, actor: Actor, input: UploadInput) {
   });
 }
 
+export interface SignInput {
+  documentVersionId: string;
+  signerPersonId: string;
+  meaning: "author" | "review" | "approval";
+  // §11.200: how and when the signer re-authenticated. The API layer
+  // verifies the ceremony; this layer records it (DB CHECK requires it).
+  reauthMethod: "oidc_fresh_token" | "dev_token" | "seed_fixture";
+  reauthAt: Date;
+  effectiveDate?: string;
+  expiresAt?: string;
+}
+
 /**
  * Part 11 e-signature: records signer, meaning, timestamp, and a copy of the
  * version's content hash (§11.70 binding). An approval signature promotes the
  * document to effective and supersedes any sibling document of the same
  * artifact + scope.
  */
-export async function signDocumentVersion(
-  db: Db,
-  actor: Actor,
-  input: {
-    documentVersionId: string;
-    signerPersonId: string;
-    meaning: "author" | "review" | "approval";
-    // §11.200: how and when the signer re-authenticated. The API layer
-    // verifies the ceremony; this layer records it (DB CHECK requires it).
-    reauthMethod: "oidc_fresh_token" | "dev_token" | "seed_fixture";
-    reauthAt: Date;
-    effectiveDate?: string;
-    expiresAt?: string;
-  },
-) {
-  return withActor(db, actor, async (tx) => {
+export async function signDocumentVersion(db: Db, actor: Actor, input: SignInput) {
+  return withActor(db, actor, (tx) => applySignature(tx, input));
+}
+
+/** The transaction body of a single signing, shared by the single-version
+ *  ceremony and the §11.200(a)(1)(i) series (bulkApproveVersions). */
+async function applySignature(tx: Tx, input: SignInput) {
+  {
     const versions = await tx
       .select()
       .from(documentVersion)
@@ -242,7 +246,7 @@ export async function signDocumentVersion(
       }
     }
     return signatures[0]!;
-  });
+  }
 }
 
 /**
@@ -263,7 +267,15 @@ export async function returnDocumentVersion(
   if (input.reason.trim().length === 0) {
     throw new Error("a return requires a documented reason");
   }
-  return withActor(db, actor, async (tx) => {
+  return withActor(db, actor, (tx) => applyReturn(tx, input));
+}
+
+/** The transaction body of one return, shared with bulkReturnVersions. */
+async function applyReturn(
+  tx: Tx,
+  input: { documentVersionId: string; returnedByPersonId: string; reason: string },
+) {
+  {
     const versions = await tx
       .select()
       .from(documentVersion)
@@ -306,7 +318,7 @@ export async function returnDocumentVersion(
       .where(eq(document.id, doc.id));
 
     return returns[0]!;
-  });
+  }
 }
 
 /**
@@ -387,6 +399,159 @@ export async function assignReview(
       })
       .returning();
     return rows[0]!;
+  });
+}
+
+/** Everything that blocks a bulk review action, reported at once (ADR-0026). */
+export class BulkReviewError extends Error {
+  constructor(public problems: string[]) {
+    super(`nothing was ${problems.length ? "signed or returned" : ""}:\n  - ${problems.join("\n  - ")}`);
+    this.name = "BulkReviewError";
+  }
+}
+
+/**
+ * Preflight a bulk review selection: every version must exist, be the latest
+ * of a pending_review document, and sit inside the caller's approve scope.
+ * Every blocker across the selection is reported at once; the caller files
+ * nothing on any problem — the reviewer unchecks, not retries.
+ */
+async function preflightBulk(
+  tx: Tx,
+  versionIds: string[],
+  grants: Grant[],
+): Promise<{ problems: string[]; label: Map<string, string> }> {
+  const problems: string[] = [];
+  const label = new Map<string, string>();
+  if (versionIds.length === 0) problems.push("empty selection — nothing to review");
+
+  for (const id of versionIds) {
+    const rows = (await tx.execute(sql`
+      SELECT dv.id, dv.version_number, d.id AS document_id, d.title, d.status,
+             d.study_id, d.study_site_id,
+             (SELECT max(version_number) FROM document_version x
+              WHERE x.document_id = d.id) AS latest
+      FROM document_version dv
+      JOIN document d ON d.id = dv.document_id
+      WHERE dv.id = ${id}`)) as unknown as {
+      id: string;
+      version_number: number;
+      document_id: string;
+      title: string;
+      status: string;
+      study_id: string;
+      study_site_id: string | null;
+      latest: number;
+    }[];
+    const row = rows[0];
+    if (!row) {
+      problems.push(`version ${id}: not found`);
+      continue;
+    }
+    label.set(id, row.title);
+    if (row.status !== "pending_review") {
+      problems.push(`"${row.title}": not awaiting review (status: ${row.status})`);
+    }
+    if (Number(row.version_number) !== Number(row.latest)) {
+      problems.push(`"${row.title}": v${row.version_number} is not the latest version`);
+    }
+    if (
+      !permits(grants, "approve", {
+        studyId: row.study_id,
+        studySiteId: row.study_site_id ?? undefined,
+      })
+    ) {
+      problems.push(`"${row.title}": no grant permits approving this document`);
+    }
+  }
+  return { problems, label };
+}
+
+/**
+ * Bulk approval as the §11.200(a)(1)(i) series of signings: one verified
+ * re-authentication opens the series, then each version gains its own
+ * signature row bound to its own content hash (§11.70) inside one
+ * transaction — every version in the selection signs, or none do.
+ */
+export async function bulkApproveVersions(
+  db: Db,
+  actor: Actor,
+  input: {
+    versionIds: string[];
+    signerPersonId: string;
+    grants: Grant[];
+    reauthMethod: "oidc_fresh_token" | "dev_token" | "seed_fixture";
+    reauthAt: Date;
+    effectiveDate?: string;
+  },
+) {
+  const versionIds = [...new Set(input.versionIds)];
+  return withActor(db, actor, async (tx) => {
+    const { problems } = await preflightBulk(tx, versionIds, input.grants);
+    // applySignature refuses returned versions; surface that in preflight
+    // too so the refusal lists everything at once.
+    for (const id of versionIds) {
+      const returned = await tx
+        .select({ id: documentReturn.id })
+        .from(documentReturn)
+        .where(eq(documentReturn.documentVersionId, id))
+        .limit(1);
+      if (returned.length > 0) {
+        problems.push(`version ${id}: was returned for correction and can never be approved`);
+      }
+    }
+    if (problems.length > 0) throw new BulkReviewError(problems);
+
+    const signed = [];
+    for (const id of versionIds) {
+      signed.push(
+        await applySignature(tx, {
+          documentVersionId: id,
+          signerPersonId: input.signerPersonId,
+          meaning: "approval",
+          reauthMethod: input.reauthMethod,
+          reauthAt: input.reauthAt,
+          effectiveDate: input.effectiveDate,
+        }),
+      );
+    }
+    return signed;
+  });
+}
+
+/**
+ * Bulk return-for-correction: the other review outcome (ADR-0015) over a
+ * selection, one shared documented reason, one transaction.
+ */
+export async function bulkReturnVersions(
+  db: Db,
+  actor: Actor,
+  input: {
+    versionIds: string[];
+    returnedByPersonId: string;
+    grants: Grant[];
+    reason: string;
+  },
+) {
+  if (input.reason.trim().length === 0) {
+    throw new BulkReviewError(["a return requires a documented reason"]);
+  }
+  const versionIds = [...new Set(input.versionIds)];
+  return withActor(db, actor, async (tx) => {
+    const { problems } = await preflightBulk(tx, versionIds, input.grants);
+    if (problems.length > 0) throw new BulkReviewError(problems);
+
+    const returned = [];
+    for (const id of versionIds) {
+      returned.push(
+        await applyReturn(tx, {
+          documentVersionId: id,
+          returnedByPersonId: input.returnedByPersonId,
+          reason: input.reason,
+        }),
+      );
+    }
+    return returned;
   });
 }
 

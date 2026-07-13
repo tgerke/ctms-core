@@ -111,6 +111,14 @@ document shows `returned` until a corrected version arrives, and the returned
 version itself can never be approved. Returning takes the same `approve`
 permission as approving, but it isn't a signature — no re-authentication.
 
+Both outcomes also work over a selection (ADR-0026):
+`POST /document-versions/bulk-approve` with `version_ids` and one
+`reauth_token` executes a §11.200(a)(1)(i) series of signings — one
+re-authentication, then one signature per version, each bound to its own
+content hash — and `POST /document-versions/bulk-return` shares one
+documented reason. All-or-nothing: anything unreviewable in the selection
+refuses the whole call with every blocker listed.
+
 ```r
 request("http://localhost:8787") |>
   req_url_path_append("document-versions", version_id, "return") |>
