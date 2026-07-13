@@ -28,12 +28,32 @@ of it applies whether you run the compose file or your own topology.
 If the host doesn't exist yet, `infra/cloud-init.yaml` builds it on any
 provider that accepts cloud-init user data (AWS, Azure, DigitalOcean,
 Hetzner, Proxmox, ...): Docker, the release-pinned stack above, SSH
-hardening, and a firewall, unattended. Render the placeholders per the
-file's header and paste the result into the provider's *user data* field;
+hardening, and a firewall, unattended. Render the placeholders and paste
+the result into the provider's *user data* field:
+
+```sh
+sed -e 's/${domain}/ctms.example.org/' \
+    -e 's/${app_version}/0.1.0/' \
+    -e 's/${auth_mode}/oidc/' \
+    -e "s/\${postgres_password}/$(openssl rand -hex 24)/" \
+    -e "s/\${ctms_app_password}/$(openssl rand -hex 24)/" \
+    -e 's/${compose_profiles}/local-db/' \
+    -e 's/${extra_env}//' \
+    infra/cloud-init.yaml > user-data.yaml
+```
+
 2 vCPUs / 2 GB RAM is comfortable. OIDC issuer/audience arrive via the
 `extra_env` placeholder or a post-boot edit of `/opt/ctms/.env`. The rest of
 this page — IdP registration, TMF RM import, admin provisioning, validation
 sign-off — still applies.
+
+Prefer infrastructure-as-code? `infra/terraform/{aws,azure,digitalocean}`
+are three self-contained Terraform roots with an identical variable
+contract — VM, firewall (SSH restricted to your admin CIDR), static IP,
+encrypted disk, same cloud-init. The AWS root additionally creates the
+Object Lock document bucket (ADR-0009) with a least-privilege IAM
+principal and wires the stack to it. Each directory's README is a complete
+walkthrough.
 
 ## Topology
 

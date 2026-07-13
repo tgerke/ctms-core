@@ -2,20 +2,15 @@
 # Boot a production ctms-core host on any Ubuntu 24.04 VM (ADR-0031): Docker,
 # the release-pinned compose stack, and basic host hardening. This same file
 # is the user_data for every infra/terraform/ root — Terraform substitutes
-# the ${...} placeholders via templatefile(). To use it standalone, render
-# it first:
+# the placeholder tokens via templatefile(). To use it standalone, render
+# it first — the placeholders and a copy-paste sed one-liner are in
+# docs/05-deployment.md ("Provisioning the VM"); note that every $ { }
+# sequence below is substituted, so keep real shell variables out of this
+# file.
 #
-#   sed -e 's/${domain}/ctms.example.org/' \
-#       -e 's/${app_version}/0.1.0/' \
-#       -e 's/${auth_mode}/oidc/' \
-#       -e "s/\${postgres_password}/$(openssl rand -hex 24)/" \
-#       -e "s/\${ctms_app_password}/$(openssl rand -hex 24)/" \
-#       -e 's/${extra_env}//' \
-#       cloud-init.yaml > user-data.yaml
-#
-# then pass user-data.yaml to your provider's "user data"/"cloud-init" field.
+# Then pass user-data.yaml to your provider's "user data"/"cloud-init" field.
 # With auth_mode=oidc the api also needs OIDC_ISSUER and OIDC_AUDIENCE —
-# add them via ${extra_env} or edit /opt/ctms/.env after boot and re-run
+# add them via the extra_env token or edit /opt/ctms/.env after boot and re-run
 # `docker compose -f compose.prod.yaml up -d`. First boot takes a few
 # minutes: watch with `cloud-init status --wait`. The pilot checklist
 # (docs/05-deployment.md) still applies: IdP registration, TMF RM import,
@@ -38,7 +33,7 @@ swap:
   size: 2147483648
 
 write_files:
-  # ${extra_env} is for additional .env lines (OIDC issuer/audience, managed
+  # The extra_env token takes additional .env lines (OIDC issuer/audience, managed
   # DATABASE_URL/DATABASE_URL_APP, S3 storage, digest SMTP); everything the
   # stack supports is documented in infra/.env.example.
   - path: /opt/ctms/.env
@@ -49,7 +44,7 @@ write_files:
       POSTGRES_PASSWORD=${postgres_password}
       CTMS_APP_PASSWORD=${ctms_app_password}
       AUTH_MODE=${auth_mode}
-      COMPOSE_PROFILES=local-db
+      COMPOSE_PROFILES=${compose_profiles}
       ${extra_env}
   - path: /etc/ssh/sshd_config.d/90-hardening.conf
     content: |
