@@ -30,7 +30,13 @@ review. Here they are one `GET` (or one `SELECT`). See [docs/01-vision.md](docs/
 
 ## Quick start
 
-Requires Node 22+, pnpm, Docker.
+[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/tgerke/ctms-core?quickstart=1)
+
+No local setup: the badge above boots the stack with the seeded demo
+studies in a free GitHub Codespace (~3 minutes; the dev bearer tokens in
+`.env.example` are ready to use).
+
+Locally instead: requires Node 22+, pnpm, Docker.
 
 ```sh
 cp .env.example .env

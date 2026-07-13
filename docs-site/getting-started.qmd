@@ -7,6 +7,15 @@ API, and web dashboard — comes up in a few minutes with a seeded demo study.
 Standing it up is a developer task; once it's running, the
 [user guide](user-guide/index.qmd) covers everything from there without code.
 
+## Try it with zero install
+
+[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/tgerke/ctms-core?quickstart=1)
+
+The badge boots the seeded stack in a free GitHub Codespace — no local
+tools needed, just a GitHub account. After ~3 minutes the dashboard opens
+on the forwarded port; the dev bearer tokens below work immediately, and
+the codespace (fictional data only) is yours alone to delete when done.
+
 ## Prerequisites
 
 - Node 22+ and [pnpm](https://pnpm.io)
