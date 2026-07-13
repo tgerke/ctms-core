@@ -5,10 +5,20 @@
  * popup with prompt=login so the IdP forces a fresh credential ceremony.
  */
 
-const OIDC = (import.meta.env.VITE_AUTH_MODE as string | undefined) === "oidc";
-const ISSUER = import.meta.env.VITE_OIDC_ISSUER as string | undefined;
-const CLIENT_ID = import.meta.env.VITE_OIDC_CLIENT_ID as string | undefined;
-const SCOPE = (import.meta.env.VITE_OIDC_SCOPE as string | undefined) ?? "openid email profile";
+// Build-time VITE_* values win; otherwise the runtime config nginx serves
+// at /env.js, so one pinned image works against any IdP.
+declare global {
+  interface Window {
+    __CTMS_ENV__?: Record<string, string | undefined>;
+  }
+}
+const conf = (viteValue: unknown, runtimeKey: string): string | undefined =>
+  (viteValue as string | undefined) || window.__CTMS_ENV__?.[runtimeKey] || undefined;
+
+const OIDC = conf(import.meta.env.VITE_AUTH_MODE, "AUTH_MODE") === "oidc";
+const ISSUER = conf(import.meta.env.VITE_OIDC_ISSUER, "OIDC_ISSUER");
+const CLIENT_ID = conf(import.meta.env.VITE_OIDC_CLIENT_ID, "OIDC_CLIENT_ID");
+const SCOPE = conf(import.meta.env.VITE_OIDC_SCOPE, "OIDC_SCOPE") ?? "openid email profile";
 
 export const authMode = OIDC ? ("oidc" as const) : ("dev" as const);
 

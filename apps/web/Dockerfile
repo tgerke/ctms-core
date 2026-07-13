@@ -20,6 +20,15 @@ FROM docker.io/library/nginx:1.27-alpine
 # substitutes this into the config template at startup.
 ENV API_PROXY_TARGET=http://api:8787
 
+# Runtime SPA auth config served at /env.js. Defaults keep dev-token mode;
+# an OIDC deployment overrides these at run time — the image itself stays
+# IdP-agnostic. They must be defined here (even when empty) so the nginx
+# entrypoint's envsubst recognizes them.
+ENV CTMS_WEB_AUTH_MODE=dev
+ENV CTMS_WEB_OIDC_ISSUER=""
+ENV CTMS_WEB_OIDC_CLIENT_ID=""
+ENV CTMS_WEB_OIDC_SCOPE="openid email profile"
+
 COPY apps/web/nginx/default.conf.template /etc/nginx/templates/default.conf.template
 COPY --from=build /app/apps/web/dist /usr/share/nginx/html
 

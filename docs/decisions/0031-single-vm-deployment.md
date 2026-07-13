@@ -38,5 +38,8 @@ Kubernetes at this phase; the same posture as the sibling edc-core repo
 - The local storage volume is now a first-class deployment target for
   non-WORM pilots; `infra/backup.sh` pairs it with the database dump. The
   Object Lock posture is unchanged and remains the recommendation.
+- The web SPA's auth configuration gains a runtime fallback: nginx serves
+  `/env.js` from container env (`CTMS_WEB_*`), so one pinned web image works
+  against any IdP; build-time `VITE_*` values still win when present.
 - The dev flow (root `docker-compose.yml` for dependencies, `pnpm dev` on
   the host) is untouched.

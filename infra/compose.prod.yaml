@@ -109,6 +109,10 @@ services:
     restart: unless-stopped
     environment:
       API_PROXY_TARGET: http://api:8787
+      # Served to the SPA at /env.js — the pinned image stays IdP-agnostic.
+      CTMS_WEB_AUTH_MODE: ${AUTH_MODE}
+      CTMS_WEB_OIDC_ISSUER: ${OIDC_ISSUER:-}
+      CTMS_WEB_OIDC_CLIENT_ID: ${OIDC_WEB_CLIENT_ID:-}
     depends_on:
       - api
 
