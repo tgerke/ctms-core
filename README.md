@@ -21,10 +21,12 @@ review. Here they are one `GET` (or one `SELECT`). See [docs/01-vision.md](docs/
 | --- | --- |
 | `docs/` | Design docs: vision, data model, compliance mapping, API guide, deployment + ADR log |
 | `docs/validation/` | Generated IQ/OQ reports and requirement→test traceability matrix |
+| `docs-site/` | Quarto docs site: getting started, user guide, cookbook, compliance, validation |
 | `packages/db` | Postgres schema (Drizzle), migrations, audit-trail enforcement, seed |
 | `packages/core` | Domain logic: audited mutations, requirement engine, completeness |
 | `apps/api` | OpenAPI 3.1 REST API (Hono), spec at `/openapi.json`, docs at `/docs` |
-| `apps/web` | React dashboard: completeness grid, site detail, document audit timeline |
+| `apps/web` | React app: dashboard and portfolio, site/visit/document pages, review queue, TMF binder, audit timeline |
+| `tools/` | CLI jobs: oversight digest, TMF export / eTMF-EMS exchange, EMS import, validation artifacts |
 
 ## Quick start
 
@@ -33,7 +35,7 @@ Requires Node 22+, pnpm, Docker.
 ```sh
 cp .env.example .env
 pnpm install
-pnpm db:up        # Postgres 16 in Docker (port 5433)
+pnpm db:up        # Postgres 16 (:5433), MinIO, mailpit in Docker
 pnpm db:migrate
 pnpm db:seed      # demo study: 4 sites, 12 staff, realistic gaps
 pnpm dev          # API on :8787, web on :5173
@@ -52,7 +54,14 @@ pnpm validation:artifacts   # OQ report + requirement traceability matrix
 Working vertical slice, hardened toward a single-tenant pilot: OIDC/SSO with
 role-based grants, signing re-authentication (§11.200), WORM-capable object
 storage, least-privilege DB roles, a verbatim CDISC TMF Reference Model importer
-(`pnpm db:import-tmf`), and generated validation artifacts. Not validated
+(`pnpm db:import-tmf`), and generated validation artifacts. On that core sits
+the working surface: full-text search across metadata and document content, a
+review queue with inline preview and batch signing (one re-authentication, one
+signature per document), site-scoped seats keeping structured delegation-of-authority
+and training logs, a read-only auditor seat with a reference-model binder and
+in-browser byte verification, a multi-study portfolio view, emailed oversight
+digests, and a verifiable TMF export package that speaks CDISC eTMF-EMS in both
+directions (`pnpm export-tmf` / `pnpm import-ems`). Not validated
 software — the formal CSV program is organizational work; see
 [docs/03-compliance.md](docs/03-compliance.md) for what "compliant-by-design"
 does and does not claim, and [docs/05-deployment.md](docs/05-deployment.md) for

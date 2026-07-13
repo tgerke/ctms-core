@@ -76,6 +76,8 @@ lists, and audit timelines fall out of the schema as plain queries — and the s
 queries are one `httr2` call from R — the thesis holds. That bet has held so far:
 SSO/RBAC, signing re-authentication, WORM storage, least-privilege roles, the
 taxonomy importer, and generated IQ/OQ/traceability artifacts all landed as breadth
-on the same schema, not architecture changes. What remains before a marketable
+on the same schema, not architecture changes — and so did the workflow layer that
+followed (content search, the review queue with bulk signing, site-seat logs, the
+auditor's binder, eTMF-EMS exchange in and out). What remains before a marketable
 compliance claim is the organizational half of validation (docs/03-compliance.md,
 honest gap #1).
