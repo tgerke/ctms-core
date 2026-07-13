@@ -164,12 +164,20 @@ const personSpecs: PersonSpec[] = [
   // person record (dev-service-token, or an OIDC client subject mapped via
   // API_SERVICE_SUBJECTS) and files documents with provenance.
   { key: "edc", given: "EDC", family: "Filing", credentials: null, site: null, role: null },
+  // The auditor's seat (ADR-0028): dev-auditor-token maps to this person.
+  { key: "ostrow", given: "Ruth", family: "Ostrow", credentials: null, site: null, role: null },
 ];
 
 const personId = new Map<string, string>();
 for (const spec of personSpecs) {
   const email = `${spec.given.toLowerCase()}.${spec.family.toLowerCase()}@${
-    spec.site ? "site" + spec.site : spec.key === "patel" ? "meridiancro" : "corc"
+    spec.site
+      ? "site" + spec.site
+      : spec.key === "patel"
+        ? "meridiancro"
+        : spec.key === "ostrow"
+          ? "gcpaudit"
+          : "corc"
   }.example`;
   const [p] = await db
     .insert(s.person)
@@ -208,6 +216,10 @@ await db.insert(s.accessGrant).values([
     studyId,
     studySiteId: studySiteId.get("001")!,
   },
+  // The auditor's seat (ADR-0028): unscoped read_only — an inspector reads the
+  // whole single-tenant deployment (the audit chain only verifies end to end)
+  // and can change nothing.
+  { personId: personId.get("ostrow")!, role: "read_only" },
 ]);
 
 // --- Requirement rules -------------------------------------------------------

@@ -313,6 +313,47 @@ export const TmfArtifactSchema = z
   })
   .openapi("TmfArtifact");
 
+// The TMF binder (ADR-0028): the study's record in the reference model's own
+// hierarchy — the navigation an inspector expects.
+export const BinderDocumentSchema = z
+  .object({
+    document_id: z.string().uuid(),
+    title: z.string(),
+    status: z.string(),
+    effective_date: z.string().nullable(),
+    expires_at: z.string().nullable(),
+    site_number: z.string().nullable(),
+    person_given_name: z.string().nullable(),
+    person_family_name: z.string().nullable(),
+    version_count: z.number().int(),
+    signature_count: z.number().int(),
+  })
+  .openapi("BinderDocument");
+
+export const BinderZoneSchema = z
+  .object({
+    zone_number: z.number().int(),
+    zone_name: z.string(),
+    sections: z.array(
+      z.object({
+        section_code: z.string(),
+        section_name: z.string(),
+        artifacts: z.array(
+          z.object({
+            tmf_artifact_id: z.number().int(),
+            artifact_code: z.string(),
+            artifact_name: z.string(),
+            expected_total: z.number().int(),
+            missing_count: z.number().int(),
+            waived_count: z.number().int(),
+            documents: z.array(BinderDocumentSchema),
+          }),
+        ),
+      }),
+    ),
+  })
+  .openapi("BinderZone");
+
 // What a source system already filed (ADR-0025): the read half of idempotent
 // filing over the ADR-0011 interface.
 export const FiledVersionSchema = z

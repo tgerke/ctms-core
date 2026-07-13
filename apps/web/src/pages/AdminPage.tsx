@@ -10,12 +10,14 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import {
+  can,
   useAddStudySite,
   useCreateOrganization,
   useCreatePerson,
   useCreateRule,
   useCreateSite,
   useGrantAccess,
+  useMe,
   useOrganizations,
   usePeople,
   useRequirementRules,
@@ -34,8 +36,10 @@ import {
 import { ErrorNote, localToday, PageState } from "../ops";
 
 // Study/site/staff administration (ADR-0016): the write surface for the rows
-// the seed script used to own. Actions render for everyone and the API's 403
-// answers for non-admins, same optimistic pattern as the rest of the app.
+// the seed script used to own. The reads (people, grants, rules, directory)
+// render for any reader — "who has access" is an inspector's question — but
+// write affordances exist only for a seat holding 'administer' (ADR-0028).
+// The API's permission gate stays the authority either way.
 
 const ORG_KIND_LABEL: Record<OrgKind, string> = {
   sponsor: "Sponsor",
@@ -65,6 +69,8 @@ const buttonCls =
   "inline-flex items-center gap-1.5 rounded-md border border-hairline px-2 py-1 text-xs text-ink2 hover:bg-page disabled:opacity-50";
 
 export default function AdminPage({ study }: { study: Study | undefined }) {
+  const { data: me } = useMe();
+  const admin = can(me, "administer");
   const studiesQuery = { isPending: !study, isError: false, error: null };
   if (!study) return <PageState query={studiesQuery} label="study" />;
   return (
@@ -78,15 +84,15 @@ export default function AdminPage({ study }: { study: Study | undefined }) {
           deletes.
         </p>
       </div>
-      <StudySitesSection study={study} />
-      <RulesSection study={study} />
-      <PeopleSection />
-      <DirectorySection />
+      <StudySitesSection study={study} admin={admin} />
+      <RulesSection study={study} admin={admin} />
+      <PeopleSection admin={admin} />
+      <DirectorySection admin={admin} />
     </div>
   );
 }
 
-function StudySitesSection({ study }: { study: Study }) {
+function StudySitesSection({ study, admin }: { study: Study; admin: boolean }) {
   const { data: sites } = useSites(study.id);
   const { data: directory } = useSiteDirectory();
   const addSite = useAddStudySite(study.id);
@@ -103,18 +109,20 @@ function StudySitesSection({ study }: { study: Study }) {
     <section className="card">
       <div className="flex flex-wrap items-center gap-3 border-b border-hairline px-4 py-3">
         <h2 className="font-medium">Study sites</h2>
-        <button
-          onClick={() => {
-            setErr(null);
-            sync.mutate(undefined, { onError: (e) => setErr(e) });
-          }}
-          disabled={sync.isPending}
-          className={`ml-auto ${buttonCls}`}
-          title="Re-materialize expected documents from the requirement rules"
-        >
-          <RefreshCw size={12} aria-hidden />
-          {sync.isPending ? "Syncing…" : "Sync expected documents"}
-        </button>
+        {admin && (
+          <button
+            onClick={() => {
+              setErr(null);
+              sync.mutate(undefined, { onError: (e) => setErr(e) });
+            }}
+            disabled={sync.isPending}
+            className={`ml-auto ${buttonCls}`}
+            title="Re-materialize expected documents from the requirement rules"
+          >
+            <RefreshCw size={12} aria-hidden />
+            {sync.isPending ? "Syncing…" : "Sync expected documents"}
+          </button>
+        )}
       </div>
       <ul className="divide-y divide-hairline">
         {sites?.map((s) => (
@@ -126,7 +134,7 @@ function StudySitesSection({ study }: { study: Study }) {
               {s.status === "active" ? `active since ${s.activated_at}` : s.status}
             </span>
             <span className="ml-auto">
-              {s.status === "pending" && (
+              {admin && s.status === "pending" && (
                 <button
                   onClick={() => {
                     setErr(null);
@@ -153,6 +161,7 @@ function StudySitesSection({ study }: { study: Study }) {
           </li>
         ))}
       </ul>
+      {admin && (
       <form
         className="flex flex-wrap items-center gap-2 border-t border-hairline px-4 py-3"
         onSubmit={(e) => {
@@ -203,11 +212,12 @@ function StudySitesSection({ study }: { study: Study }) {
         </span>
         <ErrorNote error={err} className="w-full" />
       </form>
+      )}
     </section>
   );
 }
 
-function RulesSection({ study }: { study: Study }) {
+function RulesSection({ study, admin }: { study: Study; admin: boolean }) {
   const { data: rules } = useRequirementRules(study.id);
   const { data: artifacts } = useTmfArtifacts();
   const create = useCreateRule(study.id);
@@ -248,6 +258,7 @@ function RulesSection({ study }: { study: Study }) {
           </li>
         ))}
       </ul>
+      {admin && (
       <form
         className="flex flex-wrap items-center gap-2 border-t border-hairline px-4 py-3"
         onSubmit={(e) => {
@@ -359,11 +370,12 @@ function RulesSection({ study }: { study: Study }) {
         </button>
         <ErrorNote error={err} className="w-full" />
       </form>
+      )}
     </section>
   );
 }
 
-function PeopleSection() {
+function PeopleSection({ admin }: { admin: boolean }) {
   const { data: people } = usePeople();
   const grant = useGrantAccess();
   const revoke = useRevokeGrant();
@@ -401,27 +413,30 @@ function PeopleSection() {
                 >
                   {ACCESS_ROLE_LABEL[g.role]}
                   {g.study_site_id ? " · site" : g.study_id ? " · study" : ""}
-                  <button
-                    onClick={() => {
-                      setErr(null);
-                      revoke.mutate(
-                        { grantId: g.grant_id },
-                        { onError: (e) => setErr(e) },
-                      );
-                    }}
-                    disabled={revoke.isPending}
-                    aria-label={`Revoke ${g.role} grant`}
-                    title="Revoke (sets revoked_at — grants are never deleted)"
-                    className="text-muted hover:text-ink"
-                  >
-                    <X size={11} aria-hidden />
-                  </button>
+                  {admin && (
+                    <button
+                      onClick={() => {
+                        setErr(null);
+                        revoke.mutate(
+                          { grantId: g.grant_id },
+                          { onError: (e) => setErr(e) },
+                        );
+                      }}
+                      disabled={revoke.isPending}
+                      aria-label={`Revoke ${g.role} grant`}
+                      title="Revoke (sets revoked_at — grants are never deleted)"
+                      className="text-muted hover:text-ink"
+                    >
+                      <X size={11} aria-hidden />
+                    </button>
+                  )}
                 </span>
               ))}
             </span>
           </li>
         ))}
       </ul>
+      {admin && (
       <div className="space-y-2 border-t border-hairline px-4 py-3">
         <form
           className="flex flex-wrap items-center gap-2"
@@ -534,11 +549,12 @@ function PeopleSection() {
         </form>
         <ErrorNote error={err} />
       </div>
+      )}
     </section>
   );
 }
 
-function DirectorySection() {
+function DirectorySection({ admin }: { admin: boolean }) {
   const { data: orgs } = useOrganizations();
   const createOrg = useCreateOrganization();
   const createSite = useCreateSite();
@@ -570,6 +586,7 @@ function DirectorySection() {
           </li>
         ))}
       </ul>
+      {admin && (
       <div className="space-y-2 border-t border-hairline px-4 py-3">
         <form
           className="flex flex-wrap items-center gap-2"
@@ -691,6 +708,7 @@ function DirectorySection() {
         </form>
         <ErrorNote error={err} />
       </div>
+      )}
     </section>
   );
 }

@@ -105,8 +105,8 @@ restated here because a feature comparison is meaningless without them.
   hash-chained audit trail, with a `shasum -c` compatible manifest — a
   flipped byte fails verification with stock tooling. Initially shipped
   without CDISC eTMF-EMS output (the EMS text was not yet in the verified
-  source library — ADR-0012); what remains is purpose-built in-app auditor
-  UX.
+  source library — ADR-0012); the remainder, purpose-built in-app auditor
+  UX, closed as ADR-0028.
 - **eTMF-EMS serialization** — shipped as a schema-validated layer over the
   export package (ADR-0024): `pnpm export-tmf -- --study <p> --ems
   <agreement-id>` adds an exchange.xml (eTMF-EMS v1.0.2) validated against
@@ -142,7 +142,19 @@ restated here because a feature comparison is meaningless without them.
   study/site scope so the site seat previews only its own site. Reading
   what you are about to sign now costs one click on the same page as the
   ceremony. What remains is in-browser rendering for office formats (they
-  preview as a download offer) and the broader auditor UX.
+  preview as a download offer); the broader auditor UX closed as ADR-0028.
+- **In-app auditor UX** — shipped as a rendering of the record (ADR-0028):
+  a binder page serving the study in the reference model's own zone →
+  section → artifact order over one GET (`/studies/{id}/binder`, same
+  derived views as every other surface, empty slots included), in-browser
+  verification that re-fetches any version's bytes and re-hashes them
+  against the recorded content hash and every signature bound to them
+  (§11.70, demonstrated rather than displayed), and the read-only auditor's
+  seat made real — seeded with `dev-auditor-token`, unscoped because pilots
+  are single-tenant and the audit chain verifies end to end. The UI now
+  renders every seat only the operations its grants hold, so the auditor
+  works a clean surface instead of collecting 403s. What remains is what
+  ADR-0027 left: office-format renditions, OCR, relevance ranking.
 - **Site-seat log workflows** — shipped as structured facts on a site-scoped
   seat (ADR-0023): a `site_staff` grant lands its holder on their site's page
   and nowhere else, and delegation-of-authority and training logs are dated
@@ -174,10 +186,10 @@ new system.
 
 ## If we built next
 
-Nothing is queued: queue-side document preview, the last candidate pulled
-from the "what remains" notes, shipped 2026-07-12 (ADR-0027). Remaining
-candidates live in the notes above — auditor UX, site-side depth,
-cross-study analytics.
+Nothing is queued: in-app auditor UX, the last candidate pulled from the
+"what remains" notes, shipped 2026-07-12 (ADR-0028). Remaining candidates
+live in the notes above — site-side depth, cross-study analytics,
+office-format preview renditions.
 
 ## Sources
 

@@ -1,10 +1,22 @@
-import { ArrowLeft, Download, Link2, PenLine, Undo2, Upload } from "lucide-react";
+import {
+  ArrowLeft,
+  Download,
+  Link2,
+  PenLine,
+  ShieldCheck,
+  ShieldX,
+  Undo2,
+  Upload,
+} from "lucide-react";
 import { useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import {
+  can,
   downloadVersion,
+  hashVersionBytes,
   useDocument,
   useDocumentAudit,
+  useMe,
   useReturn,
   useSign,
   useUpload,
@@ -19,6 +31,7 @@ export default function DocumentPage() {
   const documentQuery = useDocument(documentId);
   const detail = documentQuery.data;
   const { data: audit } = useDocumentAudit(documentId);
+  const { data: me } = useMe();
   const sign = useSign();
   const upload = useUpload();
   const returnDoc = useReturn();
@@ -32,6 +45,10 @@ export default function DocumentPage() {
   const doc = detail.document;
   const latest = detail.versions[0];
   const latestReturn = detail.returns[0];
+  // Grant-aware rendering (ADR-0028): the seat's operations decide which
+  // affordances exist; the API's permission gate stays the authority.
+  const canUpload = can(me, "upload");
+  const canApprove = can(me, "approve");
   const statusColor =
     doc.status === "effective"
       ? "var(--status-good)"
@@ -42,7 +59,7 @@ export default function DocumentPage() {
           : "var(--muted)";
   // POST /documents matches by artifact + scope, which is ambiguous for
   // visit-linked documents (two trip reports share both) — no re-version button there.
-  const canUploadVersion = doc.status !== "superseded" && !doc.visit_linked;
+  const canUploadVersion = canUpload && doc.status !== "superseded" && !doc.visit_linked;
 
   return (
     <div className="space-y-6">
@@ -109,7 +126,7 @@ export default function DocumentPage() {
                 </button>
               </>
             )}
-            {doc.status === "pending_review" && latest && !confirming && !returning && (
+            {canApprove && doc.status === "pending_review" && latest && !confirming && !returning && (
               <>
                 <button
                   onClick={() => setReturning(true)}
@@ -304,6 +321,15 @@ export default function DocumentPage() {
               <span className="mono ml-auto text-xs text-muted" title={`sha256 ${v.sha256}`}>
                 {v.sha256.slice(0, 12)}…
               </span>
+              <VerifyBytes
+                versionId={v.id}
+                recordedSha={v.sha256}
+                signatures={
+                  detail.signatures.filter(
+                    (sg) => sg.document_version_id === v.id,
+                  ) as { signed_sha256: string }[]
+                }
+              />
             </li>
           ))}
         </ul>
@@ -348,5 +374,86 @@ export default function DocumentPage() {
         <AuditEventList events={audit} />
       </section>
     </div>
+  );
+}
+
+/**
+ * Live record verification (ADR-0028): fetch the version's bytes, recompute
+ * SHA-256 in this browser, and compare against the stored content hash and
+ * every signature bound to it (§11.70). The check runs on the exact bytes the
+ * API serves — nothing is taken on faith from the server's own headers.
+ */
+function VerifyBytes({
+  versionId,
+  recordedSha,
+  signatures,
+}: {
+  versionId: string;
+  recordedSha: string;
+  signatures: { signed_sha256: string }[];
+}) {
+  const [computed, setComputed] = useState<string | null>(null);
+  const [working, setWorking] = useState(false);
+  const [err, setErr] = useState<unknown>(null);
+
+  if (computed === null) {
+    return (
+      <>
+        <button
+          onClick={async () => {
+            setWorking(true);
+            setErr(null);
+            try {
+              setComputed(await hashVersionBytes(versionId));
+            } catch (e) {
+              setErr(e);
+            } finally {
+              setWorking(false);
+            }
+          }}
+          disabled={working}
+          className="inline-flex items-center gap-1.5 rounded-md border border-hairline px-2 py-1 text-xs text-ink2 hover:bg-page disabled:opacity-50"
+          title="Fetch this version's bytes and recompute their SHA-256 in your browser, then compare against the recorded hash and every signature bound to it"
+        >
+          <ShieldCheck size={12} aria-hidden />
+          {working ? "Hashing…" : "Verify bytes"}
+        </button>
+        <ErrorNote error={err} className="w-full" />
+      </>
+    );
+  }
+
+  const bytesMatch = computed === recordedSha;
+  const boundSignatures = signatures.filter((sg) => sg.signed_sha256 === computed);
+  const brokenSignatures = signatures.length - boundSignatures.length;
+  const ok = bytesMatch && brokenSignatures === 0;
+  const Icon = ok ? ShieldCheck : ShieldX;
+  return (
+    <span
+      className="flex w-full items-start gap-1.5 text-xs"
+      style={{ color: ok ? "var(--status-good)" : "var(--status-critical)" }}
+    >
+      <Icon size={13} className="mt-0.5 shrink-0" aria-hidden />
+      {ok ? (
+        <span>
+          SHA-256 recomputed in this browser matches the record
+          {signatures.length > 0 &&
+            ` and ${signatures.length > 1 ? `all ${signatures.length} signatures` : "the signature"} bound to it`}
+          : <span className="mono">{computed.slice(0, 16)}…</span>
+        </span>
+      ) : (
+        <span>
+          VERIFICATION FAILED — computed <span className="mono">{computed}</span>
+          {!bytesMatch && (
+            <>
+              {" "}
+              but the record says <span className="mono">{recordedSha}</span>
+            </>
+          )}
+          {brokenSignatures > 0 &&
+            `; ${brokenSignatures} signature${brokenSignatures > 1 ? "s" : ""} bound to different bytes`}
+        </span>
+      )}
+    </span>
   );
 }

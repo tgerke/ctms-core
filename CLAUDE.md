@@ -28,8 +28,10 @@ UI :8025 (docker compose).
 
 - `.env` must set `AUTH_MODE` (`dev` or `oidc`) — the API refuses to boot
   without it. Dev tokens `dev-admin-token` / `dev-monitor-token` /
-  `dev-site-token` map to seeded people by email; the site token is the
-  site-scoped seat (ADR-0023), so most study-wide endpoints 403 for it.
+  `dev-site-token` / `dev-auditor-token` map to seeded people by email; the
+  site token is the site-scoped seat (ADR-0023), so most study-wide endpoints
+  403 for it, and the auditor token is unscoped read-only (ADR-0028), so
+  every mutation 403s.
 - Re-seeding regenerates all UUIDs; never cache ids across seeds. `pnpm db:seed`
   truncates — never run it against a real deployment.
 - Versions, signatures, and audit events are immutable at the DB level, so API

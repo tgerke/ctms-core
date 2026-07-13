@@ -209,6 +209,15 @@ await navigate(`${WEB}/documents/${doc.document_id}`);
 await shoot("document-page.png");
 await shootSections({ Versions: "document-new-version.png" });
 
+// live §11.70 verification (ADR-0028): the hash recomputed in the browser,
+// compared against the record and its signatures — a read, nothing mutates
+await evaluate(
+  `[...document.querySelectorAll('button')]
+     .find((b) => b.textContent.includes('Verify bytes')).click(); true`
+);
+await sleep(1500);
+await shootSections({ Versions: "verify-bytes.png" });
+
 // the signing confirmation panel, opened but never confirmed (no mutation)
 await navigate(`${WEB}/documents/${pendingDoc.document_id}`);
 await evaluate(
@@ -237,6 +246,13 @@ await evaluate(
 );
 await sleep(300);
 await shootSections({ "Pending review": "queue-bulk-review.png" });
+
+// the TMF binder (ADR-0028), read as the auditor persona so the header
+// shows the read-only seat's surface
+await evaluate("localStorage.setItem('ctms_token', 'dev-auditor-token'); true");
+await navigate(`${WEB}/binder`);
+await shoot("binder.png");
+await evaluate("localStorage.setItem('ctms_token', 'dev-admin-token'); true");
 
 await navigate(`${WEB}/audit`);
 await shoot("audit-page.png");

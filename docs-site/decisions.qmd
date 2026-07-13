@@ -336,6 +336,20 @@ route, so the site seat previews only its own site — a boundary the old
 content-addressed download never drew. Reads still leave no audit rows: the
 trail records what happened to the record, not who looked at it.
 
+## ADR-0028 — Auditor UX is a rendering of the record, not a module
+
+Everything an inspection needs was already a record; what was missing was
+the inspector's way in. The binder page serves the study in the reference
+model's own zone → section → artifact order over one GET, from the same
+derived views as every other surface — empty slots included, because an
+empty slot is information. "Verify bytes" re-fetches any version's content
+and recomputes its SHA-256 in the reader's browser, comparing against the
+recorded hash and every signature bound to it: the §11.70 linkage
+demonstrated, not just displayed, trusting neither the server's headers nor
+the UI's word. And the read-only auditor's seat is now seeded and real — the
+UI renders every seat only the operations its grants hold, so reading the
+record is a clean surface, not a field of buttons that answer 403.
+
 ---
 
 Three of these — ADR-0004, ADR-0006, and ADR-0010 — are the same idea applied
