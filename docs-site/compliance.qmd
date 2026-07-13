@@ -88,8 +88,9 @@ exactly these mutations and assert they fail.
    remains a non-goal of this phase.
 5. **`expected_document` churn is unaudited by design** — placeholders are
    derived state; the ground truth they derive from is fully audited. The
-   same stance covers extracted search text (ADR-0022): rebuildable at any
-   time from the immutable, audited bytes.
+   same stance covers extracted search text (ADR-0022) — OCR of scanned
+   pages included (ADR-0031): rebuildable at any time from the immutable,
+   audited bytes.
 
 Resolved since the first draft of this page: dev-token-only auth (now
 OIDC + RBAC), stubbed signing re-authentication, unblocked TRUNCATE

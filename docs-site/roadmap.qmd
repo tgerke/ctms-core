@@ -96,8 +96,19 @@ restated here because a feature comparison is meaningless without them.
   hash as the blob store, deliberately outside the audited record and
   rebuildable any time with `pnpm db:extract-text`. Search tokens now match
   metadata *or* content, and results carry a snippet of the content match.
-  What remains is OCR for scanned image-only PDFs and relevance ranking —
-  results still order by latest upload.
+  OCR for scanned image-only PDFs closed as ADR-0031; what remains is
+  relevance ranking — results still order by latest upload.
+- **OCR for scanned documents** — shipped as derived text recovered by the
+  backfill (ADR-0031): `pnpm db:extract-text` re-reads every PDF whose text
+  layer came back empty — the signature of a scanned paper original — with
+  tesseract.js over pages rendered by pdf.js, pure npm dependencies with no
+  OCR service or system binary, and nothing leaving the machine. The text
+  lands in the same content-addressed derived table, marked by its
+  extractor, so an OCR-grade search hit is always distinguishable in SQL
+  from a text-layer one. Never runs in the upload request; a scanned
+  document is metadata-searchable immediately and content-searchable after
+  the next backfill. English only, 20-page cap, accuracy bounded by scan
+  quality — stated, not hidden.
 - **TMF transfer and inspection export** — shipped as a verifiable package
   (ADR-0020): `pnpm export-tmf` writes every document version's
   content-addressed bytes, the full metadata (signatures with their §11.70
@@ -154,16 +165,16 @@ restated here because a feature comparison is meaningless without them.
   are single-tenant and the audit chain verifies end to end. The UI now
   renders every seat only the operations its grants hold, so the auditor
   works a clean surface instead of collecting 403s. Of what ADR-0027 left,
-  office-format renditions closed as ADR-0030; OCR and relevance ranking
-  remain.
+  office-format renditions closed as ADR-0030 and OCR as ADR-0031;
+  relevance ranking remains.
 - **Office-format preview renditions** — shipped as client-side renditions
   of the signed bytes (ADR-0030): the queue's preview now renders Word and
   Excel files as HTML computed in the viewer's browser — mammoth for docx, a
   small OOXML reader for xlsx — inside a fully sandboxed iframe, labeled
   "the downloaded file is the record." The server stores and serves nothing
   new, so no rendition exists anywhere to drift from the record, and byte
-  verification (§11.70) keeps hashing fetched originals. What remains is OCR
-  for image-only PDFs and relevance ranking; legacy .doc/.xls and
+  verification (§11.70) keeps hashing fetched originals. OCR for image-only
+  PDFs closed as ADR-0031; relevance ranking remains; legacy .doc/.xls and
   presentations honestly stay download offers.
 - **Site-seat log workflows** — shipped as structured facts on a site-scoped
   seat (ADR-0023): a `site_staff` grant lands its holder on their site's page
@@ -196,10 +207,10 @@ new system.
 
 ## If we built next
 
-Nothing is queued: office-format preview renditions, the last candidate
-pulled from the "what remains" notes, shipped 2026-07-12 (ADR-0030).
-Remaining candidates live in the notes above — site-side depth,
-cross-study analytics, OCR for scanned documents.
+Nothing is queued: OCR for scanned documents, the last candidate pulled
+from the "what remains" notes, shipped 2026-07-12 (ADR-0031). Remaining
+candidates live in the notes above — site-side depth, cross-study
+analytics, relevance ranking.
 
 ## Sources
 

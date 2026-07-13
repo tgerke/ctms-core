@@ -3,3 +3,5 @@ packages:
   - apps/*
 allowBuilds:
   esbuild: true
+  # postinstall is only an opencollective funding banner; the library needs no build
+  tesseract.js: false
