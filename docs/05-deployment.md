@@ -23,6 +23,18 @@ Postgres) vs. a managed `DATABASE_URL`, and `s3-local` (bundled MinIO) vs. a
 real Object Lock bucket. The sections below remain the spec — and the whole
 of it applies whether you run the compose file or your own topology.
 
+## Provisioning the VM
+
+If the host doesn't exist yet, `infra/cloud-init.yaml` builds it on any
+provider that accepts cloud-init user data (AWS, Azure, DigitalOcean,
+Hetzner, Proxmox, ...): Docker, the release-pinned stack above, SSH
+hardening, and a firewall, unattended. Render the placeholders per the
+file's header and paste the result into the provider's *user data* field;
+2 vCPUs / 2 GB RAM is comfortable. OIDC issuer/audience arrive via the
+`extra_env` placeholder or a post-boot edit of `/opt/ctms/.env`. The rest of
+this page — IdP registration, TMF RM import, admin provisioning, validation
+sign-off — still applies.
+
 ## Topology
 
 Three processes plus storage:

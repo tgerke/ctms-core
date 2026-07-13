@@ -122,7 +122,9 @@ publish container images to GHCR (`ghcr.io/tgerke/ctms-core-api`,
 `ghcr.io/tgerke/ctms-core-web`), and `infra/compose.prod.yaml` runs them
 behind automatic TLS with the least-privilege wiring built in: copy
 `infra/.env.example`, set a domain, passwords, and your identity provider,
-and `docker compose -f infra/compose.prod.yaml up -d`. The full pilot
+and `docker compose -f infra/compose.prod.yaml up -d`. If the VM doesn't exist yet, `infra/cloud-init.yaml`
+provisions it unattended on any provider that accepts cloud-init user data.
+The full pilot
 checklist — IdP registration, Object Lock, backups, validation sign-off — is
 [docs/05-deployment.md](https://github.com/tgerke/ctms-core/blob/main/docs/05-deployment.md).
 Never run `pnpm db:seed` against a deployment; it truncates everything.
