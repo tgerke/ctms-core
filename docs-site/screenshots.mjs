@@ -184,6 +184,21 @@ await navigate(WEB + "/");
 await shoot("dashboard.png");
 await shootSections(DASHBOARD_SECTIONS);
 
+// content search (ADR-0022): one word from metadata plus one that appears
+// only inside the file bytes, so the results carry a content snippet
+const searchQ = "cascade monitoring";
+const hits = await api(
+  `/studies/${study}/document-search?q=${encodeURIComponent(searchQ)}`,
+);
+if (!hits.some((r) => r.content_snippet))
+  throw new Error(`search "${searchQ}" returned no content snippet`);
+await navigate(`${WEB}/search?q=${encodeURIComponent(searchQ)}`);
+await shoot("search-results.png");
+
+// the portfolio (ADR-0021): every study's numbers side by side
+await navigate(`${WEB}/portfolio`);
+await shoot("portfolio.png");
+
 await navigate(`${WEB}/sites/${gappySite.study_site_id}`);
 await shoot("site-detail.png");
 await shootSections({ "Issues & deviations": "site-issues-form.png" });

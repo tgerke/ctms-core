@@ -18,6 +18,8 @@ finds the monitoring plan. When the match came from inside a document, the
 result shows a snippet of the surrounding text. (Scanned image-only PDFs
 have no extractable text, so they match by metadata only.)
 
+![Search results: metadata and content matches together, with a snippet where the match came from inside the file.](../images/search-results.png){.screenshot fig-alt="Document search page showing results for a two-word query, each with its TMF artifact, site, status chip, and an italic snippet of the matching text from inside the file"}
+
 ## Uploading a document
 
 Uploads happen on the site page, right on the row that needs the file. Open
