@@ -5,6 +5,24 @@ One deployment per customer — multi-tenancy is a non-goal of this phase
 quickstart into a pilot posture; `pnpm validation:iq` verifies most of it
 against the running environment and produces the sign-off report.
 
+## Reference implementation
+
+`infra/compose.prod.yaml` (ADR-0031) is this checklist as a runnable
+artifact: pinned GHCR images, Caddy terminating TLS as the only published
+service, a migrate one-shot that holds the owning role and rotates the
+runtime-role passwords, and the api connecting as `ctms_app` via
+`DATABASE_URL_APP`. Copy `infra/.env.example` to `infra/.env`, fill in the
+required values, and:
+
+```sh
+docker compose -f infra/compose.prod.yaml up -d
+```
+
+Compose profiles cover the supported variations: `local-db` (bundled
+Postgres) vs. a managed `DATABASE_URL`, and `s3-local` (bundled MinIO) vs. a
+real Object Lock bucket. The sections below remain the spec — and the whole
+of it applies whether you run the compose file or your own topology.
+
 ## Topology
 
 Three processes plus storage:
@@ -53,7 +71,9 @@ ALTER ROLE ctms_readonly LOGIN PASSWORD '<generated>';
 The API must run as `ctms_app` (it does by default — verify with IQ). The
 owning role's credentials are used only for `pnpm db:migrate` and stay out of
 the API's environment. `ctms_readonly` is the analyst SQL account
-(`docs/04-api.md`).
+(`docs/04-api.md`). `pnpm --filter @ctms/db rotate-passwords` performs the
+same rotation from `CTMS_APP_PASSWORD` / `CTMS_READONLY_PASSWORD` — the
+compose stack's migrate one-shot runs it on every bring-up.
 
 ## Identity provider
 
@@ -94,9 +114,13 @@ safe to rerun, with nothing to sync. Schedule it with cron at whatever
 cadence the team wants:
 
 ```cron
-# weekday mornings at 07:00 local
+# weekday mornings at 07:00 local — from a checkout
 0 7 * * 1-5  cd /srv/ctms-core && pnpm digest
+# or against the compose stack (the api image ships tools/)
+0 7 * * 1-5  cd /opt/ctms && docker compose -f compose.prod.yaml run --rm api pnpm digest
 ```
+
+The digest connects as the least-privilege `ctms_app` role, same as the api.
 
 Configuration is three env vars: `SMTP_URL` (the relay; the compose file's
 mailpit on `smtp://localhost:1025` for dev, inbox UI on :8025),
@@ -155,6 +179,9 @@ signatures and audit trail are their testimony and are not replayed here.
 - Object storage: versioned + locked already; replicate per your DR policy.
   Blobs are content-addressed, so a restore can be verified byte-for-byte
   against `document_version.sha256`.
+- Local storage driver (non-WORM pilots only): `infra/backup.sh` takes the
+  database dump and the blob directory as a pair under one timestamp;
+  restore instructions are in its header.
 - Schedule `GET /audit-chain/verify` (any grant holder) or the SQL function
   from cron/monitoring so chain integrity is exercised continuously, not just
   available.

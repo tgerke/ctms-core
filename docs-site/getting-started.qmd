@@ -114,3 +114,15 @@ Re-running `pnpm db:seed` resets the demo data. Two things to know:
 - The blob store for uploaded files defaults to a local `storage/` directory,
   content-addressed by sha256 (`STORAGE_DRIVER=local`); the `s3` driver adds
   Object Lock WORM for a pilot (see `.env.example`).
+
+## Deploying a pilot
+
+The dev stack above is not a deployment. For a real host, tagged releases
+publish container images to GHCR (`ghcr.io/tgerke/ctms-core-api`,
+`ghcr.io/tgerke/ctms-core-web`), and `infra/compose.prod.yaml` runs them
+behind automatic TLS with the least-privilege wiring built in: copy
+`infra/.env.example`, set a domain, passwords, and your identity provider,
+and `docker compose -f infra/compose.prod.yaml up -d`. The full pilot
+checklist — IdP registration, Object Lock, backups, validation sign-off — is
+[docs/05-deployment.md](https://github.com/tgerke/ctms-core/blob/main/docs/05-deployment.md).
+Never run `pnpm db:seed` against a deployment; it truncates everything.

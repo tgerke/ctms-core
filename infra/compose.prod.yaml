@@ -1,0 +1,120 @@
+# Production single-VM stack (ADR-0031). Pinned GHCR images, TLS at Caddy,
+# nothing else published to the host. Copy infra/.env.example to .env beside
+# this file and work through docs/05-deployment.md before real documents
+# touch the system.
+#
+#   docker compose -f compose.prod.yaml up -d
+#
+# Bring-up order is wired in: db -> migrate (one-shot, owner role, also
+# rotates the runtime-role passwords) -> api (least-privilege ctms_app) ->
+# web. NEVER run `pnpm db:seed` against this stack — it truncates everything.
+#
+# Profiles (COMPOSE_PROFILES in .env):
+#   local-db  — the bundled PostgreSQL. Drop it when DATABASE_URL points at
+#               a managed Postgres.
+#   s3-local  — MinIO, for self-hosted S3-compatible WORM storage. Prefer a
+#               real S3 bucket with Object Lock (docs/05-deployment.md);
+#               with neither, documents land on the local storage volume.
+
+name: ctms-core
+
+# Owner role: migrations and password rotation only. The api never sees it.
+x-owner-url: &owner-url ${DATABASE_URL:-postgres://ctms:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD (or DATABASE_URL) in .env}@postgres:5432/ctms}
+
+services:
+  caddy:
+    image: docker.io/library/caddy:2-alpine
+    restart: unless-stopped
+    # The only service with published ports.
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      CTMS_DOMAIN: ${CTMS_DOMAIN:?set CTMS_DOMAIN in .env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+  postgres:
+    image: docker.io/library/postgres:16
+    profiles: ["local-db"]
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ctms
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
+      POSTGRES_DB: ctms
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ctms -d ctms"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  minio:
+    image: docker.io/minio/minio
+    profiles: ["s3-local"]
+    restart: unless-stopped
+    command: server /data
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-ctms}
+      # MinIO refuses to start with a weak/empty password — set it in .env
+      # when the s3-local profile is on.
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-}
+    volumes:
+      - miniodata:/data
+
+  # One-shot with the owning role: applies migrations, then rotates the
+  # dev-grade role passwords to the values in .env. Exits when done; the api
+  # waits for it. This is the only container that uses the owner credential
+  # (ADR-0029); the api connects as ctms_app via DATABASE_URL_APP.
+  migrate:
+    image: ghcr.io/tgerke/ctms-core-api:${CTMS_VERSION:?pin CTMS_VERSION in .env}
+    command: sh -c "pnpm --filter @ctms/db migrate && pnpm --filter @ctms/db rotate-passwords"
+    environment:
+      DATABASE_URL: *owner-url
+      CTMS_APP_PASSWORD: ${CTMS_APP_PASSWORD:-}
+      CTMS_READONLY_PASSWORD: ${CTMS_READONLY_PASSWORD:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+        required: false # absent when the local-db profile is off
+
+  api:
+    image: ghcr.io/tgerke/ctms-core-api:${CTMS_VERSION}
+    restart: unless-stopped
+    # Optional configuration (OIDC, storage driver, digest SMTP, ...) flows
+    # in from .env; variables left commented out there simply don't exist in
+    # the container.
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      # Least-privilege runtime role; the owner DATABASE_URL stays with the
+      # migrate one-shot.
+      DATABASE_URL_APP: ${DATABASE_URL_APP:-postgres://ctms_app:${CTMS_APP_PASSWORD:?set CTMS_APP_PASSWORD (or DATABASE_URL_APP) in .env}@postgres:5432/ctms}
+      AUTH_MODE: ${AUTH_MODE:?set AUTH_MODE in .env (oidc for anything real)}
+      API_PORT: "8787"
+      STORAGE_DIR: /var/lib/ctms/storage
+    volumes:
+      - storagedata:/var/lib/ctms/storage
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  web:
+    image: ghcr.io/tgerke/ctms-core-web:${CTMS_VERSION}
+    restart: unless-stopped
+    environment:
+      API_PROXY_TARGET: http://api:8787
+    depends_on:
+      - api
+
+volumes:
+  pgdata:
+  miniodata:
+  storagedata:
+  caddy_data:
+  caddy_config:
