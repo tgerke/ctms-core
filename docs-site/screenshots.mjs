@@ -262,6 +262,18 @@ await evaluate(
 await sleep(300);
 await shootSections({ "Pending review": "queue-bulk-review.png" });
 
+// office-format rendition (ADR-0030): the xlsx preview rendered in-browser.
+// Fresh navigation clears the bulk selection first.
+await navigate(`${WEB}/queue`);
+await evaluate(
+  `(() => { const row = [...document.querySelectorAll('li')]
+       .find((l) => l.textContent.includes('Laboratory Normal Ranges'));
+     [...row.querySelectorAll('button')]
+       .find((b) => b.textContent.includes('Preview')).click(); return true; })()`
+);
+await sleep(3000); // lazy chunk + conversion
+await shootSections({ "Pending review": "queue-preview-rendition.png" });
+
 // the TMF binder (ADR-0028), read as the auditor persona so the header
 // shows the read-only seat's surface
 await evaluate("localStorage.setItem('ctms_token', 'dev-auditor-token'); true");

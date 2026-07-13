@@ -99,10 +99,15 @@ overdue; overdue assignments also appear in the emailed digest.
 
 Read before you sign without leaving the page: **Preview** on any row opens
 the file right there in the queue — the exact bytes your signature would be
-bound to, not a thumbnail or a converted copy. One preview is open at a
-time, so working through the queue reads like paging through the stack;
-PDFs, images, and plain text render inline, and anything else offers a
-download. Close it, tick the box, move on.
+bound to, not a thumbnail or a converted copy stored somewhere. One preview
+is open at a time, so working through the queue reads like paging through
+the stack; PDFs, images, and plain text render inline. Word documents and
+Excel workbooks render too, converted to HTML *in your browser* from those
+same bytes — the panel says "the downloaded file is the record," and it
+means it: nothing derived is kept anywhere. Anything else (legacy .doc,
+presentations) offers a download. Close it, tick the box, move on.
+
+![An Excel workbook awaiting review, rendered in the browser on the queue row](../images/queue-preview-rendition.png)
 
 Review a batch by ticking the checkboxes (or the select-all next to the
 heading). Approving the selection is **one signature ceremony for the

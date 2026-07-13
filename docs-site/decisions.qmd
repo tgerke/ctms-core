@@ -350,6 +350,22 @@ the UI's word. And the read-only auditor's seat is now seeded and real — the
 UI renders every seat only the operations its grants hold, so reading the
 record is a clean surface, not a field of buttons that answer 403.
 
+## ADR-0030 — Office-format previews render in the viewer's browser
+
+ADR-0027 left Word and Excel files — plans, logs, trackers — as a download
+offer, because a stored rendition would be a second artifact to keep honest
+against the record. The way out is to store nothing: the preview panel
+already fetches the exact signed bytes, and for office formats the web app
+now converts them to HTML in the viewer's browser — the same trust model as
+the browser's built-in PDF viewer, which is also client software rendering
+the signed bytes. docx converts with mammoth; xlsx with a small OOXML
+reader of our own (exceljs, which the server keeps for the importer, never
+finishes loading under a browser bundler — and a preview needs only cell
+text). The output lives in an iframe with an empty sandbox, because a
+document under review is untrusted input, and the panel is labeled
+"Rendered in your browser for reading — the downloaded file is the record."
+No endpoint, no schema, no stored artifact: there is nothing to drift.
+
 ---
 
 Three of these — ADR-0004, ADR-0006, and ADR-0010 — are the same idea applied

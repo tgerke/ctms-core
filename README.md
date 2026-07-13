@@ -64,7 +64,8 @@ role-based grants, signing re-authentication (§11.200), WORM-capable object
 storage, least-privilege DB roles, a verbatim CDISC TMF Reference Model importer
 (`pnpm db:import-tmf`), and generated validation artifacts. On that core sits
 the working surface: full-text search across metadata and document content, a
-review queue with inline preview and batch signing (one re-authentication, one
+review queue with inline preview (office formats render in the browser; the
+signed bytes stay the record) and batch signing (one re-authentication, one
 signature per document), site-scoped seats keeping structured delegation-of-authority
 and training logs, a read-only auditor seat with a reference-model binder and
 in-browser byte verification, a multi-study portfolio view, emailed oversight

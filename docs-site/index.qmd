@@ -58,7 +58,8 @@ See the [operational layer guide](operations.qmd).
 
 The day-to-day surface is built over those same views, not beside them: header
 search that reads document content as well as metadata, a review queue with
-inline preview and batch signing (one re-authentication, one signature per
+inline preview (office formats render in the browser; the signed bytes stay
+the record) and batch signing (one re-authentication, one signature per
 document), delegation-of-authority and training logs kept by the site seat, an
 auditor's binder in reference-model order with in-browser byte verification,
 and a verifiable export package that speaks CDISC eTMF-EMS in both directions.
