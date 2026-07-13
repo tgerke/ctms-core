@@ -11,9 +11,11 @@ import {
 import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import {
+  can,
   useAssignReview,
   useBulkApprove,
   useBulkReturn,
+  useMe,
   usePeople,
   useReviewQueue,
   useVersionContent,
@@ -44,6 +46,11 @@ export default function QueuePage({ study }: { study: Study | undefined }) {
   const assignedTo = params.get("assigned_to") ?? undefined;
   const queueQuery = useReviewQueue(study?.id, { status, assignedTo });
   const { data: people } = usePeople();
+  // Grant-aware rendering (ADR-0028): the ceremony's affordances (selection,
+  // bulk bar, assignment) exist only for seats holding approval authority;
+  // reading the queue and previewing stay open to every reader.
+  const { data: me } = useMe();
+  const reviewer = can(me, "approve");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   // One preview open at a time: switching rows swaps the panel, like paging
   // through the stack of pending documents.
@@ -85,15 +92,17 @@ export default function QueuePage({ study }: { study: Study | undefined }) {
 
       <section className="card">
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-hairline px-4 py-3">
-          <input
-            type="checkbox"
-            checked={allSelected}
-            onChange={() =>
-              setSelected(allSelected ? new Set() : new Set(visibleIds))
-            }
-            aria-label={allSelected ? "Clear selection" : "Select all listed"}
-          />
-          <h2 className="-ml-2 font-medium">Pending review</h2>
+          {reviewer && (
+            <input
+              type="checkbox"
+              checked={allSelected}
+              onChange={() =>
+                setSelected(allSelected ? new Set() : new Set(visibleIds))
+              }
+              aria-label={allSelected ? "Clear selection" : "Select all listed"}
+            />
+          )}
+          <h2 className={reviewer ? "-ml-2 font-medium" : "font-medium"}>Pending review</h2>
           <div className="ml-auto flex flex-wrap items-center gap-2">
             {(Object.keys(QUEUE_STATUS) as QueueStatus[]).map((s) => (
               <button
@@ -120,7 +129,7 @@ export default function QueuePage({ study }: { study: Study | undefined }) {
             </select>
           </div>
         </div>
-        {selected.size > 0 && (
+        {reviewer && selected.size > 0 && (
           <BulkBar
             selected={selected}
             clear={() => setSelected(new Set())}
@@ -136,6 +145,7 @@ export default function QueuePage({ study }: { study: Study | undefined }) {
               <QueueRow
                 key={q.document_version_id}
                 q={q}
+                reviewer={reviewer}
                 checked={selected.has(q.document_version_id)}
                 toggle={() => toggle(q.document_version_id)}
                 previewing={previewId === q.document_version_id}
@@ -270,12 +280,14 @@ function BulkBar({ selected, clear }: { selected: Set<string>; clear: () => void
 
 function QueueRow({
   q,
+  reviewer,
   checked,
   toggle,
   previewing,
   togglePreview,
 }: {
   q: QueueEntry;
+  reviewer: boolean;
   checked: boolean;
   toggle: () => void;
   previewing: boolean;
@@ -291,12 +303,14 @@ function QueueRow({
   return (
     <li className="px-4 py-2.5">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-        <input
-          type="checkbox"
-          checked={checked}
-          onChange={toggle}
-          aria-label={`Select ${q.title} v${q.version_number}`}
-        />
+        {reviewer && (
+          <input
+            type="checkbox"
+            checked={checked}
+            onChange={toggle}
+            aria-label={`Select ${q.title} v${q.version_number}`}
+          />
+        )}
         <span className="mono text-xs text-muted">{q.artifact_code}</span>
         <Link to={`/documents/${q.document_id}`} className="text-sm hover:underline">
           {q.title}
@@ -317,7 +331,7 @@ function QueueRow({
             <Eye size={12} aria-hidden />
             {previewing ? "Close preview" : "Preview"}
           </button>
-          {!open && (
+          {reviewer && !open && (
             <button
               onClick={() => setOpen(true)}
               className="inline-flex items-center gap-1.5 rounded-md border border-hairline px-2 py-1 text-xs text-ink2 hover:bg-page"

@@ -10,6 +10,7 @@ import {
 import { useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import {
+  can,
   isSiteSeat,
   useAssignSiteRole,
   useCreateDelegation,
@@ -122,10 +123,11 @@ export default function SitePage({ study }: { study: Study | undefined }) {
         <h2 className="border-b border-hairline px-4 py-3 font-medium">Staff</h2>
         <ul className="divide-y divide-hairline">
           {staff?.map((m) => (
-            <StaffRow key={m.role_id} m={m} readOnly={siteSeat} />
+            // Grant-aware rendering (ADR-0028): staffing changes are admin work.
+            <StaffRow key={m.role_id} m={m} readOnly={!can(me, "administer")} />
           ))}
         </ul>
-        {!siteSeat && study && (
+        {can(me, "administer") && study && (
           <div className="border-t border-hairline px-4 py-3">
             <AddStaffForm studyId={study.id} studySiteId={site.study_site_id} />
           </div>
@@ -213,7 +215,12 @@ export default function SitePage({ study }: { study: Study | undefined }) {
           </h2>
           <ul className="divide-y divide-hairline">
             {rows.map((r) => (
-              <ExpectedRow key={r.expected_document_id} row={r} canWaive={!siteSeat} />
+              <ExpectedRow
+                key={r.expected_document_id}
+                row={r}
+                canUpload={can(me, "upload")}
+                canWaive={can(me, "administer")}
+              />
             ))}
           </ul>
         </section>
@@ -232,6 +239,10 @@ function DelegationLog({
   staff: StaffMember[] | undefined;
 }) {
   const { data: entries } = useDelegationLog(studySiteId);
+  // Log entries are the site's record of itself (ADR-0023): only a seat
+  // holding 'log' authors or ends them; everyone else reads (ADR-0028).
+  const { data: me } = useMe();
+  const canLog = can(me, "log");
   return (
     <>
       {entries?.length === 0 ? (
@@ -239,24 +250,26 @@ function DelegationLog({
       ) : (
         <ul className="divide-y divide-hairline">
           {entries?.map((d) => (
-            <DelegationRow key={d.delegation_id} d={d} />
+            <DelegationRow key={d.delegation_id} d={d} canLog={canLog} />
           ))}
         </ul>
       )}
-      <div className="border-t border-hairline px-4 py-3">
-        <NewDelegationForm studySiteId={studySiteId} staff={staff} />
-      </div>
+      {canLog && (
+        <div className="border-t border-hairline px-4 py-3">
+          <NewDelegationForm studySiteId={studySiteId} staff={staff} />
+        </div>
+      )}
     </>
   );
 }
 
-function DelegationRow({ d }: { d: Delegation }) {
+function DelegationRow({ d, canLog }: { d: Delegation; canLog: boolean }) {
   const endDelegation = useEndDelegation();
   const [err, setErr] = useState<unknown>(null);
   const ended = d.status === "ended";
   // An entry ended today is still derived-active through its end date, but
   // the end fact is set — ending twice would only earn a 409.
-  const endable = d.end_date === null;
+  const endable = canLog && d.end_date === null;
   return (
     <li className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2.5">
       <div className="min-w-0">
@@ -415,6 +428,7 @@ function TrainingLog({
   staff: StaffMember[] | undefined;
 }) {
   const { data: entries } = useTrainingLog(studySiteId);
+  const { data: me } = useMe();
   return (
     <>
       {entries?.length === 0 ? (
@@ -426,9 +440,11 @@ function TrainingLog({
           ))}
         </ul>
       )}
-      <div className="border-t border-hairline px-4 py-3">
-        <NewTrainingForm studySiteId={studySiteId} staff={staff} />
-      </div>
+      {can(me, "log") && (
+        <div className="border-t border-hairline px-4 py-3">
+          <NewTrainingForm studySiteId={studySiteId} staff={staff} />
+        </div>
+      )}
     </>
   );
 }
@@ -556,7 +572,15 @@ function NewTrainingForm({
   );
 }
 
-function ExpectedRow({ row, canWaive }: { row: ExpectedDocument; canWaive: boolean }) {
+function ExpectedRow({
+  row,
+  canUpload,
+  canWaive,
+}: {
+  row: ExpectedDocument;
+  canUpload: boolean;
+  canWaive: boolean;
+}) {
   const upload = useUpload();
   const waive = useWaive();
   const liftWaiver = useRevokeWaiver();
@@ -622,9 +646,10 @@ function ExpectedRow({ row, canWaive }: { row: ExpectedDocument; canWaive: boole
             }}
           />
         )}
-        {(row.status === "missing" ||
-          row.status === "expired" ||
-          row.status === "returned") && (
+        {canUpload &&
+          (row.status === "missing" ||
+            row.status === "expired" ||
+            row.status === "returned") && (
           <>
             <input
               ref={fileRef}

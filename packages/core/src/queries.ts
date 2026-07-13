@@ -314,6 +314,121 @@ export async function listTmfArtifacts(sql: Sql) {
     ORDER BY ta.code`;
 }
 
+// --- TMF binder (ADR-0028) ----------------------------------------------------
+
+export interface BinderDocument {
+  document_id: string;
+  title: string;
+  status: string;
+  effective_date: string | null;
+  expires_at: string | null;
+  site_number: string | null;
+  person_given_name: string | null;
+  person_family_name: string | null;
+  version_count: number;
+  signature_count: number;
+}
+
+export interface BinderArtifact {
+  tmf_artifact_id: number;
+  artifact_code: string;
+  artifact_name: string;
+  expected_total: number;
+  missing_count: number;
+  waived_count: number;
+  documents: BinderDocument[];
+}
+
+export interface BinderSection {
+  section_code: string;
+  section_name: string;
+  artifacts: BinderArtifact[];
+}
+
+export interface BinderZone {
+  zone_number: number;
+  zone_name: string;
+  sections: BinderSection[];
+}
+
+/**
+ * The study's TMF laid out the way an inspector reads one: the reference
+ * model's zone → section → artifact hierarchy, each artifact carrying its
+ * filed documents and the expected-status rollup from the same view every
+ * other surface derives from (ADR-0028). Every artifact of the loaded
+ * taxonomy appears, populated or not — an empty slot is information, not
+ * noise to hide server-side.
+ */
+export async function studyBinder(sql: Sql, studyId: string): Promise<BinderZone[]> {
+  const artifacts = await sql`
+    SELECT tz.number AS zone_number, tz.name AS zone_name,
+           tsec.code AS section_code, tsec.name AS section_name,
+           ta.id AS tmf_artifact_id, ta.code AS artifact_code, ta.name AS artifact_name
+    FROM tmf_artifact ta
+    JOIN tmf_section tsec ON tsec.id = ta.section_id
+    JOIN tmf_zone tz ON tz.id = tsec.zone_id
+    ORDER BY tz.number, tsec.code, ta.code`;
+  const documents = await sql`
+    SELECT d.tmf_artifact_id, d.id AS document_id, d.title, d.status,
+           d.effective_date, d.expires_at,
+           ss.site_number,
+           p.given_name AS person_given_name, p.family_name AS person_family_name,
+           (SELECT count(*)::int FROM document_version dv
+             WHERE dv.document_id = d.id) AS version_count,
+           (SELECT count(*)::int FROM signature sg
+             JOIN document_version dv ON dv.id = sg.document_version_id
+             WHERE dv.document_id = d.id) AS signature_count
+    FROM document d
+    LEFT JOIN study_site ss ON ss.id = d.study_site_id
+    LEFT JOIN person p ON p.id = d.person_id
+    WHERE d.study_id = ${studyId}
+    ORDER BY ss.site_number NULLS FIRST, p.family_name NULLS FIRST, d.created_at`;
+  const expected = await sql`
+    SELECT v.tmf_artifact_id, count(*)::int AS expected_total,
+           count(*) FILTER (WHERE v.status = 'missing')::int AS missing_count,
+           count(*) FILTER (WHERE v.status = 'waived')::int AS waived_count
+    FROM v_expected_document_status v
+    WHERE v.study_id = ${studyId}
+    GROUP BY v.tmf_artifact_id`;
+
+  const docsByArtifact = new Map<number, BinderDocument[]>();
+  for (const { tmf_artifact_id, ...doc } of documents) {
+    const list = docsByArtifact.get(tmf_artifact_id) ?? [];
+    list.push(doc as BinderDocument);
+    docsByArtifact.set(tmf_artifact_id, list);
+  }
+  const expectedByArtifact = new Map(expected.map((e) => [e.tmf_artifact_id, e]));
+
+  const zones: BinderZone[] = [];
+  for (const row of artifacts) {
+    let zone = zones.at(-1);
+    if (!zone || zone.zone_number !== row.zone_number) {
+      zone = { zone_number: row.zone_number, zone_name: row.zone_name, sections: [] };
+      zones.push(zone);
+    }
+    let section = zone.sections.at(-1);
+    if (!section || section.section_code !== row.section_code) {
+      section = {
+        section_code: row.section_code,
+        section_name: row.section_name,
+        artifacts: [],
+      };
+      zone.sections.push(section);
+    }
+    const exp = expectedByArtifact.get(row.tmf_artifact_id);
+    section.artifacts.push({
+      tmf_artifact_id: row.tmf_artifact_id,
+      artifact_code: row.artifact_code,
+      artifact_name: row.artifact_name,
+      expected_total: exp?.expected_total ?? 0,
+      missing_count: exp?.missing_count ?? 0,
+      waived_count: exp?.waived_count ?? 0,
+      documents: docsByArtifact.get(row.tmf_artifact_id) ?? [],
+    });
+  }
+  return zones;
+}
+
 /**
  * What a source system already filed into a study (ADR-0025): the read half
  * of idempotent filing. A partner integration — or the EMS importer — asks

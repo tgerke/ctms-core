@@ -69,6 +69,12 @@ export function configureTokens(): void {
     email: "dana.kim@site001.example",
     roleLabel: "site staff",
   });
+  // The auditor's seat (ADR-0028): an unscoped read_only grant — view
+  // everything, change nothing.
+  tokenToEmail.set(process.env.API_TOKEN_AUDITOR ?? "dev-auditor-token", {
+    email: "ruth.ostrow@gcpaudit.example",
+    roleLabel: "auditor",
+  });
 }
 
 // --- oidc mode ----------------------------------------------------------------

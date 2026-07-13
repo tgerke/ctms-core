@@ -1,10 +1,11 @@
 import { FileCheck2, Moon, Search, ShieldCheck, ShieldX, Sun } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, Navigate, Route, Routes, useNavigate } from "react-router-dom";
-import { isSiteSeat, useChainStatus, useMe, useStudies } from "./api";
+import { can, isSiteSeat, useChainStatus, useMe, useStudies } from "./api";
 import { authMode } from "./auth";
 import AdminPage from "./pages/AdminPage";
 import AuditPage from "./pages/AuditPage";
+import BinderPage from "./pages/BinderPage";
 import PortfolioPage from "./pages/PortfolioPage";
 import QueuePage from "./pages/QueuePage";
 import SearchPage from "./pages/SearchPage";
@@ -59,6 +60,7 @@ const DEV_PERSONAS: { token: string; label: string }[] = [
   { token: "dev-admin-token", label: "Nora Feld — trial ops" },
   { token: "dev-monitor-token", label: "Ravi Patel — monitor" },
   { token: "dev-site-token", label: "Dana Kim — site 001" },
+  { token: "dev-auditor-token", label: "Ruth Ostrow — auditor" },
 ];
 
 function DevPersonaSwitcher() {
@@ -167,17 +169,27 @@ export default function App() {
                   Portfolio
                 </Link>
                 <Link
+                  to="/binder"
+                  className="rounded-md px-2 py-1 text-sm text-ink2 hover:bg-surface"
+                >
+                  Binder
+                </Link>
+                <Link
                   to="/queue"
                   className="rounded-md px-2 py-1 text-sm text-ink2 hover:bg-surface"
                 >
                   Review queue
                 </Link>
-                <Link
-                  to="/admin"
-                  className="rounded-md px-2 py-1 text-sm text-ink2 hover:bg-surface"
-                >
-                  Admin
-                </Link>
+                {/* Grant-aware rendering (ADR-0028): a seat that cannot
+                    administer gets no admin surface to collect 403s on. */}
+                {can(me, "administer") && (
+                  <Link
+                    to="/admin"
+                    className="rounded-md px-2 py-1 text-sm text-ink2 hover:bg-surface"
+                  >
+                    Admin
+                  </Link>
+                )}
               </>
             )}
             <Link
@@ -221,6 +233,7 @@ export default function App() {
           <Route path="/visits/:visitId" element={<VisitPage />} />
           <Route path="/documents/:documentId" element={<DocumentPage />} />
           <Route path="/search" element={<SearchPage study={study} />} />
+          <Route path="/binder" element={<BinderPage study={study} />} />
           <Route path="/portfolio" element={<PortfolioPage onSelectStudy={selectStudy} />} />
           <Route path="/queue" element={<QueuePage study={study} />} />
           <Route path="/admin" element={<AdminPage study={study} />} />

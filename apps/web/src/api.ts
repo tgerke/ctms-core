@@ -388,6 +388,41 @@ export interface TmfArtifact {
   zone_name: string;
 }
 
+// --- TMF binder (ADR-0028) -----------------------------------------------------
+
+export interface BinderDocument {
+  document_id: string;
+  title: string;
+  status: string;
+  effective_date: string | null;
+  expires_at: string | null;
+  site_number: string | null;
+  person_given_name: string | null;
+  person_family_name: string | null;
+  version_count: number;
+  signature_count: number;
+}
+
+export interface BinderArtifact {
+  tmf_artifact_id: number;
+  artifact_code: string;
+  artifact_name: string;
+  expected_total: number;
+  missing_count: number;
+  waived_count: number;
+  documents: BinderDocument[];
+}
+
+export interface BinderZone {
+  zone_number: number;
+  zone_name: string;
+  sections: {
+    section_code: string;
+    section_name: string;
+    artifacts: BinderArtifact[];
+  }[];
+}
+
 // --- Site seat (ADR-0023) ----------------------------------------------------
 
 export interface Me {
@@ -537,6 +572,17 @@ async function fetchVersionContent(versionId: string) {
     mime: blob.type,
     fileName: /filename="([^"]*)"/.exec(disposition)?.[1] ?? "document",
   };
+}
+
+/**
+ * Live record verification (ADR-0028): re-hash the exact bytes the API served
+ * in this browser and compare against the stored content hash — the §11.70
+ * record↔signature binding demonstrated on demand, not taken on faith.
+ */
+export async function hashVersionBytes(versionId: string): Promise<string> {
+  const { blob } = await fetchVersionContent(versionId);
+  const digest = await crypto.subtle.digest("SHA-256", await blob.arrayBuffer());
+  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
 /** Fetch a version's bytes and hand them to the browser as a download. */
@@ -951,6 +997,15 @@ export function useReportEnrollment() {
 export const usePortfolio = () =>
   useQuery({ queryKey: ["portfolio"], queryFn: () => api<PortfolioEntry[]>("/portfolio") });
 
+// --- TMF binder hook (ADR-0028) --------------------------------------------------
+
+export const useBinder = (studyId: string | undefined) =>
+  useQuery({
+    queryKey: ["binder", studyId],
+    queryFn: () => api<BinderZone[]>(`/studies/${studyId}/binder`),
+    enabled: !!studyId,
+  });
+
 // --- Document search hook (ADR-0019) ------------------------------------------
 
 export const useDocumentSearch = (
@@ -1244,6 +1299,30 @@ export const useMe = () =>
 /** Every grant is site-scoped: render the site seat, not the study dashboard. */
 export const isSiteSeat = (me: Me | undefined) =>
   !!me && me.grants.length > 0 && me.grants.every((g) => g.study_site_id !== null);
+
+// --- Grant-aware rendering (ADR-0028) ------------------------------------------
+
+export type Operation = "read" | "upload" | "sign" | "approve" | "administer" | "log";
+
+// Mirror of ROLE_OPERATIONS in packages/core/src/authz.ts, which stays the
+// authority: hiding an affordance here is ergonomics for seats that could
+// only collect 403s — the API's permission gate is what enforces anything.
+const ROLE_OPERATIONS: Record<AccessRole, readonly Operation[]> = {
+  admin: ["read", "upload", "sign", "approve", "administer", "log"],
+  trial_ops: ["read", "upload", "sign", "approve"],
+  monitor: ["read", "upload", "sign"],
+  read_only: ["read"],
+  ingest: ["read", "upload"],
+  site_staff: ["read", "upload", "sign", "log"],
+};
+
+/**
+ * Does any of the caller's grants permit the operation somewhere? Coarser
+ * than the server's scope-aware check on purpose: page routing (the site
+ * seat) already keeps a seat on the resources its grants reach.
+ */
+export const can = (me: Me | undefined, op: Operation): boolean =>
+  !!me?.grants.some((g) => ROLE_OPERATIONS[g.role].includes(op));
 
 export const useSiteOverview = (studySiteId: string | undefined) =>
   useQuery({

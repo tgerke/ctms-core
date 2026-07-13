@@ -21,8 +21,8 @@ at `http://localhost:8787/docs`.
 Auth: `Authorization: Bearer <token>`. Two modes, selected by `AUTH_MODE`:
 
 - **`dev`** — static tokens from `.env.example` (`dev-admin-token`,
-  `dev-monitor-token`, `dev-service-token`, `dev-site-token`) map to seeded
-  people. Demo only.
+  `dev-monitor-token`, `dev-service-token`, `dev-site-token`,
+  `dev-auditor-token`) map to seeded people. Demo only.
 - **`oidc`** — the token is a JWT from your identity provider
   (`OIDC_ISSUER`/`OIDC_AUDIENCE`); its verified email claim resolves to a
   person record. Any OIDC-compliant IdP works (Okta, Entra ID, Auth0,
@@ -89,6 +89,15 @@ The cross-study view is `GET /portfolio` (ADR-0021): one row per study with
 completeness counts, attention items, review-queue size, open issues,
 overdue visits, and enrollment vs target — the same numbers the study
 dashboards derive, grouped. One GET is a portfolio report.
+
+The inspector's view is `GET /studies/{id}/binder` (ADR-0028): the study in
+the reference model's own zone → section → artifact hierarchy, each artifact
+carrying its filed documents and the expected/missing/waived rollup — the
+same derived views again, so the binder can never disagree with the
+dashboards. Every artifact of the loaded taxonomy appears; an empty slot is
+information. One GET is a TMF binder. The seat that pairs with it is an
+unscoped `read_only` grant (`dev-auditor-token` in the demo): every read on
+this page works, every mutation answers 403.
 
 ## Writing
 

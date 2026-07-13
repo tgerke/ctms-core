@@ -47,6 +47,7 @@ import {
   scheduleVisit,
   signDocumentVersion,
   siteStaff,
+  studyBinder,
   studyEnrollment,
   studyIssues,
   studyMilestones,
@@ -83,6 +84,7 @@ import {
   AccessRoleSchema,
   ActionItemSchema,
   AuditEventSchema,
+  BinderZoneSchema,
   DelegationSchema,
   DelegationStatusSchema,
   DocumentDetailSchema,
@@ -439,6 +441,21 @@ export function buildApp(db: Db, sql: Sql) {
       });
       return c.json(rows as never, 200);
     },
+  );
+
+  app.openapi(
+    createRoute({
+      method: "get",
+      path: "/studies/{studyId}/binder",
+      security,
+      summary: "The study TMF as a binder: zones, sections, artifacts",
+      description:
+        "The reference model's own hierarchy over the same derived views every other surface reads (ADR-0028) — the navigation an inspector expects. Every artifact of the loaded taxonomy appears with its filed documents and expected-status rollup; an empty slot is information.",
+      request: { params: z.object({ studyId: z.string().uuid() }) },
+      responses: { 200: json(z.array(BinderZoneSchema), "Binder") },
+    }),
+    async (c) =>
+      c.json((await studyBinder(sql, c.req.valid("param").studyId)) as never, 200),
   );
 
   app.openapi(

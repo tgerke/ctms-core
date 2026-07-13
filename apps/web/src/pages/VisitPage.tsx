@@ -2,7 +2,9 @@ import { ArrowLeft, CheckCircle2, ClipboardList, FileUp, PenLine } from "lucide-
 import { useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import {
+  can,
   useCreateActionItem,
+  useMe,
   useResolveActionItem,
   useSign,
   useUpdateVisit,
@@ -17,11 +19,15 @@ export default function VisitPage() {
   const visitQuery = useVisit(visitId);
   const detail = visitQuery.data;
   const update = useUpdateVisit();
+  const { data: me } = useMe();
   const [err, setErr] = useState<unknown>(null);
 
   if (!detail) return <PageState query={visitQuery} label="visit" />;
   const v = detail.visit;
   const tripReport = detail.documents.find((d) => d.link_kind === "trip_report");
+  // Grant-aware rendering (ADR-0028): visit facts and uploads are monitor
+  // work; the review chip is approval authority.
+  const canUpload = can(me, "upload");
 
   return (
     <div className="space-y-6">
@@ -46,7 +52,7 @@ export default function VisitPage() {
             : ""}
         </div>
         {v.summary && <p className="mt-2 max-w-3xl text-sm text-ink2">{v.summary}</p>}
-        {!v.visit_date && (
+        {canUpload && !v.visit_date && (
           <button
             onClick={() => {
               setErr(null);
@@ -68,7 +74,7 @@ export default function VisitPage() {
       <section className="card">
         <div className="flex flex-wrap items-center gap-2 border-b border-hairline px-4 py-3">
           <h2 className="font-medium">Trip report & letters</h2>
-          {v.visit_date && (!tripReport || tripReport.status === "returned") && (
+          {canUpload && v.visit_date && (!tripReport || tripReport.status === "returned") && (
             <TripReportUpload
               visitId={v.monitoring_visit_id}
               siteNumber={v.site_number}
@@ -94,7 +100,7 @@ export default function VisitPage() {
                   {d.title}
                 </Link>
                 <span className="ml-auto inline-flex items-center gap-2 text-xs text-ink2">
-                  {d.status === "pending_review" && (
+                  {can(me, "approve") && d.status === "pending_review" && (
                     <Link
                       to={`/documents/${d.document_id}`}
                       className="inline-flex items-center gap-1 rounded-md px-2 py-1 font-medium text-white"
@@ -117,9 +123,11 @@ export default function VisitPage() {
           <span className="text-xs text-muted">
             {v.open_action_items} open of {v.total_action_items}
           </span>
-          <div className="ml-auto">
-            <AddActionItemForm visitId={v.monitoring_visit_id} />
-          </div>
+          {canUpload && (
+            <div className="ml-auto">
+              <AddActionItemForm visitId={v.monitoring_visit_id} />
+            </div>
+          )}
         </div>
         {detail.actionItems.length === 0 ? (
           <p className="px-4 py-3 text-sm text-muted">No action items.</p>
@@ -281,13 +289,14 @@ function ActionItemRow({
   };
 }) {
   const resolve = useResolveActionItem();
+  const { data: me } = useMe();
   const [err, setErr] = useState<unknown>(null);
   return (
     <li className="px-4 py-2.5">
       <div className="flex flex-wrap items-center gap-x-3">
         <span className="text-sm">{item.description}</span>
         <span className="ml-auto flex items-center gap-2">
-          {item.status !== "resolved" && (
+          {can(me, "upload") && item.status !== "resolved" && (
             <button
               onClick={() => {
                 setErr(null);

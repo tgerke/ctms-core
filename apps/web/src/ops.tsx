@@ -2,10 +2,12 @@ import { CalendarPlus, CheckCircle2, CircleAlert, Flag, Plus } from "lucide-reac
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import {
+  can,
   errorMessage,
   useAchieveMilestone,
   useCreateIssue,
   useCreateMilestone,
+  useMe,
   useReportEnrollment,
   useResolveIssue,
   useScheduleVisit,
@@ -105,6 +107,7 @@ export function VisitListItem({ v, showSite }: { v: MonitoringVisit; showSite?: 
 
 export function IssueListItem({ issue, showSite }: { issue: Issue; showSite?: boolean }) {
   const resolve = useResolveIssue();
+  const { data: me } = useMe();
   const [err, setErr] = useState<unknown>(null);
   return (
     <li className="px-4 py-2.5">
@@ -112,7 +115,7 @@ export function IssueListItem({ issue, showSite }: { issue: Issue; showSite?: bo
         <SpecChip spec={ISSUE_SEVERITY[issue.severity]} />
         <span className="text-sm">{issue.title}</span>
         <span className="ml-auto flex items-center gap-2">
-          {issue.status !== "resolved" && (
+          {can(me, "upload") && issue.status !== "resolved" && (
             <button
               onClick={() => {
                 setErr(null);
@@ -164,6 +167,7 @@ export function MilestoneStrip({
   achievable?: boolean;
 }) {
   const achieve = useAchieveMilestone();
+  const { data: me } = useMe();
   const [err, setErr] = useState<unknown>(null);
   return (
     <>
@@ -193,7 +197,7 @@ export function MilestoneStrip({
               <span className="text-xs text-muted">
                 {m.actual_date ?? m.planned_date}
               </span>
-              {achievable && m.status !== "achieved" && (
+              {achievable && can(me, "upload") && m.status !== "achieved" && (
                 <button
                   onClick={() => {
                     setErr(null);
@@ -226,10 +230,13 @@ export function AddMilestoneForm({
   sites: { study_site_id: string; site_number: string }[];
 }) {
   const create = useCreateMilestone(studyId);
+  const { data: me } = useMe();
   const [name, setName] = useState("");
   const [date, setDate] = useState("");
   const [siteId, setSiteId] = useState("");
   const [err, setErr] = useState<unknown>(null);
+  // Grant-aware rendering (ADR-0028): no form for a seat that can only read.
+  if (!can(me, "upload")) return null;
   return (
     <form
       className="flex flex-wrap items-center gap-2"
@@ -301,6 +308,7 @@ export function NewIssueForm({
   monitoringVisitId?: string;
 }) {
   const create = useCreateIssue(studyId);
+  const { data: me } = useMe();
   const today = localToday();
   const [category, setCategory] = useState<IssueCategory>("protocol_deviation");
   const [severity, setSeverity] = useState<IssueSeverity>("minor");
@@ -308,6 +316,7 @@ export function NewIssueForm({
   const [identified, setIdentified] = useState(today);
   const [due, setDue] = useState("");
   const [err, setErr] = useState<unknown>(null);
+  if (!can(me, "upload")) return null;
   return (
     <form
       className="flex flex-wrap items-center gap-2"
@@ -446,9 +455,11 @@ export function ScheduleVisitForm({
   studySiteId: string;
 }) {
   const schedule = useScheduleVisit(studyId);
+  const { data: me } = useMe();
   const [type, setType] = useState<VisitType>("interim");
   const [date, setDate] = useState("");
   const [err, setErr] = useState<unknown>(null);
+  if (!can(me, "upload")) return null;
   return (
     <form
       className="flex flex-wrap items-center gap-2"
@@ -503,6 +514,7 @@ export function ReportEnrollmentForm({
   latest: SiteEnrollment | undefined;
 }) {
   const report = useReportEnrollment();
+  const { data: me } = useMe();
   const [counts, setCounts] = useState({
     screened: latest?.screened ?? 0,
     enrolled: latest?.enrolled ?? 0,
@@ -510,6 +522,7 @@ export function ReportEnrollmentForm({
     completed: latest?.completed ?? 0,
   });
   const [err, setErr] = useState<unknown>(null);
+  if (!can(me, "upload")) return null;
   const field = (key: keyof typeof counts, label: string) => (
     <label className="flex items-center gap-1.5 text-xs text-ink2">
       {label}

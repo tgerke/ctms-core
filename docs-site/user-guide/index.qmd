@@ -85,9 +85,10 @@ times — if the record had ever been tampered with, the badge would read
 
 Every account (and every connected system) holds an access role, optionally
 limited to one study or one site. Oversight roles all see the same pages —
-what the role controls is *actions*, checked at the moment you act. If you try
-something your role doesn't allow, you'll see a permission message; nothing is
-lost.
+what the role controls is *actions*, and the pages only offer the actions
+your role can actually perform: a monitor sees no approve button, a read-only
+seat sees no forms at all. The server checks again at the moment you act, so
+nothing rests on the page being right.
 
 | Role | What it can do |
 | --- | --- |
@@ -99,7 +100,9 @@ lost.
 | **Ingest** | Read and upload only — held by connected systems, never people |
 
 Three of these deserve a note. **Read-only** is how an auditor or inspector is
-given the run of the record without any risk of changing it. **Site staff** is
+given the run of the record without any risk of changing it — see
+[the auditor's seat](inspection.qmd) for the binder and the byte
+verification that seat is built around. **Site staff** is
 the one role with a different surface: a person scoped to a single site lands
 on that site's page and works entirely there — see
 [the site seat and its logs](site-logs.qmd). **Ingest** is for
