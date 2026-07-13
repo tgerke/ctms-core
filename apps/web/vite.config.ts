@@ -4,6 +4,9 @@ import { defineConfig } from "vite";
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  // main.tsx awaits the OIDC callback at module top level; Vite's default
+  // target predates top-level await.
+  build: { target: "es2022" },
   server: {
     proxy: {
       "/api": {

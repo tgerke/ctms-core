@@ -49,6 +49,14 @@ pnpm validation:iq          # installation qualification against the live env
 pnpm validation:artifacts   # OQ report + requirement traceability matrix
 ```
 
+## Deploying
+
+Tagged releases publish container images to GHCR
+(`ghcr.io/tgerke/ctms-core-api`, `ghcr.io/tgerke/ctms-core-web`); the api
+image doubles as the one-shot migration/seed runner (ADR-0029). See
+[docs/05-deployment.md](docs/05-deployment.md) for the pilot deployment
+checklist.
+
 ## Status
 
 Working vertical slice, hardened toward a single-tenant pilot: OIDC/SSO with
