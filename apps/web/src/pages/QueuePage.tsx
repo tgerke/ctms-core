@@ -1,4 +1,13 @@
-import { CircleAlert, CircleDashed, CornerUpLeft, PenLine, UserCheck, UserPlus } from "lucide-react";
+import {
+  CircleAlert,
+  CircleDashed,
+  CornerUpLeft,
+  Download,
+  Eye,
+  PenLine,
+  UserCheck,
+  UserPlus,
+} from "lucide-react";
 import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import {
@@ -7,6 +16,7 @@ import {
   useBulkReturn,
   usePeople,
   useReviewQueue,
+  useVersionContent,
   type QueueEntry,
   type QueueStatus,
   type Study,
@@ -19,6 +29,8 @@ import { SpecChip, type StatusSpec } from "../status";
 // a version is what empties the queue — nothing here marks work "done".
 // Bulk review (ADR-0026) acts on a checkbox selection: approval is one
 // §11.200(a)(1)(i) series of signings, return shares one documented reason.
+// Preview (ADR-0027) opens the version's bytes inline, so reading what you
+// are about to sign doesn't cost a page per document.
 
 const QUEUE_STATUS: Record<QueueStatus, Omit<StatusSpec, "rank">> = {
   overdue: { label: "Overdue", icon: CircleAlert, cssVar: "--status-critical" },
@@ -33,6 +45,9 @@ export default function QueuePage({ study }: { study: Study | undefined }) {
   const queueQuery = useReviewQueue(study?.id, { status, assignedTo });
   const { data: people } = usePeople();
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  // One preview open at a time: switching rows swaps the panel, like paging
+  // through the stack of pending documents.
+  const [previewId, setPreviewId] = useState<string | null>(null);
 
   const setParam = (key: string, value: string | undefined) => {
     setParams(
@@ -123,6 +138,12 @@ export default function QueuePage({ study }: { study: Study | undefined }) {
                 q={q}
                 checked={selected.has(q.document_version_id)}
                 toggle={() => toggle(q.document_version_id)}
+                previewing={previewId === q.document_version_id}
+                togglePreview={() =>
+                  setPreviewId((id) =>
+                    id === q.document_version_id ? null : q.document_version_id,
+                  )
+                }
               />
             ))}
           </ul>
@@ -251,10 +272,14 @@ function QueueRow({
   q,
   checked,
   toggle,
+  previewing,
+  togglePreview,
 }: {
   q: QueueEntry;
   checked: boolean;
   toggle: () => void;
+  previewing: boolean;
+  togglePreview: () => void;
 }) {
   const assign = useAssignReview();
   const { data: people } = usePeople();
@@ -284,6 +309,14 @@ function QueueRow({
             : ""}
         </span>
         <span className="ml-auto flex items-center gap-2">
+          <button
+            onClick={togglePreview}
+            aria-expanded={previewing}
+            className="inline-flex items-center gap-1.5 rounded-md border border-hairline px-2 py-1 text-xs text-ink2 hover:bg-page"
+          >
+            <Eye size={12} aria-hidden />
+            {previewing ? "Close preview" : "Preview"}
+          </button>
           {!open && (
             <button
               onClick={() => setOpen(true)}
@@ -304,6 +337,7 @@ function QueueRow({
           {q.note ? ` — ${q.note}` : ""}
         </div>
       )}
+      {previewing && <PreviewPanel versionId={q.document_version_id} />}
       {open && (
         <form
           className="mt-1.5 flex flex-wrap items-center gap-2"
@@ -373,5 +407,56 @@ function QueueRow({
         </form>
       )}
     </li>
+  );
+}
+
+/**
+ * Inline view of the version awaiting review (ADR-0027): the exact immutable
+ * bytes an approval signature would hash, fetched with the session credential
+ * — there is no separate preview rendition to drift from the record. PDFs and
+ * images render natively, text renders as text, anything else offers the
+ * download.
+ */
+function PreviewPanel({ versionId }: { versionId: string }) {
+  const { isPending, error, url, mime, fileName, text } = useVersionContent(versionId);
+  if (isPending) return <p className="mt-2 text-xs text-muted">Loading document…</p>;
+  if (error) return <ErrorNote error={error} className="mt-2" />;
+  if (!url) return null;
+  return (
+    <div className="mt-2 space-y-1.5">
+      <div className="flex items-center gap-3 text-xs text-muted">
+        <span className="mono">{fileName}</span>
+        <a
+          href={url}
+          download={fileName}
+          className="inline-flex items-center gap-1 hover:underline"
+        >
+          <Download size={11} aria-hidden />
+          download
+        </a>
+      </div>
+      {mime === "application/pdf" ? (
+        <iframe
+          src={url}
+          title={fileName}
+          className="h-[28rem] w-full rounded-md border border-hairline bg-surface"
+        />
+      ) : mime?.startsWith("image/") ? (
+        <img
+          src={url}
+          alt={fileName}
+          className="max-h-[28rem] max-w-full rounded-md border border-hairline"
+        />
+      ) : text !== null ? (
+        <pre className="max-h-[28rem] overflow-auto whitespace-pre-wrap rounded-md border border-hairline bg-surface p-3 text-xs">
+          {text}
+        </pre>
+      ) : (
+        <p className="text-xs text-muted">
+          No inline view for {mime ?? "this file type"} — use the download link
+          above.
+        </p>
+      )}
+    </div>
   );
 }

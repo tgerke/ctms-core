@@ -306,7 +306,11 @@ request("http://localhost:8787") |>
 
 Storage is content-addressed: `GET /files/{sha256}` returns the version whose
 hash that is, so "give me the file this signature signed" needs nothing but
-the hash recorded on the signature row.
+the hash recorded on the signature row. When you're starting from a version
+id instead of a hash — a review-queue row, say —
+`GET /document-versions/{id}/content` returns the same bytes with their
+uploaded mime type, and echoes the hash in an `x-content-sha256` header so
+you can check what you received (ADR-0027).
 
 ## The same story in Python {#the-same-story-in-python}
 

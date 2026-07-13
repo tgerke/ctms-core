@@ -14,6 +14,12 @@
       "port": 5173
     },
     {
+      "name": "web-5199",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@ctms/web", "dev", "--port", "5199", "--strictPort"],
+      "port": 5199
+    },
+    {
       "name": "docs-site",
       "runtimeExecutable": "/bin/bash",
       "runtimeArgs": ["-c", "python3 -m http.server ${PORT:-8123} --directory docs-site/_site"],

@@ -246,6 +246,14 @@ export function buildApp(db: Db, sql: Sql) {
     auth,
     requirePermission(sql, "approve", "versionId"),
   );
+  // Version content (ADR-0027): a read scoped to the version's study/site,
+  // so a site-scoped seat can preview exactly the documents it can read —
+  // unlike /files/:sha256, which is an unscoped read by content address.
+  app.use(
+    "/document-versions/:versionId/content",
+    auth,
+    requirePermission(sql, "read", "versionId"),
+  );
   app.use("/audit-events", auth, requirePermission(sql, "read"));
   app.use("/audit-chain/*", auth, requirePermission(sql, "read"));
   app.use("/files/*", auth, requirePermission(sql, "read"));
@@ -2495,13 +2503,39 @@ export function buildApp(db: Db, sql: Sql) {
   );
 
   // Content-addressed file download (documented informally; binary response).
+  // The mime type and file name come from a version row carrying this hash;
+  // identical bytes always share them closely enough to serve.
   app.get("/files/:sha256", async (c) => {
     const sha = c.req.param("sha256");
     const bytes = /^[0-9a-f]{64}$/.test(sha) ? await getBlob(sha) : null;
     if (!bytes) return c.json({ error: "file not found" }, 404);
+    const [v] = await sql`
+      SELECT file_name, mime_type FROM document_version
+      WHERE sha256 = ${sha} ORDER BY uploaded_at LIMIT 1`;
     return c.body(new Uint8Array(bytes), 200, {
-      "content-type": "application/pdf",
-      "content-disposition": `inline; filename="${sha}.pdf"`,
+      "content-type": (v?.mime_type as string | undefined) ?? "application/octet-stream",
+      "content-disposition": `inline; filename="${((v?.file_name as string | undefined) ?? sha).replace(/["\r\n]/g, "")}"`,
+    });
+  });
+
+  // Version content for queue-side preview (ADR-0027; documented informally;
+  // binary response). Serves the exact bytes every signature on this version
+  // hashes (§11.70) — there is no derived "preview rendition" to drift from
+  // the record — with the uploaded mime type, plus the hash in a header so a
+  // client can verify what it received.
+  app.get("/document-versions/:versionId/content", async (c) => {
+    const versionId = c.req.param("versionId");
+    if (!z.string().uuid().safeParse(versionId).success) {
+      return c.json({ error: "version not found" }, 404);
+    }
+    const [v] = await sql`
+      SELECT sha256, file_name, mime_type FROM document_version WHERE id = ${versionId}`;
+    const bytes = v ? await getBlob(v.sha256) : null;
+    if (!v || !bytes) return c.json({ error: "version not found" }, 404);
+    return c.body(new Uint8Array(bytes), 200, {
+      "content-type": v.mime_type as string,
+      "content-disposition": `inline; filename="${(v.file_name as string).replace(/["\r\n]/g, "")}"`,
+      "x-content-sha256": v.sha256 as string,
     });
   });
 
