@@ -350,6 +350,22 @@ the UI's word. And the read-only auditor's seat is now seeded and real — the
 UI renders every seat only the operations its grants hold, so reading the
 record is a clean surface, not a field of buttons that answer 403.
 
+## ADR-0029 — Container packaging: two images, and the api cannot migrate itself
+
+Tagging a release publishes two OCI images to GHCR: an api image that is a
+tsx runtime carrying the full db package, and a multi-stage Vite build of
+the web app served by nginx, which also owns the `/api/*` reverse proxy —
+the same contract the dev proxy already speaks. The decision worth
+recording is what does *not* happen: the api never runs migrations at boot.
+It connects as the DML-only role migration 0004 created, so it cannot alter
+the schema even in principle — boot-time migration would mean handing the
+owner credential to the long-running, network-exposed process, undoing that
+separation. A deployment instead runs a one-shot migrate container with the
+owner credential, which exits before the api starts. And because the api
+image ships the db package, that one-shot runner *is* the api image: in a
+pinned deployment, the migration code version can never drift from the code
+it migrates for.
+
 ## ADR-0030 — Office-format previews render in the viewer's browser
 
 ADR-0027 left Word and Excel files — plans, logs, trackers — as a download
