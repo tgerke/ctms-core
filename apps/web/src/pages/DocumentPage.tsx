@@ -2,7 +2,7 @@ import { ArrowLeft, Download, Link2, PenLine, Undo2, Upload } from "lucide-react
 import { useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import {
-  fileUrl,
+  downloadVersion,
   useDocument,
   useDocumentAudit,
   useReturn,
@@ -247,15 +247,15 @@ export default function DocumentPage() {
               <span className="rounded bg-page px-1.5 py-0.5 text-xs font-semibold">
                 v{v.version_number}
               </span>
-              <a
-                href={fileUrl(v.sha256)}
-                target="_blank"
-                rel="noreferrer"
+              {/* Browser-initiated loads can't carry the bearer token, so the
+                  bytes come through an authenticated fetch (ADR-0027). */}
+              <button
+                onClick={() => downloadVersion(v.id).catch(setErr)}
                 className="inline-flex items-center gap-1.5 hover:underline"
               >
                 <Download size={13} aria-hidden />
                 {v.file_name}
-              </a>
+              </button>
               <span className="text-xs text-muted">
                 {(v.size_bytes / 1024).toFixed(1)} kB · uploaded{" "}
                 {v.uploader_given_name

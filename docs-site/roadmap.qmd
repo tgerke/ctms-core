@@ -133,9 +133,16 @@ restated here because a feature comparison is meaningless without them.
   every version still gains its own signature bound to its own content
   hash. Bulk return shares one immutable reason. All-or-nothing with every
   blocker listed, in one transaction, on the same code path as the
-  single-document ceremony. What remains is reviewer ergonomics beyond the
-  ceremony itself — inline document preview from the queue, so diligence
-  gets as cheap as the signature did.
+  single-document ceremony. The reviewer-ergonomics remainder (inline
+  preview from the queue) closed as ADR-0027.
+- **Queue-side document preview** — shipped as a scoped read of the signed
+  bytes (ADR-0027): every queue row opens the version inline — the exact
+  immutable bytes a signature would hash, never a derived rendition — over
+  `GET /document-versions/{id}/content`, which resolves the version's
+  study/site scope so the site seat previews only its own site. Reading
+  what you are about to sign now costs one click on the same page as the
+  ceremony. What remains is in-browser rendering for office formats (they
+  preview as a download offer) and the broader auditor UX.
 - **Site-seat log workflows** — shipped as structured facts on a site-scoped
   seat (ADR-0023): a `site_staff` grant lands its holder on their site's page
   and nowhere else, and delegation-of-authority and training logs are dated
@@ -167,9 +174,9 @@ new system.
 
 ## If we built next
 
-Nothing is queued: bulk review, the last candidate pulled from the "what
-remains" notes, shipped 2026-07-12 (ADR-0026). Remaining candidates live in
-the notes above — auditor UX, queue-side document preview, site-side depth,
+Nothing is queued: queue-side document preview, the last candidate pulled
+from the "what remains" notes, shipped 2026-07-12 (ADR-0027). Remaining
+candidates live in the notes above — auditor UX, site-side depth,
 cross-study analytics.
 
 ## Sources

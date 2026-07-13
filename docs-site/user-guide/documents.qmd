@@ -95,6 +95,13 @@ computed from the documents themselves, so it can never show stale work.
 Filter by reviewer for a personal worklist, or by status to see what's
 overdue; overdue assignments also appear in the emailed digest.
 
+Read before you sign without leaving the page: **Preview** on any row opens
+the file right there in the queue — the exact bytes your signature would be
+bound to, not a thumbnail or a converted copy. One preview is open at a
+time, so working through the queue reads like paging through the stack;
+PDFs, images, and plain text render inline, and anything else offers a
+download. Close it, tick the box, move on.
+
 Review a batch by ticking the checkboxes (or the select-all next to the
 heading). Approving the selection is **one signature ceremony for the
 series**: you re-authenticate once, and every selected version gets its own

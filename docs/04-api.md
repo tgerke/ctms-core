@@ -157,9 +157,16 @@ version must be the latest of a `pending_review` document the caller may
 approve, and a refusal lists every blocker across the selection at once.
 
 Both calls leave hash-chained audit events attributed to the token's person;
-`GET /audit-chain/verify` confirms the chain end-to-end, and
-`GET /files/{sha256}` returns the exact bytes a signature covers — storage is
-content-addressed, so the hash on the signature row is also the retrieval key.
+`GET /audit-chain/verify` confirms the chain end-to-end.
+
+Bytes come back two ways (ADR-0027).
+`GET /document-versions/{id}/content` is the read the UI's preview and
+downloads use: the version's exact bytes with their uploaded mime type and
+file name, the content hash in an `x-content-sha256` header, scoped to the
+version's study/site like every other version-addressed route.
+`GET /files/{sha256}` is the content-addressed copy surface — the hash on a
+signature row is also a retrieval key, so an inspector can fetch exactly the
+bytes a signature covers.
 
 ## The CRA's week, from R
 

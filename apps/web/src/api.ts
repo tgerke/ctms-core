@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
 import { authMode, beginLogin, getReauthToken, token } from "./auth";
 
 export type ExpectedStatus =
@@ -509,7 +510,86 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-export const fileUrl = (sha256: string) => `/api/files/${sha256}`;
+/**
+ * A version's bytes via authenticated fetch (ADR-0027). Browser-initiated
+ * loads (<a href>, <iframe src>) can't carry the bearer token, so anything
+ * that shows or saves a file goes through here.
+ */
+async function fetchVersionContent(versionId: string) {
+  const res = await fetch(`/api/document-versions/${versionId}/content`, {
+    headers: { Authorization: `Bearer ${token() ?? ""}` },
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    let detail = text;
+    try {
+      const parsed = JSON.parse(text);
+      if (typeof parsed?.error === "string") detail = parsed.error;
+    } catch {
+      // non-JSON body: keep the raw text as detail
+    }
+    throw new ApiError(res.status, detail);
+  }
+  const blob = await res.blob();
+  const disposition = res.headers.get("content-disposition") ?? "";
+  return {
+    blob,
+    mime: blob.type,
+    fileName: /filename="([^"]*)"/.exec(disposition)?.[1] ?? "document",
+  };
+}
+
+/** Fetch a version's bytes and hand them to the browser as a download. */
+export async function downloadVersion(versionId: string): Promise<void> {
+  const { blob, fileName } = await fetchVersionContent(versionId);
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = fileName;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 30_000);
+}
+
+/**
+ * A version's bytes for inline viewing (ADR-0027), as an object URL revoked
+ * when the version changes or the component unmounts. Text content is decoded
+ * eagerly so text/* renders as text, not a download. Bytes are immutable, so
+ * the query never goes stale.
+ */
+export function useVersionContent(versionId: string | undefined) {
+  const query = useQuery({
+    queryKey: ["version-content", versionId],
+    queryFn: async () => {
+      const content = await fetchVersionContent(versionId!);
+      return {
+        ...content,
+        text: content.mime.startsWith("text/") ? await content.blob.text() : null,
+      };
+    },
+    enabled: !!versionId,
+    staleTime: Infinity,
+  });
+
+  const [url, setUrl] = useState<string>();
+  useEffect(() => {
+    if (!query.data) return;
+    const u = URL.createObjectURL(query.data.blob);
+    setUrl(u);
+    return () => {
+      URL.revokeObjectURL(u);
+      setUrl(undefined);
+    };
+  }, [query.data]);
+
+  return {
+    isPending: query.isPending,
+    error: query.error,
+    url,
+    mime: query.data?.mime,
+    fileName: query.data?.fileName,
+    text: query.data?.text ?? null,
+  };
+}
 
 export const useStudies = () =>
   useQuery({ queryKey: ["studies"], queryFn: () => api<Study[]>("/studies") });

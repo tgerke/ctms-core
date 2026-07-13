@@ -325,6 +325,17 @@ all-or-nothing in one transaction with every blocker listed, and both run
 the same code path as the single-document ceremony, so the two can never
 drift.
 
+## ADR-0027 — Preview is a scoped read of the signed bytes
+
+ADR-0026 made the ceremony cheap; diligence still cost a page per document.
+Every queue row now opens the version inline, and what it shows is the
+exact immutable bytes a signature would hash — no thumbnails, no converted
+renditions, nothing derived that could drift from the record. The read
+resolves the version's study/site scope like every other version-addressed
+route, so the site seat previews only its own site — a boundary the old
+content-addressed download never drew. Reads still leave no audit rows: the
+trail records what happened to the record, not who looked at it.
+
 ---
 
 Three of these — ADR-0004, ADR-0006, and ADR-0010 — are the same idea applied
