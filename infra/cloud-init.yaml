@@ -1,5 +1,5 @@
 #cloud-config
-# Boot a production ctms-core host on any Ubuntu 24.04 VM (ADR-0031): Docker,
+# Boot a production ctms-core host on any Ubuntu 24.04 VM (ADR-0032): Docker,
 # the release-pinned compose stack, and basic host hardening. This same file
 # is the user_data for every infra/terraform/ root — Terraform substitutes
 # the placeholder tokens via templatefile(). To use it standalone, render

@@ -1,4 +1,4 @@
-# The same variable contract as ../aws and ../azure (ADR-0031).
+# The same variable contract as ../aws and ../azure (ADR-0032).
 
 variable "name" {
   description = "Resource name prefix"

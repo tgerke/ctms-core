@@ -1,4 +1,4 @@
-# The same variable contract as ../aws and ../digitalocean (ADR-0031).
+# The same variable contract as ../aws and ../digitalocean (ADR-0032).
 
 variable "name" {
   description = "Resource name prefix"

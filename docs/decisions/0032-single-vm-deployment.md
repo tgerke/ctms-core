@@ -1,4 +1,4 @@
-# ADR-0031: Single-VM production shape, Caddy for TLS, thin infra-as-code
+# ADR-0032: Single-VM production shape, Caddy for TLS, thin infra-as-code
 
 **Status**: accepted · 2026-07-12
 

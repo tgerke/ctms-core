@@ -1,4 +1,4 @@
-# Production single-VM stack (ADR-0031). Pinned GHCR images, TLS at Caddy,
+# Production single-VM stack (ADR-0032). Pinned GHCR images, TLS at Caddy,
 # nothing else published to the host. Copy infra/.env.example to .env beside
 # this file and work through docs/05-deployment.md before real documents
 # touch the system.

@@ -7,7 +7,7 @@ against the running environment and produces the sign-off report.
 
 ## Reference implementation
 
-`infra/compose.prod.yaml` (ADR-0031) is this checklist as a runnable
+`infra/compose.prod.yaml` (ADR-0032) is this checklist as a runnable
 artifact: pinned GHCR images, Caddy terminating TLS as the only published
 service, a migrate one-shot that holds the owning role and rotates the
 runtime-role passwords, and the api connecting as `ctms_app` via

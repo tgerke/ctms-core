@@ -2,7 +2,7 @@
 
 Provisions one droplet running the production stack
 (`infra/compose.prod.yaml`) via `infra/cloud-init.yaml` — Terraform never
-duplicates install logic (ADR-0031). Same variable contract as the `../aws`
+duplicates install logic (ADR-0032). Same variable contract as the `../aws`
 and `../azure` roots. Authenticate with `DIGITALOCEAN_TOKEN` in the
 environment.
 

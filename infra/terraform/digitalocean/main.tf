@@ -1,4 +1,4 @@
-# One droplet running infra/compose.prod.yaml (ADR-0031). All app
+# One droplet running infra/compose.prod.yaml (ADR-0032). All app
 # installation is delegated to infra/cloud-init.yaml — this root only
 # provisions the machine, its firewall, and a stable address. Droplet disks
 # are encrypted at rest by the platform.

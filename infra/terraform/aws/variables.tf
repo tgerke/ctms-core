@@ -1,4 +1,4 @@
-# The same variable contract as ../azure and ../digitalocean (ADR-0031),
+# The same variable contract as ../azure and ../digitalocean (ADR-0032),
 # plus the Object Lock bucket controls that only AWS carries.
 
 variable "name" {

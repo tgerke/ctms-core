@@ -1,4 +1,4 @@
-# One VM running infra/compose.prod.yaml (ADR-0031). All app installation is
+# One VM running infra/compose.prod.yaml (ADR-0032). All app installation is
 # delegated to infra/cloud-init.yaml — this root only provisions the machine,
 # its firewall, a stable address, and (s3.tf) the WORM document bucket.
 

@@ -6,7 +6,7 @@ document bucket the pilot posture calls for (`docs/05-deployment.md`,
 ADR-0009): S3 with Object Lock enabled at creation, versioning, a
 COMPLIANCE default-retention rule, and a least-privilege IAM principal
 (put/get/list — no delete). Terraform never duplicates install logic
-(ADR-0031); same variable contract as the `../azure` and `../digitalocean`
+(ADR-0032); same variable contract as the `../azure` and `../digitalocean`
 roots.
 
 ```sh

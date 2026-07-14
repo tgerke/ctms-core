@@ -2,7 +2,7 @@
 
 Provisions one VM running the production stack (`infra/compose.prod.yaml`)
 via `infra/cloud-init.yaml` — Terraform never duplicates install logic
-(ADR-0031). Same variable contract as the `../aws` and `../digitalocean`
+(ADR-0032). Same variable contract as the `../aws` and `../digitalocean`
 roots. Authenticate with `az login` (or a service principal).
 
 ```sh
