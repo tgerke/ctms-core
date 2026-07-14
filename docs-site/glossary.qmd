@@ -4,13 +4,13 @@ title: "Glossary"
 
 Trial-world terms first, then the words this system uses with a specific
 meaning. Regulatory entries here are deliberately brief identifications, not
-summaries of requirements — the [compliance mapping](compliance.qmd) is the
+summaries of requirements; the [compliance mapping](compliance.qmd) is the
 page that makes precise claims, with sources.
 
 ## People and organizations
 
 Sponsor
-: The organization responsible for the trial — often the company or
+: The organization responsible for the trial, often the company or
 institution funding it. This system is built for the sponsor-side (or
 CRO-side) oversight seat.
 
@@ -49,18 +49,18 @@ things it must contain *essential records*.
 
 TMF Reference Model
 : A CDISC-maintained standard taxonomy for organizing TMF content into zones,
-sections, and artifacts. Document types in this system come from it — the
+sections, and artifacts. Document types in this system come from it; the
 zone headings you see on site pages are its zones.
 
 eISF / eBinder
-: Electronic investigator site file — the site-side counterpart of the eTMF.
+: Electronic investigator site file, the site-side counterpart of the eTMF.
 Named here mostly for contrast: this system takes the sponsor/CRO view.
 
 eTMF-EMS
 : The CDISC exchange mechanism standard for moving TMF content between
 systems. This system writes an eTMF-EMS package alongside its export, and
 files a partner's package in through the same upload-and-review path as any
-other document — imported files land pending review, nothing arrives
+other document: imported files land pending review, nothing arrives
 pre-approved.
 
 Delegation of authority log
@@ -70,8 +70,8 @@ document, so the system can check that the authorizer actually held the PI
 role and whether each delegate's credentials are in order.
 
 Training log
-: The site's record of training completions — who, what topic, when, and
-until when — with current / expiring / expired status derived from the dates.
+: The site's record of training completions (who, what topic, when, and
+until when), with current / expiring / expired status derived from the dates.
 An entry can link to the filed certificate document.
 
 EDC (Electronic Data Capture)
@@ -79,7 +79,7 @@ EDC (Electronic Data Capture)
 this system: ctms-core holds documents and site-reported aggregates only.
 
 CTMS (Clinical Trial Management System)
-: Software for running trial operations — sites, visits, issues, enrollment,
+: Software for running trial operations: sites, visits, issues, enrollment,
 milestones. The "ctms" in ctms-core.
 
 ## Regulations and guidelines
@@ -107,7 +107,7 @@ validation program in its terms.
 
 Expected document
 : A document the study *should* have right now, according to a requirement
-rule — for example, a current IRB approval at every active site. Expected
+rule, for example a current IRB approval at every active site. Expected
 documents exist before any file is uploaded; that's what makes "missing" a
 status rather than a discovery.
 
@@ -117,7 +117,7 @@ investigator needs a CV no older than 2 years"). Rules are data, and the
 site document matrix is their live evaluation.
 
 Derived status
-: Any status computed at read time from recorded facts — document
+: Any status computed at read time from recorded facts: document
 completeness, visit stages, issue states, milestone states. Never stored,
 never stale, never yours to update. The full list is in
 [what the statuses mean](user-guide/statuses.qmd).
@@ -129,7 +129,7 @@ current anywhere.
 Returned (for correction)
 : The review outcome besides approval: a reviewer sent the latest version
 back with a reason, which stays on the document's permanent record. The
-returned version can never be approved — uploading a corrected version
+returned version can never be approved; uploading a corrected version
 reopens review.
 
 Review assignment
@@ -146,11 +146,11 @@ signature waved over N documents.
 
 Site seat
 : Access scoped to a single site. A site-seat sign-in lands on that site's
-page and works entirely there — uploads, signatures, the logs, enrollment
-reporting — with no study-wide view to get lost in.
+page and works entirely there (uploads, signatures, the logs, enrollment
+reporting), with no study-wide view to get lost in.
 
 Binder
-: The study rendered in TMF Reference Model order — zone, section, artifact —
+: The study rendered in TMF Reference Model order (zone, section, artifact),
 with filed documents and open gaps side by side. A single query over the same
 derived views as every other page: there is no binder to maintain, so none
 can drift.
@@ -162,7 +162,7 @@ verifiable with standard checksum tools.
 
 Waived
 : An expected document an administrator has marked not applicable, with a
-recorded reason ("central IRB of record — no local approval letter"). A
+recorded reason ("central IRB of record; no local approval letter"). A
 waived requirement stops counting as a gap, but the placeholder and its
 waiver history stay on the record; if a document is filed anyway, the
 document wins.
@@ -180,7 +180,7 @@ Version
 nothing ever edits or deletes an old one.
 
 E-signature meaning
-: Every signature records *why* it was signed — approval, review, or
+: Every signature records *why* it was signed: approval, review, or
 authorship. In the app you'll mostly meet approval signatures, which make
 documents effective.
 
@@ -193,7 +193,7 @@ Action item
 resolution. Open action items keep a visit in follow-up.
 
 Milestone
-: A named study date, planned versus actual — first site activated, database
+: A named study date, planned versus actual: first site activated, database
 lock. Scoped to the study or to one site.
 
 Audit trail

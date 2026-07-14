@@ -22,13 +22,13 @@ flat, folder-oriented, and frustrating for a data-science team.
 ## What ctms-core is
 
 ctms-core is a regulatory-document backbone built for the sponsor/CRO oversight
-seat — the team watching many sites at once.
+seat: the team watching many sites at once.
 
 These docs serve two audiences. If you coordinate or monitor studies, start
-with the [user guide](user-guide/index.qmd) — every task, point and click, no
-code. If you script against the API or query the database, start with the
-[cookbook](cookbook.qmd). The rest of this page is the design argument, which
-you can skip.
+with the [user guide](user-guide/index.qmd), which covers every task point and
+click, no code. If you script against the API or query the database, start with
+the [cookbook](cookbook.qmd). The rest of this page is the design argument,
+which you can skip.
 
 Three design commitments define the system:
 
@@ -39,8 +39,8 @@ Three design commitments define the system:
 
 2. **A requirement engine.** Declarative rules ("every active site needs a
    current IRB approval per protocol version"; "every investigator needs a CV no
-   older than 2 years") materialize *expected* documents. Completeness status —
-   missing, pending review, current, expiring soon, expired, superseded — is
+   older than 2 years") materialize *expected* documents. Completeness status
+   (missing, pending review, current, expiring soon, expired, superseded) is
    derived by database views, never hand-maintained. It cannot drift from the
    documents themselves, because it is computed from them on every read.
 
@@ -56,22 +56,22 @@ deviations, enrollment reporting, and milestones are dated facts in tables, with
 lifecycle stages (overdue, awaiting report, resolved, achieved) derived by views.
 See the [operational layer guide](operations.qmd).
 
-The day-to-day surface is built over those same views, not beside them: header
-search that reads document content as well as metadata, a review queue with
-inline preview (office formats render in the browser; the signed bytes stay
-the record) and batch signing (one re-authentication, one signature per
-document), delegation-of-authority and training logs kept by the site seat, an
-auditor's binder in reference-model order with in-browser byte verification,
-and a verifiable export package that speaks CDISC eTMF-EMS in both directions.
-The [user guide](user-guide/index.qmd) walks each one.
+The day-to-day surface is built over those same views, not beside them. Header
+search reads document content as well as metadata. The review queue previews
+files inline (office formats render in the browser; the signed bytes stay the
+record) and signs in batches, one re-authentication and one signature per
+document. Site seats keep delegation-of-authority and training logs. Auditors
+get a binder in reference-model order with in-browser byte verification, and
+the export package speaks CDISC eTMF-EMS in both directions. The
+[user guide](user-guide/index.qmd) walks each one.
 
-![The study dashboard: completeness counts, milestones, and enrollment vs target — every number computed by a view at read time.](images/dashboard.png){.screenshot fig-alt="ctms-core study dashboard showing expected document counts, percent current, milestone chips, and enrollment progress bars per site"}
+![The study dashboard: completeness counts, milestones, and enrollment vs target, every number computed by a view at read time.](images/dashboard.png){.screenshot fig-alt="ctms-core study dashboard showing expected document counts, percent current, milestone chips, and enrollment progress bars per site"}
 
 ## The API is the product
 
-The web dashboard consumes only the public REST API — no private endpoints, no
-backdoors — so anything the UI can show, your script can query. The OpenAPI 3.1
-spec is generated from the same schemas that validate requests.
+The web dashboard consumes only the public REST API, with no private endpoints
+or backdoors, so anything the UI can show, your script can query. The OpenAPI
+3.1 spec is generated from the same schemas that validate requests.
 
 And if you'd rather skip HTTP entirely: the derived-status views (`v_*`) are
 documented public surface. With a read-only Postgres connection, R (`DBI`/`dbplyr`)
@@ -92,7 +92,7 @@ neither is a gap in the software:
 
 - **Validation is a program you run, not a property software ships with.**
   Under GAMP 5 the validation claim belongs to the deploying organization and
-  attaches to a specific installation and its operating procedures — that is
+  attaches to a specific installation and its operating procedures; the same is
   true of every eTMF on the market. ctms-core generates the technical half for
   you: IQ checks against your live environment, an OQ run report, and a
   requirement→test traceability matrix. The [validation guide](validation.qmd)
@@ -103,7 +103,7 @@ neither is a gap in the software:
   regulatory documents and site-reported aggregates; the subject-data boundary
   is GCP architecture, not a missing feature. Your EDC files *into* the TMF
   through the documented upload API as a machine identity with provenance
-  (ADR-0011) — documents and aggregates come in, subject data never does. The
+  (ADR-0011): documents and aggregates come in, subject data never does. The
   reference client is [edc-core](https://github.com/tgerke/edc-core), this
   project's AGPL sibling on the data-capture side: the two are designed to
   hold that boundary between them, not to grow into each other.

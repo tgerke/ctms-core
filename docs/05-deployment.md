@@ -1,6 +1,6 @@
 # Pilot deployment (single tenant)
 
-One deployment per customer — multi-tenancy is a non-goal of this phase
+One deployment per customer; multi-tenancy is a non-goal of this phase
 (ADR-0001, vision doc). This page is the checklist that turns the dev
 quickstart into a pilot posture; `pnpm validation:iq` verifies most of it
 against the running environment and produces the sign-off report.
@@ -20,7 +20,7 @@ docker compose -f infra/compose.prod.yaml up -d
 
 Compose profiles cover the supported variations: `local-db` (bundled
 Postgres) vs. a managed `DATABASE_URL`, and `s3-local` (bundled MinIO) vs. a
-real Object Lock bucket. The sections below remain the spec — and the whole
+real Object Lock bucket. The sections below remain the spec, and the whole
 of it applies whether you run the compose file or your own topology.
 
 ## Provisioning the VM
@@ -44,29 +44,36 @@ sed -e 's/${domain}/ctms.example.org/' \
 
 2 vCPUs / 2 GB RAM is comfortable. OIDC issuer/audience arrive via the
 `extra_env` placeholder or a post-boot edit of `/opt/ctms/.env`. The rest of
-this page — IdP registration, TMF RM import, admin provisioning, validation
-sign-off — still applies.
+this page (IdP registration, TMF RM import, admin provisioning, validation
+sign-off) still applies.
 
 Prefer infrastructure-as-code? `infra/terraform/{aws,azure,digitalocean}`
 are three self-contained Terraform roots with an identical variable
-contract — VM, firewall (SSH restricted to your admin CIDR), static IP,
+contract: VM, firewall (SSH restricted to your admin CIDR), static IP,
 encrypted disk, same cloud-init. The AWS root additionally creates the
 Object Lock document bucket (ADR-0009) with a least-privilege IAM
 principal and wires the stack to it. Each directory's README is a complete
 walkthrough.
 
+Installing ctms-core and its sibling
+[edc-core](https://github.com/tgerke/edc-core) together on one host, with a
+shared Keycloak for SSO and the EDC-to-TMF filing credential pre-wired, is
+packaged separately as
+[clinical-stack](https://github.com/tgerke/clinical-stack); its install guide
+points back at this page for everything app-level.
+
 ## Topology
 
 Three processes plus storage:
 
-- **API** (`apps/api`, Node 22) — stateless; run behind a TLS-terminating
+- **API** (`apps/api`, Node 22): stateless; run behind a TLS-terminating
   reverse proxy (Caddy, nginx, or the platform's load balancer). The app
   itself speaks plain HTTP and assumes the proxy owns certificates.
-- **Postgres 16** — the compliance surface lives here (triggers, roles,
+- **Postgres 16**: the compliance surface lives here (triggers, roles,
   hash chain). Managed Postgres (RDS et al.) is fine.
-- **Web** (`apps/web`) — static files after `pnpm build`; serve from the same
+- **Web** (`apps/web`): static files after `pnpm build`; serve from the same
   proxy or any static host.
-- **Object storage** — any S3-compatible store, bucket created **with Object
+- **Object storage**: any S3-compatible store, bucket created **with Object
   Lock** and a default COMPLIANCE retention rule matching your records
   retention schedule.
 
@@ -100,19 +107,19 @@ ALTER ROLE ctms_app      LOGIN PASSWORD '<generated>';
 ALTER ROLE ctms_readonly LOGIN PASSWORD '<generated>';
 ```
 
-The API must run as `ctms_app` (it does by default — verify with IQ). The
+The API must run as `ctms_app` (it does by default; verify with IQ). The
 owning role's credentials are used only for `pnpm db:migrate` and stay out of
 the API's environment. `ctms_readonly` is the analyst SQL account
 (`docs/04-api.md`). `pnpm --filter @ctms/db rotate-passwords` performs the
-same rotation from `CTMS_APP_PASSWORD` / `CTMS_READONLY_PASSWORD` — the
+same rotation from `CTMS_APP_PASSWORD` / `CTMS_READONLY_PASSWORD`; the
 compose stack's migrate one-shot runs it on every bring-up.
 
 ## Identity provider
 
 Register two OIDC clients (or one, if the IdP allows both flows):
 
-- **API audience** `ctms-api` — the value in `OIDC_AUDIENCE`.
-- **Web SPA** — authorization code + PKCE, redirect URI `https://<host>/`;
+- **API audience** `ctms-api`: the value in `OIDC_AUDIENCE`.
+- **Web SPA**: authorization code + PKCE, redirect URI `https://<host>/`;
   the signing dialog re-runs the flow with `prompt=login`, so the IdP must
   honor forced re-authentication (all mainstream IdPs do).
 
@@ -134,13 +141,13 @@ pnpm validation:iq --report iq-$(date +%F).md   # file the report
 pnpm validation:artifacts                # OQ + traceability, file alongside
 ```
 
-Do **not** run `pnpm db:seed` against a pilot database — it truncates.
+Do **not** run `pnpm db:seed` against a pilot database; it truncates.
 
 ## Digest notifications
 
-`pnpm digest` (ADR-0017) emails each study's oversight digest — expiring and
+`pnpm digest` (ADR-0017) emails each study's oversight digest (expiring and
 expired documents, overdue visits, action items, issues, milestones, overdue
-review assignments, and any audit-chain failure — to everyone holding a
+review assignments, and any audit-chain failure) to everyone holding a
 study-wide `admin` or `trial_ops` grant. It is stateless: a pure function of the derived views at send time,
 safe to rerun, with nothing to sync. Schedule it with cron at whatever
 cadence the team wants:
@@ -166,7 +173,7 @@ list. Without `SMTP_URL` the job prints to stdout instead of sending
 study's complete transfer/inspection package: content-addressed document
 bytes, full metadata (versions, signatures with their §11.70 hashes,
 returns, waivers, the completeness snapshot), and the entire hash-chained
-audit trail. The receiving side verifies with stock tooling — no ctms-core
+audit trail. The receiving side verifies with stock tooling, no ctms-core
 software required:
 
 ```sh
@@ -183,7 +190,7 @@ Adding `--ems <agreement-id>` (ADR-0024) includes a CDISC eTMF-EMS v1.0.2
 SPECIFICATIONID of the exchange agreement between the transferring parties;
 there is no default. It requires the verbatim TMF RM import
 (`pnpm db:import-tmf`), which records the model version and the per-artifact
-unique IDs the standard mandates — the export refuses, naming every gap,
+unique IDs the standard mandates. The export refuses, naming every gap,
 rather than invent them.
 
 ## Receiving a partner's TMF
@@ -192,21 +199,21 @@ The other direction (ADR-0025): `pnpm import-ems -- --package <dir>` reads a
 partner's eTMF-EMS package and files it through the same audited endpoint
 every source system uses (ADR-0011), authenticating with an `ingest`-role
 token (`--token` or `CTMS_API_TOKEN`; dev: `dev-service-token`). It performs
-the standard's receiving-side checks first — XSD validation, checksum
-verification of every referenced file — and refuses the whole batch, naming
+the standard's receiving-side checks first (XSD validation, checksum
+verification of every referenced file) and refuses the whole batch, naming
 every blocker at once, if anything cannot be mapped honestly: unknown TMF RM
 unique IDs, sites that don't exist on the study, country-level or RESTRICTED
 objects. Everything that files lands `pending_review` for human review, and
-re-running the same package is a no-op — the importer asks
+re-running the same package is a no-op: the importer asks
 `GET /studies/{id}/filings` what it already filed. `--dry-run` prints the
-plan without filing; keep the received package as the partner's record — its
+plan without filing; keep the received package as the partner's record; its
 signatures and audit trail are their testimony and are not replayed here.
 
 ## Backups and verification
 
 - Postgres: continuous archiving or the managed service's PITR; test restore
   before go-live. A restored copy must pass
-  `SELECT * FROM ctms_verify_audit_chain()` (empty result = intact) — that is
+  `SELECT * FROM ctms_verify_audit_chain()` (empty result = intact); that is
   the tamper-evidence check, and it works on backups too.
 - Object storage: versioned + locked already; replicate per your DR policy.
   Blobs are content-addressed, so a restore can be verified byte-for-byte

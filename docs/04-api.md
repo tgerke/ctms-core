@@ -1,29 +1,29 @@
 # API guide
 
-The API is the product (ADR-0002). The web dashboard consumes only this API —
-no private endpoints, no backdoors — so anything the UI can show, a script can
-query. The OpenAPI 3.1 spec is generated from the same zod schemas that
+The API is the product (ADR-0002). The web dashboard consumes only this API,
+with no private endpoints or backdoors, so anything the UI can show, a script
+can query. The OpenAPI 3.1 spec is generated from the same zod schemas that
 validate requests: `http://localhost:8787/openapi.json`, interactive reference
 at `http://localhost:8787/docs`.
 
 ## Principles
 
-1. **Resources are the relational model** — studies, sites, people, expected
+1. **Resources are the relational model**: studies, sites, people, expected
    documents, documents, versions, signatures, audit events. No folder
    metaphors.
-2. **Derived status is served, never stored** — `/expected-documents` returns
+2. **Derived status is served, never stored**: `/expected-documents` returns
    the same view the database computes; two clients can never disagree.
-3. **Every mutation is attributable** — the bearer token resolves to a person;
+3. **Every mutation is attributable**: the bearer token resolves to a person;
    that person lands on every audit event the mutation produces.
-4. **Auditability is an endpoint** — `/audit-events`, `/documents/{id}/audit`,
+4. **Auditability is an endpoint**: `/audit-events`, `/documents/{id}/audit`,
    and `/audit-chain/verify` expose the trail and its integrity check.
 
 Auth: `Authorization: Bearer <token>`. Two modes, selected by `AUTH_MODE`:
 
-- **`dev`** — static tokens from `.env.example` (`dev-admin-token`,
+- **`dev`**: static tokens from `.env.example` (`dev-admin-token`,
   `dev-monitor-token`, `dev-service-token`, `dev-site-token`,
   `dev-auditor-token`) map to seeded people. Demo only.
-- **`oidc`** — the token is a JWT from your identity provider
+- **`oidc`**: the token is a JWT from your identity provider
   (`OIDC_ISSUER`/`OIDC_AUDIENCE`); its verified email claim resolves to a
   person record. Any OIDC-compliant IdP works (Okta, Entra ID, Auth0,
   Keycloak). Machine identities (client-credentials tokens with no email
@@ -32,7 +32,7 @@ Auth: `Authorization: Bearer <token>`. Two modes, selected by `AUTH_MODE`:
 Either way the identity must hold an `access_grant` row: roles
 (`admin`, `trial_ops`, `monitor`, `read_only`, `ingest`, `site_staff`) map to
 operations (read / upload / sign / approve / administer / log; `ingest` is
-read + upload for source-system filing, `site_staff` is the site seat —
+read + upload for source-system filing, `site_staff` is the site seat,
 ADR-0023), optionally scoped to one study or study-site (ADR-0008). Denials
 are 403 and name the missing permission. `GET /me` returns the caller's
 person and grants, so a client can decide which surface to render.
@@ -81,18 +81,18 @@ Finding a specific document is one more
 (`GET /studies/{id}/document-search?q=`, ADR-0019 + ADR-0022): every word in
 `q` must match the document's metadata (title, artifact taxonomy, site,
 person, uploader, file names, filing source) or the extracted text inside
-its versions — `q=1572 003` finds site 003's Form FDA 1572, and a phrase
+its versions: `q=1572 003` finds site 003's Form FDA 1572, and a phrase
 from inside the monitoring plan finds the monitoring plan. Content matches
 carry `matched_in_content` and a `content_snippet` of the surrounding text.
 
 The cross-study view is `GET /portfolio` (ADR-0021): one row per study with
 completeness counts, attention items, review-queue size, open issues,
-overdue visits, and enrollment vs target — the same numbers the study
+overdue visits, and enrollment vs target: the same numbers the study
 dashboards derive, grouped. One GET is a portfolio report.
 
 The inspector's view is `GET /studies/{id}/binder` (ADR-0028): the study in
 the reference model's own zone → section → artifact hierarchy, each artifact
-carrying its filed documents and the expected/missing/waived rollup — the
+carrying its filed documents and the expected/missing/waived rollup, the
 same derived views again, so the binder can never disagree with the
 dashboards. Every artifact of the loaded taxonomy appears; an empty slot is
 information. One GET is a TMF binder. The seat that pairs with it is an
@@ -125,7 +125,7 @@ request("http://localhost:8787") |>
   req_perform()
 ```
 
-`approval` is one of three signature meanings — `author` and `review` record
+`approval` is one of three signature meanings: `author` and `review` record
 attestations without changing status; only `approval` makes a version
 effective and supersedes its non-visit-linked predecessors. Review's other
 outcome is `POST /document-versions/{id}/return` with a `reason` (ADR-0015):
@@ -141,7 +141,7 @@ The filing surface is complete enough to build an idempotent integration on
 when a non-superseded one with the same artifact and scope exists (an
 imported partner record must not merge into a local one),
 `POST /documents/{id}/versions` appends a version to exactly that document
-(a superseded document answers 409 — closed history stays closed), and
+(a superseded document answers 409; closed history stays closed), and
 `GET /studies/{id}/filings?source_system=` returns what that source already
 filed, `source_ref` by `source_ref`, so a re-run can skip instead of
 duplicate. The eTMF-EMS importer (`pnpm import-ems`) is exactly such a
@@ -153,14 +153,14 @@ approval authority for the document) with an optional `due_date`, and
 `GET /studies/{id}/review-queue` returns every document awaiting review with
 its latest assignment and a derived `queue_status`
 (`unassigned | assigned | overdue`; filter with `assigned_to` for a "my
-work" list). There is no completion call — approving or returning the
+work" list). There is no completion call; approving or returning the
 version is what clears the queue entry.
 
 The queue's selection acts in bulk (ADR-0026):
 `POST /document-versions/bulk-approve` takes `version_ids` and one
-`reauth_token` — a §11.200(a)(1)(i) series of signings, one re-authentication
+`reauth_token`: a §11.200(a)(1)(i) series of signings, one re-authentication
 opening the series and each version gaining its own signature bound to its
-own content hash — and `POST /document-versions/bulk-return` takes
+own content hash. `POST /document-versions/bulk-return` takes
 `version_ids` and one shared `reason`. Both are all-or-nothing: every
 version must be the latest of a `pending_review` document the caller may
 approve, and a refusal lists every blocker across the selection at once.
@@ -173,13 +173,13 @@ Bytes come back two ways (ADR-0027).
 downloads use: the version's exact bytes with their uploaded mime type and
 file name, the content hash in an `x-content-sha256` header, scoped to the
 version's study/site like every other version-addressed route.
-`GET /files/{sha256}` is the content-addressed copy surface — the hash on a
+`GET /files/{sha256}` is the content-addressed copy surface: the hash on a
 signature row is also a retrieval key, so an inspector can fetch exactly the
 bytes a signature covers.
 
 ## The CRA's week, from R
 
-The operational layer answers the questions a monitor plans a week around — as flat
+The operational layer answers the questions a monitor plans a week around, as flat
 data frames, filterable server-side, with every lifecycle stage derived, never stored.
 
 ```r
@@ -212,7 +212,8 @@ ctms("studies", study, "milestones") |>
   select(name, site_number, planned_date, actual_date, status)
 ```
 
-Writes are the same shape — schedule a visit, record a deviation, report counts:
+Writes are the same shape, whether you schedule a visit, record a deviation,
+or report counts:
 
 ```r
 request("http://localhost:8787") |>
@@ -228,18 +229,18 @@ request("http://localhost:8787") |>
 ```
 
 Visit facts (conducted date, monitor, summary, a new scheduled date) are
-`PATCH /monitoring-visits/{id}` — the derived stage recomputes.
+`PATCH /monitoring-visits/{id}`; the derived stage recomputes.
 `POST /monitoring-visits/{id}/document-links` attaches an already-filed
 document to a visit (`link_kind`: `trip_report`, `confirmation_letter`,
 `follow_up_letter`). When requirement rules or role assignments change, an
-admin re-runs `POST /studies/{id}/sync-expected-documents` — idempotent:
+admin re-runs `POST /studies/{id}/sync-expected-documents`, which is idempotent:
 inserts what's newly expected, prunes unfulfilled placeholders that no longer
 apply.
 
 ## Onboarding a site (ADR-0016)
 
 Studies, sites, people, roles, grants, and requirement rules are ordinary
-audited rows with a write surface — no seed script or SQL needed. All admin
+audited rows with a write surface; no seed script or SQL needed. All admin
 mutations require the `administer` operation (the `admin` role); directory
 reads (`GET /organizations`, `/sites`, `/people`, `/tmf-artifacts`,
 `/studies/{id}/requirement-rules`) are ordinary reads. The whole onboarding
@@ -285,10 +286,10 @@ Endings are facts, never deletes: `PATCH /study-site-roles/{id}` sets an
 revoking an *unscoped* grant requires an equally unscoped `administer` grant,
 so a site-scoped admin cannot mint global access. Requirement rules are
 `POST /studies/{id}/requirement-rules` and `PATCH /requirement-rules/{id}`;
-a rule's scope level and artifact are fixed after creation — a different
+a rule's scope level and artifact are fixed after creation; a different
 requirement is a new rule.
 
-When an expected document genuinely does not apply ("central IRB — no local
+When an expected document genuinely does not apply ("central IRB; no local
 approval letter"), waive it instead of leaving a permanent gap:
 
 ```r
@@ -300,12 +301,12 @@ The row shows `waived` where it would have shown `missing`, leaves the
 completeness denominator, and carries who/when/why on the view. A filed
 document always beats the waiver, and
 `POST /expected-documents/{id}/revoke-waiver` (reason required) lifts it as a
-recorded fact — the waiver history is never deleted (ADR-0016).
+recorded fact; the waiver history is never deleted (ADR-0016).
 
 ## The site seat (ADR-0023)
 
 A person whose grant is `site_staff` scoped to one study-site works entirely
-through site-scoped endpoints — study-wide reads (including `/portfolio`) are
+through site-scoped endpoints; study-wide reads (including `/portfolio`) are
 403 for them. `GET /study-sites/{id}` is the landing read (site, study
 context, completeness rollup); `/expected-documents`, `/enrollment`, `/staff`
 hang off the same path. The structured logs live beside the signed documents:
@@ -331,7 +332,7 @@ site("training-log") |>
   select(family_name, topic, trained_on, expires_at, status)
 ```
 
-Writes take the `log` operation (`site_staff` or `admin` — a monitor reads
+Writes take the `log` operation (`site_staff` or `admin`; a monitor reads
 the logs but never authors a site's own record):
 `POST /study-sites/{id}/delegation-log` (`person_id`, `delegated_tasks[]`,
 `start_date`, `authorized_by`), `PATCH /delegations/{id}` with an `end_date`
@@ -346,7 +347,7 @@ attributed to the site person.
 
 The `v_*` views are documented public surface (see `02-data-model.md`). With a
 read-only Postgres role, dbplyr composes against the same derived truth the dashboard
-shows — no export, no sync, no drift:
+shows: no export, no sync, no drift:
 
 ```r
 con <- DBI::dbConnect(RPostgres::Postgres(),

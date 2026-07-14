@@ -1,10 +1,10 @@
 # ctms-core
 
-A modern regulatory-document backbone for clinical trials, built sponsor/CRO-side:
+A regulatory-document backbone for clinical trials, built sponsor/CRO-side:
 every trial document is a row with a [TMF Reference Model](https://www.cdisc.org/standards/trial-master-file-reference-model)
 artifact type, immutable content-addressed versions, and an append-only audit trail.
 A requirement engine materializes *expected* documents from declarative rules, so
-completeness, gaps, and upcoming expirations are queries — not monitoring visits.
+completeness, gaps, and upcoming expirations are queries, not monitoring visits.
 
 The public API is the product; the web UI is its first customer.
 
@@ -47,7 +47,7 @@ pnpm db:seed      # demo study: 4 sites, 12 staff, realistic gaps
 pnpm dev          # API on :8787, web on :5173
 ```
 
-Then open http://localhost:5173 (dashboard) and http://localhost:8787/docs (API reference).
+Then open `http://localhost:5173` (dashboard) and `http://localhost:8787/docs` (API reference).
 
 ```sh
 pnpm test                   # includes DB-level audit-immutability + WORM tests
@@ -59,9 +59,14 @@ pnpm validation:artifacts   # OQ report + requirement traceability matrix
 
 Tagged releases publish container images to GHCR
 (`ghcr.io/tgerke/ctms-core-api`, `ghcr.io/tgerke/ctms-core-web`); the api
-image doubles as the one-shot migration/seed runner (ADR-0029). See
-[docs/05-deployment.md](docs/05-deployment.md) for the pilot deployment
-checklist.
+image doubles as the one-shot migration/seed runner (ADR-0029).
+`infra/` carries the supported single-VM shape: a production compose file
+behind Caddy TLS, cloud-init, and Terraform roots for AWS, Azure, and
+DigitalOcean (ADR-0032). See [docs/05-deployment.md](docs/05-deployment.md)
+for the pilot deployment checklist. To run ctms-core and
+[edc-core](https://github.com/tgerke/edc-core) together on one host with
+shared Keycloak SSO, use
+[clinical-stack](https://github.com/tgerke/clinical-stack) instead.
 
 ## Status
 
@@ -76,8 +81,8 @@ signature per document), site-scoped seats keeping structured delegation-of-auth
 and training logs, a read-only auditor seat with a reference-model binder and
 in-browser byte verification, a multi-study portfolio view, emailed oversight
 digests, and a verifiable TMF export package that speaks CDISC eTMF-EMS in both
-directions (`pnpm export-tmf` / `pnpm import-ems`). Not validated
-software — the formal CSV program is organizational work; see
+directions (`pnpm export-tmf` / `pnpm import-ems`). It is not validated
+software; the formal CSV program is organizational work. See
 [docs/03-compliance.md](docs/03-compliance.md) for what "compliant-by-design"
 does and does not claim, and [docs/05-deployment.md](docs/05-deployment.md) for
 the pilot checklist.
