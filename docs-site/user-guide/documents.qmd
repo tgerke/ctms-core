@@ -15,8 +15,11 @@ and the text inside the files themselves. Every word you type must match,
 which makes narrowing natural: "1572" lists every Form FDA 1572, "1572 003"
 is site 003's, and a phrase you remember from inside the monitoring plan
 finds the monitoring plan. When the match came from inside a document, the
-result shows a snippet of the surrounding text. (Scanned image-only PDFs
-have no extractable text, so they match by metadata only.)
+result shows a snippet of the surrounding text. Scanned image-only PDFs are
+covered too: their pages are read by OCR, so a phrase from a scanned
+approval letter finds the letter. (OCR text is a machine reading of the
+scan — a snippet from one may carry small misreadings, and the download is
+always the record.)
 
 ![Search results: metadata and content matches together, with a snippet where the match came from inside the file.](../images/search-results.png){.screenshot fig-alt="Document search page showing results for a two-word query, each with its TMF artifact, site, status chip, and an italic snippet of the matching text from inside the file"}
 

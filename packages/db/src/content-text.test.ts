@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { extractContentText } from "./content-text.js";
-import { makePdf } from "./seed/pdf.js";
+import { createOcr, extractContentText } from "./content-text.js";
+import { makePdf, makeScannedPdf } from "./seed/pdf.js";
 
 /**
  * Extraction contract (ADR-0022): PDFs and text yield normalized text,
@@ -35,4 +35,29 @@ describe("extractContentText (ADR-0022)", () => {
     const res = await extractContentText(bytes, "application/pdf");
     expect(res).toEqual({ status: "failed", content: null, extractor: null });
   });
+});
+
+/**
+ * OCR contract (ADR-0031): a scanned image-only PDF has an empty text layer,
+ * and the OCR pass recovers what exists only as pixels. Slowest test in the
+ * suite; the first run on a machine also downloads the eng traineddata.
+ */
+describe("OCR of image-only PDFs (ADR-0031)", () => {
+  it("recovers text that exists only as pixels", async () => {
+    const pdf = makeScannedPdf([
+      "Monitoring Visit Follow-up Letter",
+      "Temperature excursion resolved for kit 88-A.",
+    ]);
+    const layer = await extractContentText(new Uint8Array(pdf), "application/pdf");
+    expect(layer.status).toBe("extracted");
+    expect(layer.content).toBe("");
+
+    const ocr = await createOcr();
+    try {
+      const text = await ocr.recognizePdf(new Uint8Array(pdf));
+      expect(text).toContain("Temperature excursion resolved");
+    } finally {
+      await ocr.close();
+    }
+  }, 120_000);
 });

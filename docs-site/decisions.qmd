@@ -254,8 +254,8 @@ property ADR-0019 named when it scoped this out. The table is derived state
 deliberately outside the audited record: no audit trigger, no immutability
 trigger, rebuildable any time with `pnpm db:extract-text`. Failures and
 unsupported types are recorded as rows, never block an upload, and scanned
-image-only PDFs simply match by metadata alone (OCR is a non-feature until
-a pilot needs it). Query semantics stay ADR-0019's substring-AND — each
+image-only PDFs simply match by metadata alone (OCR stayed a deliberate
+non-feature until ADR-0031). Query semantics stay ADR-0019's substring-AND — each
 word must match the metadata haystack *or* the content — and results carry
 a snippet of the content match.
 
@@ -381,6 +381,25 @@ text). The output lives in an iframe with an empty sandbox, because a
 document under review is untrusted input, and the panel is labeled
 "Rendered in your browser for reading — the downloaded file is the record."
 No endpoint, no schema, no stored artifact: there is nothing to drift.
+
+## ADR-0031 — OCR for image-only PDFs is derived text, recovered by the backfill
+
+The paper-born share of a TMF — approval letters, certificates, signature
+pages — arrives as scanned PDFs with no text layer, which ADR-0022 could
+only match by metadata. OCR now recovers what exists only as pixels, and it
+lands exactly where ADR-0022 put every other extraction: in
+**document_content_text**, content-addressed, derived, rebuildable, outside
+the audited record — with its `extractor` column saying `tesseract.js`,
+because OCR output is a *reading* of pixels, not a fact about bytes, and a
+search hit built on it must stay traceable to the engine that guessed it.
+The engine is tesseract.js (WASM) over pages rendered by pdf.js — pure npm
+dependencies, no OCR service, no system binary, nothing leaving the
+machine. It never runs in the upload request (OCR costs seconds per page;
+extraction must not block an upload): `pnpm db:extract-text` re-reads every
+PDF whose text layer came back under 20 characters and updates the row in
+place, blank scans included, so nothing retries forever. The seeded demo
+ships a scanned IRB approval letter whose body — "renewed approval for a
+further twelve months" — is findable only because OCR read it.
 
 ---
 
