@@ -33,10 +33,8 @@ one-shot container (`pnpm --filter @ctms/db migrate`) with the owner-role
 
 ## Consequences
 
-- A production compose topology (not yet in the repo; this bullet originally
-  pointed at a planned deployment ADR whose number was later taken by office
-  renditions) sequences db → migrate (one-shot) → api via
-  `depends_on: service_completed_successfully`.
+- `infra/compose.prod.yaml` (ADR-0032) sequences db → migrate (one-shot) →
+  api via `depends_on: service_completed_successfully`.
 - The api image is larger than a compiled bundle would be (ships
   devDependencies like tsx). Accepted at pilot scale.
 - `pnpm db:seed` becomes trivially runnable in production topology

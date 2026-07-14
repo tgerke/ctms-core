@@ -23,6 +23,14 @@ server {
         client_max_body_size 100m;
     }
 
+    # Runtime SPA auth config from container env: one pinned image serves
+    # any IdP. Exact-match wins over the static dev stub in the bundle.
+    location = /env.js {
+        default_type application/javascript;
+        add_header Cache-Control "no-cache";
+        return 200 'window.__CTMS_ENV__={AUTH_MODE:"${CTMS_WEB_AUTH_MODE}",OIDC_ISSUER:"${CTMS_WEB_OIDC_ISSUER}",OIDC_CLIENT_ID:"${CTMS_WEB_OIDC_CLIENT_ID}",OIDC_SCOPE:"${CTMS_WEB_OIDC_SCOPE}"};';
+    }
+
     # Hashed bundle files never change content under the same name.
     location /assets/ {
         add_header Cache-Control "public, max-age=31536000, immutable";

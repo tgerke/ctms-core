@@ -1,0 +1,21 @@
+{
+  "name": "ctms-core",
+  "image": "mcr.microsoft.com/devcontainers/typescript-node:22",
+  "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {}
+  },
+  "containerEnv": {
+    "COREPACK_ENABLE_DOWNLOAD_PROMPT": "0"
+  },
+  "forwardPorts": [5173, 8787, 8025],
+  "portsAttributes": {
+    "5173": { "label": "ctms-core web", "onAutoForward": "openBrowser" },
+    "8787": { "label": "ctms-core api", "onAutoForward": "silent" },
+    "8025": { "label": "mailpit (digest emails)", "onAutoForward": "silent" }
+  },
+  // AUTH_MODE=dev with the documented demo tokens comes from .env.example;
+  // the seed is two fictional studies and an illustrative TMF subset (the
+  // licensed CDISC TMF RM Excel is never vendored, ADR-0005).
+  "postCreateCommand": "corepack enable && pnpm install && ([ -f .env ] || cp .env.example .env) && pnpm db:up && pnpm db:migrate && pnpm db:seed",
+  "postStartCommand": "pnpm db:up && nohup pnpm dev > /tmp/ctms-dev.log 2>&1 &"
+}

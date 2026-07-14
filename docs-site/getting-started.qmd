@@ -7,6 +7,15 @@ API, and web dashboard — comes up in a few minutes with a seeded demo study.
 Standing it up is a developer task; once it's running, the
 [user guide](user-guide/index.qmd) covers everything from there without code.
 
+## Try it with zero install
+
+[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/tgerke/ctms-core?quickstart=1)
+
+The badge boots the seeded stack in a free GitHub Codespace — no local
+tools needed, just a GitHub account. After ~3 minutes the dashboard opens
+on the forwarded port; the dev bearer tokens below work immediately, and
+the codespace (fictional data only) is yours alone to delete when done.
+
 ## Prerequisites
 
 - Node 22+ and [pnpm](https://pnpm.io)
@@ -114,3 +123,17 @@ Re-running `pnpm db:seed` resets the demo data. Two things to know:
 - The blob store for uploaded files defaults to a local `storage/` directory,
   content-addressed by sha256 (`STORAGE_DRIVER=local`); the `s3` driver adds
   Object Lock WORM for a pilot (see `.env.example`).
+
+## Deploying a pilot
+
+The dev stack above is not a deployment. For a real host, tagged releases
+publish container images to GHCR (`ghcr.io/tgerke/ctms-core-api`,
+`ghcr.io/tgerke/ctms-core-web`), and `infra/compose.prod.yaml` runs them
+behind automatic TLS with the least-privilege wiring built in: copy
+`infra/.env.example`, set a domain, passwords, and your identity provider,
+and `docker compose -f infra/compose.prod.yaml up -d`. If the VM doesn't exist yet, `infra/cloud-init.yaml`
+provisions it unattended on any provider that accepts cloud-init user data.
+The full pilot
+checklist — IdP registration, Object Lock, backups, validation sign-off — is
+[docs/05-deployment.md](https://github.com/tgerke/ctms-core/blob/main/docs/05-deployment.md).
+Never run `pnpm db:seed` against a deployment; it truncates everything.

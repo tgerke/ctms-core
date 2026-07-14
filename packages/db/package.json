@@ -9,6 +9,7 @@
   "scripts": {
     "generate": "drizzle-kit generate",
     "migrate": "tsx src/migrate.ts",
+    "rotate-passwords": "tsx src/rotate-passwords.ts",
     "seed": "tsx src/seed/index.ts",
     "import-tmf": "tsx src/import-tmf.ts",
     "extract-text": "tsx src/extract-text.ts",

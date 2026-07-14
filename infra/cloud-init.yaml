@@ -1,0 +1,67 @@
+#cloud-config
+# Boot a production ctms-core host on any Ubuntu 24.04 VM (ADR-0032): Docker,
+# the release-pinned compose stack, and basic host hardening. This same file
+# is the user_data for every infra/terraform/ root — Terraform substitutes
+# the placeholder tokens via templatefile(). To use it standalone, render
+# it first — the placeholders and a copy-paste sed one-liner are in
+# docs/05-deployment.md ("Provisioning the VM"); note that every $ { }
+# sequence below is substituted, so keep real shell variables out of this
+# file.
+#
+# Then pass user-data.yaml to your provider's "user data"/"cloud-init" field.
+# With auth_mode=oidc the api also needs OIDC_ISSUER and OIDC_AUDIENCE —
+# add them via the extra_env token or edit /opt/ctms/.env after boot and re-run
+# `docker compose -f compose.prod.yaml up -d`. First boot takes a few
+# minutes: watch with `cloud-init status --wait`. The pilot checklist
+# (docs/05-deployment.md) still applies: IdP registration, TMF RM import,
+# admin provisioning, validation sign-off.
+#
+# Notes:
+# - ufw governs host services (SSH); Docker publishes ports via iptables
+#   directly, bypassing ufw. The stack publishes only 80/443 by design —
+#   keep your cloud firewall/security group as the real boundary.
+# - Ubuntu's unattended-upgrades ships enabled; this config only adds the
+#   pieces that aren't defaults.
+
+package_update: true
+package_upgrade: true
+packages:
+  - ufw
+
+swap:
+  filename: /swap.img
+  size: 2147483648
+
+write_files:
+  # The extra_env token takes additional .env lines (OIDC issuer/audience, managed
+  # DATABASE_URL/DATABASE_URL_APP, S3 storage, digest SMTP); everything the
+  # stack supports is documented in infra/.env.example.
+  - path: /opt/ctms/.env
+    permissions: "0600"
+    content: |
+      CTMS_DOMAIN=${domain}
+      CTMS_VERSION=${app_version}
+      POSTGRES_PASSWORD=${postgres_password}
+      CTMS_APP_PASSWORD=${ctms_app_password}
+      AUTH_MODE=${auth_mode}
+      COMPOSE_PROFILES=${compose_profiles}
+      ${extra_env}
+  - path: /etc/ssh/sshd_config.d/90-hardening.conf
+    content: |
+      PasswordAuthentication no
+      PermitRootLogin prohibit-password
+
+runcmd:
+  - curl -fsSL https://get.docker.com | sh
+  - systemctl reload ssh
+  - ufw allow 22/tcp
+  - ufw allow 80/tcp
+  - ufw allow 443/tcp
+  - ufw allow 443/udp
+  - ufw --force enable
+  # The compose artifacts come from the pinned release tag — the same files
+  # a checkout has, never forked copies.
+  - curl -fsSL -o /opt/ctms/compose.prod.yaml https://raw.githubusercontent.com/tgerke/ctms-core/v${app_version}/infra/compose.prod.yaml
+  - curl -fsSL -o /opt/ctms/Caddyfile https://raw.githubusercontent.com/tgerke/ctms-core/v${app_version}/infra/Caddyfile
+  - cd /opt/ctms && docker compose -f compose.prod.yaml up -d
+  - echo "ctms-core is starting — point DNS for ${domain} at this host and Caddy obtains TLS automatically. Next; the pilot checklist in docs/05-deployment.md."

@@ -401,6 +401,31 @@ place, blank scans included, so nothing retries forever. The seeded demo
 ships a scanned IRB approval letter whose body — "renewed approval for a
 further twelve months" — is findable only because OCR read it.
 
+## ADR-0032 — Single-VM production shape, Caddy for TLS, thin infra-as-code
+
+ADR-0029 published the images; this decision says where they run. The
+supported production shape is one VM running `infra/compose.prod.yaml`:
+Caddy terminating TLS as the only published service, and the bring-up
+order from the deployment guide wired into the file itself. The migrate
+one-shot is the only container holding the owner credential, and on every
+bring-up it also rotates the runtime roles' passwords from `.env`, so the
+least-privilege separation that migration 0004 created in the schema is
+now enforced by the topology too. Compose profiles cover the supported
+variations (bundled Postgres or managed, bundled MinIO or a real Object
+Lock bucket). Infrastructure-as-code stays deliberately thin and
+VM-shaped: a provider-agnostic cloud-init, plus one small Terraform root
+each for AWS, Azure, and DigitalOcean that provisions the VM, firewall,
+and disk, then delegates every application step to that same cloud-init.
+No Kubernetes at this phase; a single-tenant pilot (ADR-0001) needs a
+compose file and a DNS record, and that is also the answer the sibling
+edc-core gives, which matters for organizations installing both. Two
+smaller things ride the same change: the web image now serves its IdP
+configuration at runtime from container env via `/env.js`, so one pinned
+image works against any identity provider, and a devcontainer definition
+boots the seeded demo stack in GitHub Codespaces for zero-install
+evaluation. This ADR was drafted as 0031 while OCR shipped under that
+number; it is recorded as 0032.
+
 ---
 
 Three of these — ADR-0004, ADR-0006, and ADR-0010 — are the same idea applied

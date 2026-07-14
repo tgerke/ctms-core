@@ -19,7 +19,7 @@ import {
   digestRecipients,
   renderDigest,
 } from "@ctms/core";
-import { createDb, loadEnv } from "@ctms/db";
+import { appDatabaseUrl, createDb, loadEnv } from "@ctms/db";
 import nodemailer from "nodemailer";
 
 loadEnv();
@@ -32,7 +32,8 @@ const flag = (name: string) => {
 const studyFilter = flag("--study") as string | undefined;
 const dryRun = args.includes("--dry-run") || !process.env.SMTP_URL;
 
-const { sql } = createDb();
+// Reads derived views only — run as the least-privilege role, same as the api.
+const { sql } = createDb(appDatabaseUrl());
 
 const studies = (await sql`
   SELECT id, protocol_number FROM study

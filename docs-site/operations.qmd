@@ -125,10 +125,13 @@ assignments, with a broken audit chain leading the message — to everyone
 holding study-wide admin or trial-ops access. The digest is a pure function of the same derived views
 the dashboard reads, computed at send time: no notification state, no
 subscription list, nothing that can drift from the record. Schedule it with
-cron at whatever cadence the team wants; `SMTP_URL` names the relay (the
-dev stack ships [mailpit](https://mailpit.axllent.org/) on
-`smtp://localhost:1025`, inbox UI on `:8025`), and without it the job
-prints to stdout.
+cron at whatever cadence the team wants — from a checkout, or against the
+production compose stack
+(`docker compose -f compose.prod.yaml run --rm api pnpm digest`; the api
+image ships the tools). `SMTP_URL` names the relay (the dev stack ships
+[mailpit](https://mailpit.axllent.org/) on `smtp://localhost:1025`, inbox UI
+on `:8025`), and without it the job prints to stdout. It connects as the
+same least-privilege database role the API uses.
 
 ## Handing over the TMF
 
