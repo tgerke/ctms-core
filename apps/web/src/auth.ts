@@ -13,7 +13,9 @@ declare global {
   }
 }
 const conf = (viteValue: unknown, runtimeKey: string): string | undefined =>
-  (viteValue as string | undefined) || window.__CTMS_ENV__?.[runtimeKey] || undefined;
+  (viteValue as string | undefined) ||
+  (typeof window === "undefined" ? undefined : window.__CTMS_ENV__?.[runtimeKey]) ||
+  undefined;
 
 const OIDC = conf(import.meta.env.VITE_AUTH_MODE, "AUTH_MODE") === "oidc";
 const ISSUER = conf(import.meta.env.VITE_OIDC_ISSUER, "OIDC_ISSUER");
