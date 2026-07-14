@@ -4,7 +4,7 @@ title: "Direct SQL access"
 
 The `v_*` views are documented public API, not internals. The REST API is
 `SELECT`s over these views, so a read-only Postgres connection reads exactly
-the derived truth the dashboard shows — no export step, no sync job, no drift.
+the derived truth the dashboard shows: no export step, no sync job, no drift.
 For a data-science team, this is often the shortest path: one connection,
 then `dbplyr` or SQL composes whatever the analysis needs.
 
@@ -32,7 +32,7 @@ grant, not a feature request.
 | `v_expected_document_status` | Every expected document with derived status: `missing`, `waived`, `pending_review`, `returned`, `current`, `expiring_soon`, `expired`, `superseded` |
 | `v_study_site_completeness` | Per-site rollup: counts by status, percent current (waived rows leave the denominator) |
 | `v_review_queue` | Documents awaiting review with their latest assignment: `unassigned`, `assigned`, `overdue` |
-| `v_document_search` | Every document with its metadata flattened into a searchable `haystack`, plus its versions' extracted text as `content_text` (ADR-0022 — select columns; the text makes `SELECT *` heavy) |
+| `v_document_search` | Every document with its metadata flattened into a searchable `haystack`, plus its versions' extracted text as `content_text` (ADR-0022; select columns, since the text makes `SELECT *` heavy) |
 | `v_monitoring_visit_status` | Visits with derived stage: `scheduled` → `overdue` → `awaiting_report` → `report_pending_review` → `follow_up` → `complete`, plus open action-item counts |
 | `v_issue_status` | Issues and deviations: `open`, `overdue`, `resolved` |
 | `v_site_enrollment` | Latest enrollment report per site vs its target |
@@ -82,12 +82,12 @@ pl.read_database_uri(
 )
 ```
 
-(Or `pandas.read_sql` with SQLAlchemy/psycopg — any Postgres client works;
+(Or `pandas.read_sql` with SQLAlchemy/psycopg. Any Postgres client works;
 that's the point.)
 
 ## From psql
 
-There is no host psql requirement — the Docker container has one:
+There is no host psql requirement; the Docker container has one:
 
 ```sh
 docker exec -i ctms-core-db-1 psql -U ctms_readonly -d ctms \
@@ -97,7 +97,7 @@ docker exec -i ctms-core-db-1 psql -U ctms_readonly -d ctms \
 ## Why both paths exist
 
 The REST API adds authentication-to-person mapping, request validation, file
-handling, and writes — everything an application needs. Direct SQL serves the
+handling, and writes: everything an application needs. Direct SQL serves the
 analyst who wants to compose queries the API authors didn't anticipate. Because
 both read the same views, choosing one is a matter of convenience, never of
 data quality: the dashboard, the API, and your `dbplyr` pipeline cannot

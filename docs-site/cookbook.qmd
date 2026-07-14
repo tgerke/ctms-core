@@ -6,15 +6,15 @@ The API is the product, and this page is its acceptance test: if the questions
 a monitoring team asks aren't a few lines each, the design has failed. The
 examples run against the seeded demo study (`pnpm db:seed`) with the dev tokens
 from `.env.example`. The full interactive reference lives at
-<http://localhost:8787/docs>. The point-and-click versions of these same tasks
-are in the [user guide](user-guide/index.qmd).
+`http://localhost:8787/docs` while the stack is running. The point-and-click
+versions of these same tasks are in the [user guide](user-guide/index.qmd).
 
 Everything below is shown in R first (the stack these docs assume you might
 share), then condensed in [Python](#the-same-story-in-python) and
-[curl](#curl-one-liners). No client library is required in any language — it's
+[curl](#curl-one-liners). No client library is required in any language: it's
 plain HTTP with a bearer token.
 
-![The interactive reference at `/docs`, generated from the same schemas that validate requests — every endpoint with a try-it panel and client snippets.](images/api-docs.png){.screenshot fig-alt="OpenAPI reference for the ctms-core API showing the endpoint list, authentication panel, and a curl example for listing studies"}
+![The interactive reference at `/docs`, generated from the same schemas that validate requests; every endpoint has a try-it panel and client snippets.](images/api-docs.png){.screenshot fig-alt="OpenAPI reference for the ctms-core API showing the endpoint list, authentication panel, and a curl example for listing studies"}
 
 ## Setup
 
@@ -41,7 +41,7 @@ study <- df_studies$id[1]
 ## The monitor's morning
 
 Expected-vs-actual for the whole study, as one tidy data frame. Status is
-computed by the database view on every read — there is no stored flag to go
+computed by the database view on every read; there is no stored flag to go
 stale.
 
 ```r
@@ -96,26 +96,26 @@ request("http://localhost:8787") |>
 ```
 
 Approval moves the document to `effective` and (outside of visit-linked
-documents) supersedes its predecessors — at which point the expected-document
+documents) supersedes its predecessors, at which point the expected-document
 view flips from `pending_review` to `current` on its own, because it was never
 anything but a query.
 
 `approval` is one of three signature meanings. `author` and `review` record
 attestations on a version without changing its status; only `approval` makes
-it effective. All three are Part 11 signatures — signer, timestamp, meaning,
-bound to the content hash.
+it effective. All three are Part 11 signatures: signer, timestamp, and
+meaning, bound to the content hash.
 
 Review has a second outcome: return the version for correction with a
 documented reason (ADR-0015). The reason is an immutable fact row, the
 document shows `returned` until a corrected version arrives, and the returned
 version itself can never be approved. Returning takes the same `approve`
-permission as approving, but it isn't a signature — no re-authentication.
+permission as approving, but it isn't a signature, so no re-authentication.
 
 Both outcomes also work over a selection (ADR-0026):
 `POST /document-versions/bulk-approve` with `version_ids` and one
-`reauth_token` executes a §11.200(a)(1)(i) series of signings — one
+`reauth_token` executes a §11.200(a)(1)(i) series of signings (one
 re-authentication, then one signature per version, each bound to its own
-content hash — and `POST /document-versions/bulk-return` shares one
+content hash), and `POST /document-versions/bulk-return` shares one
 documented reason. All-or-nothing: anything unreviewable in the selection
 refuses the whole call with every blocker listed.
 
@@ -129,7 +129,7 @@ request("http://localhost:8787") |>
 
 ### Filing from another system
 
-Source systems — an EDC first — file documents through the same endpoint,
+Source systems (an EDC first) file documents through the same endpoint,
 with two optional provenance fields:
 
 ```r
@@ -140,7 +140,7 @@ with two optional provenance fields:
 
 The version lands as `pending_review` like any upload (a human still
 approves), and its row on the document page carries a "filed by edc-core"
-chip. Machine identities hold the `ingest` role — read and upload, never
+chip. Machine identities hold the `ingest` role: read and upload, never
 sign (see [ADR-0011](decisions.qmd#adr-0011-a-generic-source-system-filing-interface-edc-integration-stays-outside-the-data-boundary)).
 
 The filing surface is complete enough to build an idempotent integration on
@@ -188,8 +188,8 @@ ctms("studies", study, "milestones") |>
   select(name, site_number, planned_date, actual_date, status)
 ```
 
-Recording work is the same shape — schedule a visit, log a deviation, report
-counts:
+Recording work is the same shape, whether you schedule a visit, log a
+deviation, or report counts:
 
 ```r
 # Log a protocol deviation with a 14-day resolution window
@@ -240,7 +240,7 @@ The same `PATCH` records the visit's conducted date, monitor, and summary;
 
 Site onboarding is a write surface, not a seed script (ADR-0016): create the
 org and site, link the site to the study, activate it, add people, assign
-roles, grant access — every step an audited row. The
+roles, grant access, every step an audited row. The
 [user guide](user-guide/administration.qmd) covers the same flow in the app.
 
 ```r
@@ -278,7 +278,7 @@ request("http://localhost:8787") |>
 ```
 
 And when an expected document genuinely doesn't apply, waive it instead of
-leaving a permanent gap — the reason is required, and lifting the waiver
+leaving a permanent gap. The reason is required, and lifting the waiver
 later is itself a recorded fact:
 
 ```r
@@ -307,7 +307,7 @@ request("http://localhost:8787") |>
 Storage is content-addressed: `GET /files/{sha256}` returns the version whose
 hash that is, so "give me the file this signature signed" needs nothing but
 the hash recorded on the signature row. When you're starting from a version
-id instead of a hash — a review-queue row, say —
+id instead of a hash (a review-queue row, say),
 `GET /document-versions/{id}/content` returns the same bytes with their
 uploaded mime type, and echoes the hash in an `x-content-sha256` header so
 you can check what you received (ADR-0027).
@@ -344,8 +344,8 @@ ctms(f"/studies/{study}/enrollment")[
     ["site_number", "enrolled", "target_enrollment", "pct_of_target"]]
 ```
 
-Writes mirror the R examples — `api.post(...)` with a JSON body, using an
-admin token:
+Writes mirror the R examples: `api.post(...)` with a JSON body, using an
+admin token.
 
 ```python
 admin = httpx.Client(
@@ -389,5 +389,5 @@ curl -s "$BASE/audit-chain/verify" -H "$AUTH" | jq
 
 Every list endpoint above is a `SELECT` over a documented `v_*` view. With the
 seeded read-only role you can point `DBI`/`dbplyr` or `psycopg` straight at
-Postgres and compose against the same derived truth — see
+Postgres and compose against the same derived truth; see
 [direct SQL access](sql-access.qmd).
