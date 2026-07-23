@@ -21,7 +21,7 @@ review. Here they are one `GET` (or one `SELECT`). See [docs/01-vision.md](docs/
 | --- | --- |
 | `docs/` | Design docs: vision, data model, compliance mapping, API guide, deployment + ADR log |
 | `docs/validation/` | Generated IQ/OQ reports and requirement→test traceability matrix |
-| `docs-site/` | Quarto docs site: getting started, user guide, cookbook, compliance, validation |
+| `site/` | Astro Starlight docs site: getting started, user guide, cookbook, compliance, validation |
 | `packages/db` | Postgres schema (Drizzle), migrations, audit-trail enforcement, seed |
 | `packages/core` | Domain logic: audited mutations, requirement engine, completeness |
 | `apps/api` | OpenAPI 3.1 REST API (Hono), spec at `/openapi.json`, docs at `/docs` |

@@ -1,0 +1,178 @@
+---
+title: "Operational layer"
+---
+
+The features CTMS products sell (monitoring visits with trip-report workflows,
+issue and deviation tracking, enrollment metrics, milestones) are usually built
+as workflow objects: rows with status columns advanced by application code, in
+modules vendors configure per customer. That design is why incumbent systems are
+hard for data teams to use: the workflow state lives in vendor-specific objects
+reachable only through vendor screens and vendor exports.
+
+ctms-core builds the same features the other way around. **Tables store dated
+facts; views derive the lifecycle.** No table in this layer has a status column,
+so a stage can never be stale: it is never written, only computed.
+
+:::note[Prefer point and click?]
+This page explains how the operational layer is built. The same workflows as
+step-by-step tasks in the app (scheduling visits, logging deviations,
+reporting enrollment) live in the [user guide](/ctms-core/user-guide/).
+:::
+
+## Monitoring visits
+
+A `monitoring_visit` records the facts of a visit at a study-site: type
+(`pre_study | initiation | interim | close_out`), the scheduled date, the actual
+visit date (null until conducted), the monitor, and a summary.
+
+Everything else is derived. `v_monitoring_visit_status` computes the stage from
+the dates, the linked trip report's document status, and open action items:
+
+| Stage | Meaning |
+| --- | --- |
+| `scheduled` | Scheduled date in the future, not yet conducted |
+| `overdue` | Scheduled date has passed with no visit date recorded |
+| `awaiting_report` | Conducted, but no trip report yet, or the report was returned for correction (ADR-0015) |
+| `report_pending_review` | Trip report uploaded, awaiting approval signature |
+| `follow_up` | Report approved, but action items remain open |
+| `complete` | Report approved and every action item resolved |
+
+The stage machine is fixed in the view, deliberately: new stages are a
+migration, not a per-customer workflow configuration.
+
+![The dashboard's visit list, with stage badges computed by `v_monitoring_visit_status` and one-click stage filters (URL-addressable, like everything else).](../../assets/screenshots/monitoring-visits.png)
+
+### Trip reports are documents, not a parallel review system
+
+Visit documents (trip reports, confirmation letters, follow-up letters) are
+ordinary documents linked to the visit through a typed join table. They get the
+same immutable versions and hash-bound signatures as everything else. "Report
+approved" is an ordinary approval signature, which is what moves the visit past
+`report_pending_review`, and "report returned" is an ordinary
+return-for-correction (ADR-0015), which drops the visit back to
+`awaiting_report` until a corrected report is uploaded.
+
+One wrinkle worth knowing: two visits at the same site produce documents with
+identical artifact and scope, so visit-linked documents are treated as
+*per-visit records*. Uploading through the visit endpoint always creates a
+fresh document, and the usual supersede-siblings step on approval skips
+visit-linked documents in both directions. Visit 2's trip report never
+supersedes visit 1's.
+
+### Action items
+
+`visit_action_item` rows are findings to close out: a description, a due date,
+and resolution fields (`resolved_at`, resolver, note). Open action items hold
+the visit in `follow_up` even after the report is approved; closing them out
+is what completes the visit.
+
+![A visit in `follow_up`: the trip report is effective, but one action item is overdue and another open; resolving them is what moves the visit to `complete`.](../../assets/screenshots/visit-page.png)
+
+## Issues and deviations
+
+An `issue` is a protocol deviation or finding, scoped to the study or to a
+site, optionally linked to the monitoring visit that identified it. Facts:
+category, severity (`minor | major | critical`), identified date, due date,
+resolution date and note.
+
+`v_issue_status` derives `open | overdue | resolved` from the dates. An issue
+past its due date without a resolution is overdue; nobody has to remember to
+flip a flag.
+
+![Issues on the dashboard, with severity and derived status; recording a new deviation is a form on the same page, or one `POST`.](../../assets/screenshots/issues.png)
+
+The [user guide](/ctms-core/user-guide/issues/) walks recording an issue step by step.
+
+## Enrollment
+
+`enrollment_report` holds site-reported aggregates, one row per site and
+as-of date: screened, enrolled, withdrawn, completed. `v_site_enrollment`
+surfaces the latest report per site against the site's target.
+
+:::note[Subject-level data stays in the EDC]
+This is a firm scope boundary, not a phase-1 shortcut. ctms-core carries
+operational aggregates for oversight; the EDC owns the clinical record.
+:::
+
+Corrections to a report are audited UPDATEs rather than new rows or silent
+overwrites; the audit trail preserves full before/after row images.
+
+![Enrollment vs target per site, from `v_site_enrollment`: the latest report against `study_site.target_enrollment`.](../../assets/screenshots/enrollment.png)
+
+## Milestones
+
+`study_milestone` rows carry planned and actual dates, scoped to the study or a
+site. `v_milestone_status` derives `achieved | overdue | upcoming`, which makes
+drift between plan and reality a query.
+
+![Milestones on the dashboard: green achieved, red overdue, grey upcoming, all from `v_milestone_status`.](../../assets/screenshots/milestones.png)
+
+## Corrections and the audit trail
+
+Unlike document versions and signatures, operational tables carry no
+immutability triggers: visits get rescheduled, counts get corrected, items get
+edited. These are correctable operational facts. What makes that safe is that
+the same trigger-written, hash-chained audit trail records every change with
+full before and after images. Deleting a mis-scheduled visit leaves an
+audited tombstone rather than a silent gap.
+
+## Digest notifications
+
+Nothing here requires anyone to remember to look: `pnpm digest` (ADR-0017)
+emails each study's oversight summary (expiring and expired documents,
+overdue visits, action items, issues, milestones, and overdue review
+assignments, with a broken audit chain leading the message) to everyone
+holding study-wide admin or trial-ops access. The digest is a pure function
+of the same derived views the dashboard reads, computed at send time: no
+notification state, no subscription list, nothing that can drift from the
+record. Schedule it with cron at whatever cadence the team wants, either
+from a checkout or against the production compose stack
+(`docker compose -f compose.prod.yaml run --rm api pnpm digest`; the api
+image ships the tools). `SMTP_URL` names the relay (the dev stack ships
+[mailpit](https://mailpit.axllent.org/) on `smtp://localhost:1025`, inbox UI
+on `:8025`), and without it the job prints to stdout. It connects as the
+same least-privilege database role the API uses.
+
+## Handing over the TMF
+
+When the study transfers, archives, or gets inspected, `pnpm export-tmf`
+(ADR-0020) writes one verifiable package: every document version's bytes
+(named by their sha256), the full metadata (signatures carrying the exact
+content hash they signed, returns, waivers, the completeness snapshot),
+and the entire hash-chained audit trail. The receiving party checks it with
+nothing but `shasum -a 256 -c manifest.sha256`; a single altered byte fails.
+
+Adding `--ems <agreement-id>` (ADR-0024) puts a CDISC eTMF-EMS v1.0.2
+`exchange.xml` in the package: the industry interchange inventory, one
+`<OBJECT>` per document version, validated against the official schema on
+every export. The agreement id is the SPECIFICATIONID of the exchange
+agreement between the parties; there is no default, because an export
+cannot claim an agreement nobody made. EMS output requires the verbatim
+TMF Reference Model import (`pnpm db:import-tmf`): the standard's mandatory
+unique IDs and model version are read from the licensed spreadsheet, never
+invented, and the export refuses, naming every gap, until they are on
+record.
+
+## Receiving a partner's TMF
+
+The exchange works in both directions (ADR-0025). `pnpm import-ems --
+--package <dir>` reads a partner's eTMF-EMS package and files it through the
+same audited endpoint every source system uses (ADR-0011), as an `ingest`
+machine identity. The standard's receiving-side checks run first (XSD
+validation, checksum verification of every file), and the batch refuses as a
+whole, every blocker named at once, when anything cannot be mapped honestly:
+a TMF RM unique ID the imported taxonomy doesn't know, a site the study
+doesn't have, a country-level or RESTRICTED object the schema can't hold.
+What files lands `pending_review`; nothing becomes effective without a
+human. Re-running the same package files nothing (the importer asks the API
+what it already filed), and the partner's own signatures and audit records
+stay in the retained package as their testimony, never replayed into this
+system's record.
+
+## Reading it all from code
+
+Every capability here ships in the OpenAPI spec, and the four `v_*` views are
+public query surface for direct SQL. The cookbook's
+["CRA's week"](/ctms-core/cookbook/#the-cras-week) walks through visits needing
+attention, open action items, unresolved deviations, enrollment vs target, and
+milestone drift, each one a flat data frame.

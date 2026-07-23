@@ -1,0 +1,215 @@
+---
+title: "Glossary"
+---
+
+Trial-world terms first, then the words this system uses with a specific
+meaning. Regulatory entries here are deliberately brief identifications, not
+summaries of requirements; the [compliance mapping](/ctms-core/compliance/) is the
+page that makes precise claims, with sources.
+
+## People and organizations
+
+Sponsor
+: The organization responsible for the trial, often the company or
+institution funding it. This system is built for the sponsor-side (or
+CRO-side) oversight seat.
+
+CRO (Contract Research Organization)
+: A company the sponsor hires to run some or all of the trial's operations,
+including monitoring.
+
+CRA (Clinical Research Associate)
+: The monitor: visits sites, verifies the trial is run to protocol, writes
+trip reports, and raises findings.
+
+Study coordinator
+: Site-side staff who run the day-to-day of the trial at their site,
+including keeping the site's documents in order.
+
+PI (Principal Investigator)
+: The physician responsible for the trial at one site. Sub-investigators
+assist under the PI's supervision.
+
+IRB / IEC
+: Institutional Review Board (US) / Independent Ethics Committee (elsewhere):
+the body that reviews and approves the trial's protocol and consent documents
+to protect participants. Its approvals are among the documents this system
+tracks.
+
+Site
+: A hospital or clinic where the trial enrolls participants. In this system a
+*study-site* is one site's participation in one study.
+
+## Documents and files
+
+TMF (Trial Master File)
+: The collection of documents that together demonstrate a trial was conducted
+properly. An **eTMF** is its electronic form. ICH's GCP guideline calls the
+things it must contain *essential records*.
+
+TMF Reference Model
+: A CDISC-maintained standard taxonomy for organizing TMF content into zones,
+sections, and artifacts. Document types in this system come from it; the
+zone headings you see on site pages are its zones.
+
+eISF / eBinder
+: Electronic investigator site file, the site-side counterpart of the eTMF.
+Named here mostly for contrast: this system takes the sponsor/CRO view.
+
+eTMF-EMS
+: The CDISC exchange mechanism standard for moving TMF content between
+systems. This system writes an eTMF-EMS package alongside its export, and
+files a partner's package in through the same upload-and-review path as any
+other document: imported files land pending review, nothing arrives
+pre-approved.
+
+Delegation of authority log
+: The site's record of which study tasks the investigator has delegated to
+whom, from when. Kept here as structured entries beside the signed log
+document, so the system can check that the authorizer actually held the PI
+role and whether each delegate's credentials are in order.
+
+Training log
+: The site's record of training completions (who, what topic, when, and
+until when), with current / expiring / expired status derived from the dates.
+An entry can link to the filed certificate document.
+
+EDC (Electronic Data Capture)
+: The system where subject-level clinical data is recorded. Deliberately not
+this system: ctms-core holds documents and site-reported aggregates only.
+
+CTMS (Clinical Trial Management System)
+: Software for running trial operations: sites, visits, issues, enrollment,
+milestones. The "ctms" in ctms-core.
+
+## Regulations and guidelines
+
+GCP (Good Clinical Practice)
+: The international ethical and scientific quality standard for conducting
+clinical trials, set out in ICH guideline E6.
+
+ICH
+: The International Council for Harmonisation, which writes the technical
+guidelines (including E6) that most regulators adopt.
+
+21 CFR Part 11
+: The US FDA regulation on electronic records and electronic signatures. The
+[compliance mapping](/ctms-core/compliance/) states, requirement by requirement, how
+this system addresses it and what remains the deploying organization's
+responsibility.
+
+GAMP 5
+: An industry good-practice guide for validating computerized systems in
+regulated environments. The [validation guide](/ctms-core/validation/) describes the
+validation program in its terms.
+
+## Words this system uses precisely
+
+Expected document
+: A document the study *should* have right now, according to a requirement
+rule, for example a current IRB approval at every active site. Expected
+documents exist before any file is uploaded; that's what makes "missing" a
+status rather than a discovery.
+
+Requirement rule
+: The declarative statement that generates expected documents ("every
+investigator needs a CV no older than 2 years"). Rules are data, and the
+site document matrix is their live evaluation.
+
+Derived status
+: Any status computed at read time from recorded facts: document
+completeness, visit stages, issue states, milestone states. Never stored,
+never stale, never yours to update. The full list is in
+[what the statuses mean](/ctms-core/user-guide/statuses/).
+
+Pending review
+: Uploaded but not yet approved. A pending-review document doesn't count as
+current anywhere.
+
+Returned (for correction)
+: The review outcome besides approval: a reviewer sent the latest version
+back with a reason, which stays on the document's permanent record. The
+returned version can never be approved; uploading a corrected version
+reopens review.
+
+Review assignment
+: Routing a pending version to a named reviewer, with an optional due date.
+It has no "done" state of its own: approving or returning the version is
+what completes it, so the review queue can never disagree with the
+documents.
+
+Bulk review
+: Approving (or returning) a selection of queued documents in one ceremony:
+you re-authenticate once, and every selected version gets its own signature
+bound to its own file. The audit trail shows N signatures, never one
+signature waved over N documents.
+
+Site seat
+: Access scoped to a single site. A site-seat sign-in lands on that site's
+page and works entirely there (uploads, signatures, the logs, enrollment
+reporting), with no study-wide view to get lost in.
+
+Binder
+: The study rendered in TMF Reference Model order (zone, section, artifact),
+with filed documents and open gaps side by side. A single query over the same
+derived views as every other page: there is no binder to maintain, so none
+can drift.
+
+Export package
+: The transfer-and-inspection package the system exports: every version's
+bytes, the full metadata with signature hashes, and the entire audit chain,
+verifiable with standard checksum tools.
+
+Waived
+: An expected document an administrator has marked not applicable, with a
+recorded reason ("central IRB of record; no local approval letter"). A
+waived requirement stops counting as a gap, but the placeholder and its
+waiver history stay on the record; if a document is filed anyway, the
+document wins.
+
+Current / effective
+: Approved by signature and in force. "Effective" is the document's own
+state; "current" is how a requirement row reports it.
+
+Superseded
+: Replaced by a newer sibling document of the same type and scope. Kept
+forever, counted nowhere.
+
+Version
+: One immutable uploaded file within a document. New uploads add versions;
+nothing ever edits or deletes an old one.
+
+E-signature meaning
+: Every signature records *why* it was signed: approval, review, or
+authorship. In the app you'll mostly meet approval signatures, which make
+documents effective.
+
+Trip report
+: The CRA's report of a monitoring visit. A real document with versions and
+signatures, linked to its visit; approving it is what advances the visit.
+
+Action item
+: A finding from a visit that must be closed out: description, due date,
+resolution. Open action items keep a visit in follow-up.
+
+Milestone
+: A named study date, planned versus actual: first site activated, database
+lock. Scoped to the study or to one site.
+
+Audit trail
+: The automatic, append-only record of every change in the system: who, what,
+when, with before and after values. Written by the database itself, never by
+hand.
+
+Hash chain
+: What makes the audit trail tamper-evident: each entry carries a
+cryptographic fingerprint of itself and the entry before it, so removing or
+altering any entry breaks the chain. The header badge re-verifies the whole
+chain continuously.
+
+Hash-bound signature
+: A signature stored with the fingerprint of the exact file content signed.
+If the file ever differed, the signature would visibly not match. The
+document page's **Verify bytes** control proves it on demand: the browser
+re-fetches the file, recomputes the hash locally, and compares it against the
+record and every signature bound to it.

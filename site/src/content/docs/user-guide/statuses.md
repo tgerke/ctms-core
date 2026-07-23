@@ -1,0 +1,67 @@
+---
+title: "What the statuses mean"
+---
+
+Every status in the app is computed when the page loads (from dates, from
+document states, from open counts), so what you see is always the present
+tense. Each one renders as an icon plus a label (never color alone), and this
+page lists them all: what each means, and what, if anything, to do about it.
+
+## Document statuses
+
+These appear on expected-document rows, in the site document matrix, and on
+count tiles.
+
+| Status | Meaning | What to do |
+| --- | --- | --- |
+| **Missing** (grey outline) | The requirement expects a document and none has been filed | Upload it from the site page |
+| **Expired** (red) | The document's validity period has ended | Upload the renewal |
+| **Pending review** (blue) | Uploaded, awaiting an approval signature | Review the file, then approve it or return it for correction |
+| **Returned** (orange) | A reviewer sent the latest version back, with a reason | Read the reason on the document page and upload a corrected version |
+| **Expiring soon** (amber) | Current, but inside its expiry warning window | Chase the renewal before it lapses |
+| **Current** (green) | Approved and in force | Nothing |
+| **Superseded** (grey) | Replaced by a newer sibling document | Nothing; it's history, kept forever |
+| **Waived** (grey) | An admin recorded why the requirement doesn't apply here (e.g. central IRB) | Nothing, unless circumstances change; then lift the waiver from the site page |
+
+## Review queue statuses
+
+The queue lists documents awaiting review; these describe the assignment,
+not the document (which is always **Pending review** while it's here).
+
+| Status | Meaning | What to do |
+| --- | --- | --- |
+| **Unassigned** (amber outline) | Awaiting review, nobody named | Assign a reviewer from the queue page |
+| **Assigned** (blue) | A named reviewer has it, not yet due | Review it: approve or return |
+| **Overdue** (red) | Past the assignment's due date | Review it now, or reassign |
+
+## Monitoring visit stages
+
+The full lifecycle, with next steps, is walked through in
+[monitoring visits](/ctms-core/user-guide/monitoring-visits/).
+
+| Stage | Meaning |
+| --- | --- |
+| **Scheduled** (grey outline) | Visit date still ahead |
+| **Overdue** (red) | Scheduled date passed, no visit recorded |
+| **Awaiting report** (amber) | Conducted, no trip report yet, or the report was returned for correction |
+| **Report in review** (blue) | Trip report uploaded, not yet approved |
+| **Follow-up** (amber) | Report approved, action items still open |
+| **Complete** (green) | Report approved, everything resolved |
+
+## Issue and action-item statuses
+
+| Status | Meaning | What to do |
+| --- | --- | --- |
+| **Open** (amber) | Logged, not yet resolved, not yet due | Work it |
+| **Overdue** (red) | Past its due date without a resolution | Work it now |
+| **Resolved** (green) | Resolution recorded | Nothing |
+
+## Issue severities
+
+Severity is set by whoever logs the issue and doesn't change on its own.
+
+| Severity | Typical use |
+| --- | --- |
+| **Critical** (red) | Safety-relevant or reportable; needs escalation |
+| **Major** (amber) | Meaningful protocol or process breach |
+| **Minor** (grey) | Documentation-level finding |

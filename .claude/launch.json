@@ -22,8 +22,8 @@
     {
       "name": "docs-site",
       "runtimeExecutable": "/bin/bash",
-      "runtimeArgs": ["-c", "python3 -m http.server ${PORT:-8123} --directory docs-site/_site"],
-      "port": 8123,
+      "runtimeArgs": ["-c", "pnpm --filter site dev --port ${PORT:-4321}"],
+      "port": 4321,
       "autoPort": true
     }
   ]
