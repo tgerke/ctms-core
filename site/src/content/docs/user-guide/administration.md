@@ -1,0 +1,80 @@
+---
+title: "Administration"
+---
+
+The admin page (the **Admin** link in the header) is where a study gets its
+shape: which sites participate, who works at them, who may sign in, and what
+documents the study expects. Everything on it follows the same two rules as
+the rest of the app: every change is recorded in the audit trail with your
+name on it, and nothing is ever deleted: roles end, grants are revoked,
+waivers are lifted, all as dated facts.
+
+You need the administrator role for everything on this page. The actions
+render for everyone; without the role, the app will tell you that you don't
+have permission when you try.
+
+## Onboarding a site
+
+A new site arrives in three steps, top card first:
+
+1. **Create the organization and site** (Directory card, bottom of the page)
+   if they don't exist yet: the institution, then its physical site with
+   city and state.
+2. **Add the site to the study** (Study sites card): pick the site, give it
+   its site number. It starts as *pending*.
+3. **Activate** when the site is ready to work. Activation stamps today's
+   date and immediately materializes the site's expected documents. Its row
+   appears in the site document matrix with everything *missing*, which is
+   exactly right: that is the site's startup checklist.
+
+## Staff
+
+People are created once (People & access card) and then assigned roles per
+site, from the **Staff** card on each site's page: pick the person, the role
+(PI, coordinator, pharmacist…), and the start date. Assigning a role
+materializes the person's credential requirements (CV, medical license, GCP
+training) according to the study's rules.
+
+When someone leaves, **End role** records today as the end date. The
+assignment stays on the record (it's a regulated staffing fact); the
+person's unfulfilled credential placeholders are pruned on the next sync.
+
+## Access
+
+Site staffing and system access are separate on purpose: a coordinator can
+work at a site without a login, and a data manager can have read access
+without holding any site role. The People & access card grants access roles
+(the same five described in [the user guide's start page](/ctms-core/user-guide/)) and
+revokes them; revocation is a timestamp, and the grant history stays.
+
+## Requirement rules
+
+The Requirement rules card lists what the study expects on file, and lets
+you add to it: pick the TMF artifact, the scope (once per study, per site,
+or per staff member), a plain-language name, an optional validity period,
+and whether an approval signature is required. New rules materialize their
+placeholders on the next sync, which the page runs for you.
+
+A rule's scope and artifact are fixed once created; if the requirement
+itself changes, that's a new rule, so the old placeholders keep their
+history.
+
+## Waiving an expected document
+
+Some requirements genuinely don't apply everywhere: a site under a central
+IRB has no local approval letter to file. Leaving that row *missing* forever
+would be noise; deleting it would erase the requirement. Instead, **waive**
+it from the site page: the missing row gets a *Waive* button that asks for a
+reason (required; an inspector will read it).
+
+A waived row shows the *waived* chip, displays who waived it, when, and why,
+and stops counting against the site's completeness percentage. Three things
+to know:
+
+- **A document beats a waiver.** If someone files the document anyway, the
+  row reports the document's status; the waiver becomes moot.
+- **Lifting a waiver is recorded too.** *Lift waiver* asks for its own
+  reason, and the row returns to *missing*. The original waiver stays in the
+  history.
+- **One active waiver at a time.** The full trail of past waivers and lifts
+  lives in the audit trail.

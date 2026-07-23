@@ -1,0 +1,393 @@
+---
+title: "API cookbook"
+---
+
+The API is the product, and this page is its acceptance test: if the questions
+a monitoring team asks aren't a few lines each, the design has failed. The
+examples run against the seeded demo study (`pnpm db:seed`) with the dev tokens
+from `.env.example`. The full interactive reference lives at
+`http://localhost:8787/docs` while the stack is running. The point-and-click
+versions of these same tasks are in the [user guide](/ctms-core/user-guide/).
+
+Everything below is shown in R first (the stack these docs assume you might
+share), then condensed in [Python](#the-same-story-in-python) and
+[curl](#curl-one-liners). No client library is required in any language: it's
+plain HTTP with a bearer token.
+
+![The interactive reference at `/docs`, generated from the same schemas that validate requests; every endpoint has a try-it panel and client snippets.](../../assets/screenshots/api-docs.png)
+
+## Setup
+
+A four-line helper turns any GET endpoint into a tibble:
+
+```r
+library(httr2)
+library(dplyr)
+
+ctms <- function(path, ..., query = list()) {
+  request("http://localhost:8787") |>
+    req_url_path_append(path, ...) |>
+    req_url_query(!!!query) |>
+    req_auth_bearer_token("dev-monitor-token") |>
+    req_perform() |>
+    resp_body_json(simplifyVector = TRUE) |>
+    as_tibble()
+}
+
+df_studies <- ctms("studies")
+study <- df_studies$id[1]
+```
+
+## The monitor's morning
+
+Expected-vs-actual for the whole study, as one tidy data frame. Status is
+computed by the database view on every read; there is no stored flag to go
+stale.
+
+```r
+df_expected <- ctms("studies", study, "expected-documents")
+
+# Everything that needs attention, most urgent first
+df_expected |>
+  filter(status != "current") |>
+  arrange(factor(status, c("expired", "missing", "pending_review", "expiring_soon"))) |>
+  select(site_number, artifact_name, person_family_name, status, effective_expiry)
+
+# Completeness by site, one line each
+ctms("studies", study, "sites") |>
+  select(site_number, site_name, pct_current, missing_count, expired_count)
+
+# Credential expirations in the next 60 days — the report the binder systems can't run
+df_expected |>
+  filter(status == "expiring_soon", scope_level == "person_role") |>
+  select(site_number, person_family_name, artifact_name, effective_expiry)
+```
+
+No pagination-by-folder, no per-document round trips, no XML exports: the
+completeness of a four-site trial is three GETs.
+
+## Writing: upload and sign
+
+Mutations use the same API the dashboard does. Every write is attributed to the
+token's person and lands in the hash-chained audit trail.
+
+```r
+# Upload a missing GCP certificate (multipart; lands as pending_review)
+request("http://localhost:8787/documents") |>
+  req_auth_bearer_token("dev-admin-token") |>
+  req_body_multipart(
+    file            = curl::form_file("gcp_certificate.pdf"),
+    tmf_artifact_id = artifact_id,     # from the expected-documents row
+    study_id        = study,
+    study_site_id   = site_id,
+    person_id       = person_id,
+    title           = "GCP Certificate — Oduya"
+  ) |>
+  req_perform()
+
+# Approve: a Part 11 signature bound to the version's content hash.
+# Signing requires re-authentication (§11.200): in dev mode the bearer token
+# restated; in oidc mode a freshly issued token from the identity provider.
+request("http://localhost:8787") |>
+  req_url_path_append("document-versions", version_id, "sign") |>
+  req_auth_bearer_token("dev-admin-token") |>
+  req_body_json(list(meaning = "approval", reauth_token = "dev-admin-token")) |>
+  req_perform()
+```
+
+Approval moves the document to `effective` and (outside of visit-linked
+documents) supersedes its predecessors, at which point the expected-document
+view flips from `pending_review` to `current` on its own, because it was never
+anything but a query.
+
+`approval` is one of three signature meanings. `author` and `review` record
+attestations on a version without changing its status; only `approval` makes
+it effective. All three are Part 11 signatures: signer, timestamp, and
+meaning, bound to the content hash.
+
+Review has a second outcome: return the version for correction with a
+documented reason (ADR-0015). The reason is an immutable fact row, the
+document shows `returned` until a corrected version arrives, and the returned
+version itself can never be approved. Returning takes the same `approve`
+permission as approving, but it isn't a signature, so no re-authentication.
+
+Both outcomes also work over a selection (ADR-0026):
+`POST /document-versions/bulk-approve` with `version_ids` and one
+`reauth_token` executes a §11.200(a)(1)(i) series of signings (one
+re-authentication, then one signature per version, each bound to its own
+content hash), and `POST /document-versions/bulk-return` shares one
+documented reason. All-or-nothing: anything unreviewable in the selection
+refuses the whole call with every blocker listed.
+
+```r
+request("http://localhost:8787") |>
+  req_url_path_append("document-versions", version_id, "return") |>
+  req_auth_bearer_token("dev-admin-token") |>
+  req_body_json(list(reason = "Unsigned copy — please upload the signed version.")) |>
+  req_perform()
+```
+
+### Filing from another system
+
+Source systems (an EDC first) file documents through the same endpoint,
+with two optional provenance fields:
+
+```r
+# ... the same multipart upload, plus:
+    source_system = "edc-core",
+    source_ref    = "casebook 002-011"
+```
+
+The version lands as `pending_review` like any upload (a human still
+approves), and its row on the document page carries a "filed by edc-core"
+chip. Machine identities hold the `ingest` role: read and upload, never
+sign (see [ADR-0011](/ctms-core/decisions/#adr-0011-a-generic-source-system-filing-interface-edc-integration-stays-outside-the-data-boundary)).
+
+The filing surface is complete enough to build an idempotent integration on
+(ADR-0025): `force_new = "true"` creates a fresh document even when a
+non-superseded one with the same artifact and scope exists (an imported
+partner record must not merge into a local one),
+`POST /documents/{id}/versions` appends a version to exactly that document
+(a superseded document answers 409), and
+`GET /studies/{id}/filings?source_system=` returns what that source already
+filed, so a re-run skips instead of duplicating. The eTMF-EMS importer
+(`pnpm import-ems`, [operations](/ctms-core/operations/#receiving-a-partners-tmf))
+is exactly such a client and nothing more.
+
+## The CRA's week {#the-cras-week}
+
+The [operational layer](/ctms-core/operations/) answers the questions a monitor plans a
+week around, with every lifecycle stage derived, never stored. List endpoints
+filter server-side.
+
+```r
+# Visits needing attention: overdue, or conducted without a trip report
+bind_rows(
+  ctms("studies", study, "monitoring-visits", query = list(stage = "overdue")),
+  ctms("studies", study, "monitoring-visits", query = list(stage = "awaiting_report"))
+) |>
+  select(site_number, visit_type, scheduled_date, visit_date, stage)
+
+# Open action items roll up on the same view the visit page uses
+ctms("studies", study, "monitoring-visits") |>
+  filter(open_action_items > 0) |>
+  select(site_number, visit_type, open_action_items, stage)
+
+# Unresolved major/critical issues, most urgent first
+ctms("studies", study, "issues") |>
+  filter(status != "resolved", severity %in% c("major", "critical")) |>
+  arrange(desc(status == "overdue"), due_date) |>
+  select(site_number, category, severity, title, due_date, status)
+
+# Enrollment vs target — which site gets the recruitment call
+ctms("studies", study, "enrollment") |>
+  select(site_number, enrolled, target_enrollment, pct_of_target, as_of_date)
+
+# Milestones: planned vs actual, drift visible
+ctms("studies", study, "milestones") |>
+  select(name, site_number, planned_date, actual_date, status)
+```
+
+Recording work is the same shape, whether you schedule a visit, log a
+deviation, or report counts:
+
+```r
+# Log a protocol deviation with a 14-day resolution window
+request("http://localhost:8787") |>
+  req_url_path_append("studies", study, "issues") |>
+  req_auth_bearer_token("dev-admin-token") |>
+  req_body_json(list(
+    study_site_id   = site_id,
+    category        = "protocol_deviation",
+    severity        = "major",
+    title           = "Dosing outside window, subject 002-011",
+    identified_date = as.character(Sys.Date()),
+    due_date        = as.character(Sys.Date() + 14)
+  )) |>
+  req_perform()
+
+# Report this week's enrollment counts for a site
+request("http://localhost:8787") |>
+  req_url_path_append("study-sites", site_id, "enrollment") |>
+  req_auth_bearer_token("dev-admin-token") |>
+  req_method("PUT") |>
+  req_body_json(list(
+    as_of_date = as.character(Sys.Date()),
+    screened = 14, enrolled = 9, withdrawn = 1, completed = 2
+  )) |>
+  req_perform()
+
+# Reschedule an overdue visit — PATCH the fact, the stage recomputes
+request("http://localhost:8787") |>
+  req_url_path_append("monitoring-visits", visit_id) |>
+  req_auth_bearer_token("dev-admin-token") |>
+  req_method("PATCH") |>
+  req_body_json(list(scheduled_date = as.character(Sys.Date() + 21))) |>
+  req_perform()
+
+# Attach an already-filed document to a visit (confirmation or follow-up letter)
+request("http://localhost:8787") |>
+  req_url_path_append("monitoring-visits", visit_id, "document-links") |>
+  req_auth_bearer_token("dev-admin-token") |>
+  req_body_json(list(document_id = document_id, link_kind = "follow_up_letter")) |>
+  req_perform()
+```
+
+The same `PATCH` records the visit's conducted date, monitor, and summary;
+`link_kind` is `trip_report`, `confirmation_letter`, or `follow_up_letter`.
+
+## The admin corner
+
+Site onboarding is a write surface, not a seed script (ADR-0016): create the
+org and site, link the site to the study, activate it, add people, assign
+roles, grant access, every step an audited row. The
+[user guide](/ctms-core/user-guide/administration/) covers the same flow in the app.
+
+```r
+adm <- function(path, body) {
+  request("http://localhost:8787") |>
+    req_url_path_append(path) |>
+    req_auth_bearer_token("dev-admin-token") |>
+    req_body_json(body) |> req_perform() |> resp_body_json()
+}
+
+org  <- adm("organizations", list(name = "Cascade Clinical Research", kind = "site_org"))
+site <- adm("sites", list(organization_id = org$id, name = "Cascade Clinical Research",
+                          city = "Boise", state = "ID"))
+ss   <- adm(paste0("studies/", study, "/sites"),
+            list(site_id = site$id, site_number = "005"))
+pi   <- adm("people", list(given_name = "Ada", family_name = "Okafor",
+                           email = "ada.okafor@cascade.example", credentials = "MD"))
+adm(paste0("study-sites/", ss$id, "/roles"),
+    list(person_id = pi$id, role = "principal_investigator",
+         start_date = as.character(Sys.Date())))
+adm("access-grants", list(person_id = pi$id, role = "read_only", study_id = study))
+```
+
+When requirement rules or staff role assignments change, an admin
+re-materializes the expected-document placeholders. The sync is idempotent:
+it inserts what's newly expected and prunes unfulfilled placeholders that no
+longer apply.
+
+```r
+request("http://localhost:8787") |>
+  req_url_path_append("studies", study, "sync-expected-documents") |>
+  req_auth_bearer_token("dev-admin-token") |>
+  req_method("POST") |>
+  req_perform()
+```
+
+And when an expected document genuinely doesn't apply, waive it instead of
+leaving a permanent gap. The reason is required, and lifting the waiver
+later is itself a recorded fact:
+
+```r
+adm(paste0("expected-documents/", expected_id, "/waive"),
+    list(reason = "Central IRB of record; local approval letter not applicable."))
+```
+
+## Auditability is an endpoint
+
+```r
+# Everything that ever happened to one document
+ctms("documents", document_id, "audit")
+
+# Verify the hash chain end-to-end
+ctms("audit-chain", "verify")
+
+# Retrieve the exact bytes a signature covers, by content hash
+request("http://localhost:8787") |>
+  req_url_path_append("files", sha256) |>
+  req_auth_bearer_token("dev-monitor-token") |>
+  req_perform() |>
+  resp_body_raw() |>
+  writeBin("signed_version.pdf")
+```
+
+Storage is content-addressed: `GET /files/{sha256}` returns the version whose
+hash that is, so "give me the file this signature signed" needs nothing but
+the hash recorded on the signature row. When you're starting from a version
+id instead of a hash (a review-queue row, say),
+`GET /document-versions/{id}/content` returns the same bytes with their
+uploaded mime type, and echoes the hash in an `x-content-sha256` header so
+you can check what you received (ADR-0027).
+
+## The same story in Python {#the-same-story-in-python}
+
+```python
+import httpx
+import pandas as pd
+
+api = httpx.Client(
+    base_url="http://localhost:8787",
+    headers={"Authorization": "Bearer dev-monitor-token"},
+)
+
+def ctms(path, **params):
+    return pd.DataFrame(api.get(path, params=params).json())
+
+study = ctms("/studies")["id"][0]
+
+# Triage: everything not current, most urgent first
+expected = ctms(f"/studies/{study}/expected-documents")
+order = ["expired", "missing", "pending_review", "expiring_soon"]
+(expected[expected.status != "current"]
+    .assign(rank=lambda d: d.status.map(order.index))
+    .sort_values("rank")
+    [["site_number", "artifact_name", "person_family_name", "status"]])
+
+# Overdue visits, server-side filter
+ctms(f"/studies/{study}/monitoring-visits", stage="overdue")
+
+# Enrollment vs target
+ctms(f"/studies/{study}/enrollment")[
+    ["site_number", "enrolled", "target_enrollment", "pct_of_target"]]
+```
+
+Writes mirror the R examples: `api.post(...)` with a JSON body, using an
+admin token.
+
+```python
+admin = httpx.Client(
+    base_url="http://localhost:8787",
+    headers={"Authorization": "Bearer dev-admin-token"},
+)
+
+admin.post(f"/studies/{study}/issues", json={
+    "study_site_id": site_id,
+    "category": "protocol_deviation",
+    "severity": "major",
+    "title": "Dosing outside window, subject 002-011",
+    "identified_date": "2026-07-09",
+    "due_date": "2026-07-23",
+})
+```
+
+## curl one-liners {#curl-one-liners}
+
+```sh
+AUTH='Authorization: Bearer dev-monitor-token'
+BASE=http://localhost:8787
+STUDY=$(curl -s $BASE/studies -H "$AUTH" | jq -r '.[0].id')
+
+# Completeness by site
+curl -s "$BASE/studies/$STUDY/sites" -H "$AUTH" \
+  | jq -r '.[] | [.site_number, .pct_current, .missing_count] | @tsv'
+
+# What's missing or expired
+curl -s "$BASE/studies/$STUDY/expected-documents" -H "$AUTH" \
+  | jq '[.[] | select(.status == "missing" or .status == "expired")]'
+
+# Overdue monitoring visits
+curl -s "$BASE/studies/$STUDY/monitoring-visits?stage=overdue" -H "$AUTH" | jq
+
+# Verify the audit hash chain
+curl -s "$BASE/audit-chain/verify" -H "$AUTH" | jq
+```
+
+## Or skip the API entirely
+
+Every list endpoint above is a `SELECT` over a documented `v_*` view. With the
+seeded read-only role you can point `DBI`/`dbplyr` or `psycopg` straight at
+Postgres and compose against the same derived truth; see
+[direct SQL access](/ctms-core/sql-access/).

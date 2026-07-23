@@ -58,11 +58,14 @@ UI :8025 (docker compose).
   caught subtly wrong once.
 - Compliance claims in docs must never run ahead of the code. When a control
   ships, update `docs/03-compliance.md` and its mirror
-  `docs-site/compliance.qmd` together, and keep the "honest gaps" list honest.
+  `site/src/content/docs/compliance.md` together, and keep the "honest gaps"
+  list honest.
 
 ## Docs
 
-`docs/*.md` and `docs-site/*.qmd` deliberately overlap; a change to one usually
-needs the other. Rebuild the site with `quarto render` in `docs-site/`
-(rendered `_site/` is gitignored). Screenshots regenerate via
-`docs-site/screenshots.mjs` against a freshly seeded stack (ADR-0007).
+`docs/*.md` and the site pages in `site/src/content/docs/` deliberately
+overlap; a change to one usually needs the other. The site is Astro Starlight
+(ADR-0033): `pnpm --filter site dev` to preview, `pnpm --filter site build` to
+build (`site/dist/` is gitignored; the build fails on broken internal links).
+Screenshots regenerate via `tools/screenshots.mjs` against a freshly seeded
+stack (ADR-0007) into `site/src/assets/screenshots/`.

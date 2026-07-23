@@ -14,3 +14,4 @@ docs-site/.quarto/
 **/.terraform/
 *.tfstate
 *.tfstate.*
+site/dist/

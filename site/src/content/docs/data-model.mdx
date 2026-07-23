@@ -1,0 +1,218 @@
+---
+title: "Data model"
+---
+
+import Mermaid from "../../components/Mermaid.astro";
+
+Postgres is the system of record. Everything the dashboard shows and the API
+serves is either a table of facts or a view derived from those facts. There is
+no third category, and no stored status column anywhere in the system.
+
+<Mermaid
+  code={`erDiagram
+    tmf_zone ||--o{ tmf_section : contains
+    tmf_section ||--o{ tmf_artifact : contains
+    organization ||--o{ study : sponsors
+    organization ||--o{ site : operates
+    study ||--o{ protocol_version : versions
+    study ||--o{ study_site : enrolls
+    site ||--o{ study_site : participates
+    study_site ||--o{ study_site_role : staffs
+    person ||--o{ study_site_role : holds
+    tmf_artifact ||--o{ document : types
+    study ||--o{ document : scopes
+    study_site o|--o{ document : scopes
+    person o|--o{ document : scopes
+    document ||--o{ document_version : versions
+    document_version ||--o{ signature : signs
+    person ||--o{ signature : signer
+    person ||--o{ access_grant : authorizes
+    study o|--o{ access_grant : scopes
+    study_site o|--o{ access_grant : scopes
+    tmf_artifact ||--o{ requirement_rule : requires
+    study ||--o{ requirement_rule : configures
+    requirement_rule ||--o{ expected_document : materializes
+    study_site ||--o{ monitoring_visit : hosts
+    monitoring_visit ||--o{ monitoring_visit_document : links
+    document ||--o{ monitoring_visit_document : linked
+    monitoring_visit ||--o{ visit_action_item : raises
+    study ||--o{ issue : tracks
+    study_site o|--o{ issue : scopes
+    monitoring_visit o|--o{ issue : identifies
+    study_site ||--o{ enrollment_report : reports
+    study ||--o{ study_milestone : plans
+    study_site ||--o{ delegation : logs
+    person ||--o{ delegation : delegate
+    person ||--o{ delegation : authorizes
+    study_site ||--o{ training_record : logs
+    person ||--o{ training_record : trainee
+    document o|--o{ training_record : certifies`}
+/>
+
+## Reference taxonomy
+
+**tmf_zone → tmf_section → tmf_artifact** mirror the CDISC TMF Reference Model
+hierarchy (11 zones of numbered sections and artifacts in the official model).
+
+:::danger[The seeded taxonomy is an illustrative subset]
+The seed contains roughly 40 hand-checked artifacts across the major zones
+(Trial Management, Regulatory, IRB/IEC, Site Management, IP, Safety), enough to
+exercise every mechanism, deliberately not a reproduction of the full model.
+Artifact numbering follows the official scheme (e.g. `03.01.02`), and
+`pnpm db:import-tmf` loads the complete CDISC spreadsheet verbatim: download it
+from CDISC yourself (licensing) and the importer upserts by artifact number,
+no schema change.
+:::
+
+## Organizational spine
+
+- **organization**: sponsor, CRO, or site institution.
+- **study**: protocol number, title, phase; belongs to a sponsoring organization.
+- **protocol_version**: labeled versions with effective dates. Requirement
+  rules can demand re-collection per version (amended protocol signature pages,
+  for instance).
+- **site** and **study_site**: a physical site, and its participation in a
+  study: site number, lifecycle (`pending → active → closed`), activation date,
+  enrollment target. Most site-level documents hang off `study_site`.
+- **person** and **study_site_role**: people, and the roles they hold at a
+  study-site (PI, sub-investigator, coordinator, pharmacist, research nurse)
+  with start and end dates. Role assignments are auditable facts and the anchor
+  for person-scoped requirements. These are *persons*, not "users". Login
+  identity maps onto persons at the API layer, so the identity provider is
+  swappable without touching the regulated facts.
+- **access_grant**: what a person may *do* through the API: a role
+  (`admin | trial_ops | monitor | read_only | ingest | site_staff`), optionally scoped
+  to one study or one study-site, mapping to operations (read / upload / sign /
+  approve / administer / log). `site_staff` is the site seat (ADR-0023): a
+  person whose every grant is site-scoped works entirely through their site's
+  page, and `log` gates writing that site's own DoA/training entries.
+  Revocation is a timestamp, never a delete, and every grant
+  change lands in the audit trail, so an access review is a query. Deliberately
+  separate from `study_site_role`, which records regulated staffing facts.
+
+## Documents
+
+- **document**: one logical record: its TMF artifact type plus scope columns
+  (`study_id` always; `study_site_id` for site-scoped; `person_id` for
+  person-scoped, which requires site scope too, since a CV is filed per site).
+  Lifecycle `status`: `pending_review → effective → superseded`, with a
+  `returned` detour when review sends a version back (ADR-0015), and optional
+  effective and expiry dates for licenses, approvals, and training certificates.
+- **document_version**: **immutable**; the database rejects UPDATE and DELETE
+  for every role. Each version records number, sha256 of the content, filename,
+  MIME type, size, uploader, timestamp, and, when a source system filed it,
+  `source_system`/`source_ref` provenance (ADR-0011). File bytes live in a
+  content-addressed store keyed by that hash: a local directory in dev, or S3
+  with Object Lock so the bytes are WORM (ADR-0009). Duplicate uploads
+  deduplicate for free.
+- **signature**: a Part 11 e-signature record: signer, meaning
+  (`author | review | approval`), timestamp, and `signed_sha256`, a copy of
+  the version's content hash taken at signing, so the signature↔record binding
+  (§11.70) is verifiable independently of the version row. Each signature also
+  records how and when the signer re-authenticated (§11.200); a database CHECK
+  requires it on every new row. Immutable, like versions.
+- **document_return**: the review outcome besides approval (ADR-0015): who
+  returned a version, when, and why. The reason is required and non-blank at
+  the schema level, the row is immutable like a signature, and a returned
+  version can never be approved; the fix is a corrected version, which
+  reopens review.
+
+Finding a document is a query too (ADR-0019): **v_document_search** flattens
+each document's metadata (title, artifact taxonomy, site, person, uploader,
+file names, filing source) into a searchable haystack, and search requires
+every word to match. There is no search index that could drift from the
+record. The view also carries each document's extracted text (ADR-0022):
+**document_content_text** holds the text of every stored blob, keyed by the
+same content hash as the blob store. It is derived state deliberately outside
+the audited record, since extracted text of immutable bytes can never go stale
+and can be rebuilt from the bytes at any time (`pnpm db:extract-text`). So a
+search word can match what a document says, not only what it is filed as.
+
+Review work is routed the same way (ADR-0018): a **review_assignment** row
+names who should review a pending version and when it is due, with no status
+column: the assignment is finished exactly when its version gains an
+approval signature or a return, and **v_review_queue** derives
+`unassigned | assigned | overdue` for everything still waiting. Approving or
+returning is what empties the queue; there is no completion flag to forget.
+
+## The requirement engine
+
+- **requirement_rule**: declarative, per study: which artifact, at which scope
+  level (`study | study_site | person_role`), for which roles when
+  person-scoped, how many months a document stays valid (null = never expires),
+  and whether a signature is required.
+- **expected_document**: placeholders materialized from the rules: one row per
+  rule × in-scope entity (the study; each active study-site; each active
+  matching role assignment). An idempotent sync inserts missing placeholders
+  and removes unfulfilled ones whose scope entity has left (a role ended, a
+  site closed).
+- **expected_document_waiver**: why an expected document is not applicable
+  (ADR-0016): reason (required, non-blank), who, when. Lifting a waiver sets
+  the revoke fields once (a recorded fact, never a delete), and one active
+  waiver is allowed per placeholder.
+- **v_expected_document_status** (*view*): the heart of the system. Joins each
+  placeholder to its best fulfilling document (same artifact and scope, latest
+  effective) and its active waiver, and derives status:
+  `missing | waived | pending_review | returned | current | expiring_soon (≤60 days) | expired | superseded`.
+  `waived` appears exactly where `missing` would have; a filed document always
+  wins over a waiver.
+- **v_study_site_completeness** (*view*): the per-site rollup: counts by
+  status, percent current. Waived rows leave the percentage's denominator: an
+  explained absence is not a gap.
+
+Because no stored status exists, completeness is computed from ground truth on
+every read. It cannot drift from the documents, which is the failure mode this
+project exists to fix.
+
+![The dashboard's site document matrix is one `SELECT` from `v_expected_document_status`: requirements down, sites across, every cell a derived status.](../../assets/screenshots/site-document-matrix.png)
+
+## The operational layer
+
+Monitoring visits, issues, enrollment, and milestones follow the same rule:
+facts in tables, lifecycle in views. The [operational layer guide](/ctms-core/operations/)
+covers them in full; the derived views are `v_monitoring_visit_status`,
+`v_issue_status`, `v_site_enrollment`, and `v_milestone_status`.
+
+The site-seat logs (ADR-0023) extend the same pattern to the site's own
+records: **delegation** (delegate, delegated tasks, start/end dates,
+authorizing PI; CHECKs forbid self-delegation and unordered dates) and
+**training_record** (person, topic, completion date, optional expiry and a
+link to the filed certificate document). `v_delegation_log` derives
+`active | ended` plus two cross-checks: whether the authorizer held an
+active PI role at that site on the start date, and the delegate's count of
+open credential items from `v_expected_document_status`. `v_training_log`
+derives `current | expiring_soon (≤60 days) | expired`. The signed DoA log
+document stays the authoritative Part 11 record; these rows are the
+queryable layer beside it.
+
+## Audit trail
+
+**audit_event** is append-only and written by database triggers on every
+INSERT, UPDATE, and DELETE to domain tables, not by application discipline.
+Each event captures the acting person (bound per transaction by the API), the
+action, entity type and id, full before/after row images, a timestamp, and a
+hash chain: each event's hash is computed in-database from the previous hash
+plus the event's canonical fields. Any retroactive edit breaks every subsequent
+hash, so tampering is detectable by walking the chain. An endpoint does
+exactly that (`GET /audit-chain/verify`).
+
+UPDATE and DELETE on `audit_event` itself raise an error at the database level,
+for every role including the owner. "Record changes shall not obscure previously
+recorded information" (§11.10(e)) is a property of the schema, not a code path.
+
+## Views are public API
+
+The `v_*` views are not internals. They are the documented, stable query
+surface: the REST API is `SELECT`s over these views, so a data scientist with a
+read-only Postgres connection reads the same derived truth the dashboard shows.
+The two can never disagree.
+
+Treat view columns like endpoint fields: additive changes are safe; renames and
+removals are breaking. [Direct SQL access](/ctms-core/sql-access/) shows how to
+connect.
+
+## Where the definitions live
+
+For the exact DDL: tables are defined in `packages/db/src/schema.ts` (Drizzle),
+and everything Drizzle can't express (audit triggers, immutability guards, the
+derived-status views) lives in the SQL migrations alongside it.

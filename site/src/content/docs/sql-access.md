@@ -1,0 +1,108 @@
+---
+title: "Direct SQL access"
+---
+
+The `v_*` views are documented public API, not internals. The REST API is
+`SELECT`s over these views, so a read-only Postgres connection reads exactly
+the derived truth the dashboard shows: no export step, no sync job, no drift.
+For a data-science team, this is often the shortest path: one connection,
+then `dbplyr` or SQL composes whatever the analysis needs.
+
+## The read-only role
+
+`pnpm db:seed` creates a SQL role with SELECT-only privileges:
+
+| | |
+| --- | --- |
+| host | `localhost` |
+| port | `5433` |
+| database | `ctms` |
+| user / password | `ctms_readonly` / `ctms_readonly` |
+
+:::note
+These are dev credentials for the local Docker instance, kept deliberately
+guessable. The point being demonstrated is architectural: read access is a
+grant, not a feature request.
+:::
+
+## The views
+
+| View | What it answers |
+| --- | --- |
+| `v_expected_document_status` | Every expected document with derived status: `missing`, `waived`, `pending_review`, `returned`, `current`, `expiring_soon`, `expired`, `superseded` |
+| `v_study_site_completeness` | Per-site rollup: counts by status, percent current (waived rows leave the denominator) |
+| `v_review_queue` | Documents awaiting review with their latest assignment: `unassigned`, `assigned`, `overdue` |
+| `v_document_search` | Every document with its metadata flattened into a searchable `haystack`, plus its versions' extracted text as `content_text` (ADR-0022; select columns, since the text makes `SELECT *` heavy) |
+| `v_monitoring_visit_status` | Visits with derived stage: `scheduled` → `overdue` → `awaiting_report` → `report_pending_review` → `follow_up` → `complete`, plus open action-item counts |
+| `v_issue_status` | Issues and deviations: `open`, `overdue`, `resolved` |
+| `v_site_enrollment` | Latest enrollment report per site vs its target |
+| `v_milestone_status` | Milestones: `achieved`, `overdue`, `upcoming` |
+
+The base tables are readable too (the grant is schema-wide), but the views are
+the *stable* surface: treat their columns like endpoint fields. Additive
+changes are safe; renames and removals are breaking and will be versioned
+accordingly.
+
+## From R
+
+```r
+con <- DBI::dbConnect(RPostgres::Postgres(),
+  host = "localhost", port = 5433, dbname = "ctms",
+  user = "ctms_readonly", password = "ctms_readonly")
+
+# Visits needing attention, joined to enrollment — one lazy pipeline,
+# executed in the database
+dplyr::tbl(con, "v_monitoring_visit_status") |>
+  dplyr::filter(stage %in% c("overdue", "awaiting_report")) |>
+  dplyr::left_join(dplyr::tbl(con, "v_site_enrollment"),
+                   by = c("study_id", "study_site_id", "site_number", "site_name")) |>
+  dplyr::select(site_number, visit_type, stage, enrolled, target_enrollment) |>
+  dplyr::collect()
+```
+
+`dbplyr` translates the pipeline to SQL and runs it in Postgres, so joins and
+filters happen next to the data. `show_query()` on any step shows the SQL it
+will send.
+
+## From Python
+
+```python
+import polars as pl
+
+uri = "postgresql://ctms_readonly:ctms_readonly@localhost:5433/ctms"
+
+pl.read_database_uri(
+    """
+    select site_number, artifact_name, person_family_name, status
+    from v_expected_document_status
+    where status in ('missing', 'expired')
+    order by site_number
+    """,
+    uri,
+)
+```
+
+(Or `pandas.read_sql` with SQLAlchemy/psycopg. Any Postgres client works;
+that's the point.)
+
+## From psql
+
+There is no host psql requirement; the Docker container has one:
+
+```sh
+docker exec -i ctms-core-db-1 psql -U ctms_readonly -d ctms \
+  -c "select site_number, pct_current from v_study_site_completeness;"
+```
+
+## Why both paths exist
+
+The REST API adds authentication-to-person mapping, request validation, file
+handling, and writes: everything an application needs. Direct SQL serves the
+analyst who wants to compose queries the API authors didn't anticipate. Because
+both read the same views, choosing one is a matter of convenience, never of
+data quality: the dashboard, the API, and your `dbplyr` pipeline cannot
+disagree about a visit's stage or a document's status.
+
+Writes go through the API only. The read-only role can't mutate anything, and
+that's structural: every write path that exists runs through the audited,
+actor-attributed mutation layer.

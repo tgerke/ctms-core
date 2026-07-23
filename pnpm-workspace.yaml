@@ -1,6 +1,7 @@
 packages:
   - packages/*
   - apps/*
+  - site
 allowBuilds:
   esbuild: true
   # postinstall is only an opencollective funding banner; the library needs no build
