@@ -74,6 +74,19 @@ Training log
 until when), with current / expiring / expired status derived from the dates.
 An entry can link to the filed certificate document.
 
+Screening log
+: The site's record of its own screening activity: a site-assigned code
+(never a name), the screening date, and the eventual outcome (enrolled, or
+screen-failed with a reason). The log's counts sit beside the enrollment
+numbers the site reports, so the two reconcile on every page load.
+
+Entry-level e-signature
+: A Part 11 e-signature applied to a single log entry (a delegation, a
+training completion, a screening record) through the same re-authentication
+ceremony as document signing. The signature is bound to a hash of the
+entry's facts at signing; if the entry later changes in a permitted way,
+the log shows that the signature covers the earlier facts.
+
 EDC (Electronic Data Capture)
 : The system where subject-level clinical data is recorded. Deliberately not
 this system: ctms-core holds documents and site-reported aggregates only.
