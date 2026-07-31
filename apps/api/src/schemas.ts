@@ -184,6 +184,10 @@ export const SearchResultSchema = z
     // (v_document_search.content_text).
     matched_in_content: z.boolean(),
     content_snippet: z.string().nullable(),
+    // Relevance (ADR-0037): deterministic score behind the result order —
+    // per token, best metadata tier (title 8 / taxonomy 4 / other 2) plus
+    // content occurrences capped at 4. Checkable from the response fields.
+    rank: z.number().int(),
   })
   .openapi("SearchResult");
 

@@ -106,8 +106,8 @@ feature comparison is meaningless without them.
   hash as the blob store, deliberately outside the audited record and
   rebuildable any time with `pnpm db:extract-text`. Search tokens now match
   metadata *or* content, and results carry a snippet of the content match.
-  OCR for scanned image-only PDFs closed as ADR-0031; what remains is
-  relevance ranking: results still order by latest upload.
+  OCR for scanned image-only PDFs closed as ADR-0031, and relevance
+  ranking as ADR-0037: best matches now come first.
 - **OCR for scanned documents**: shipped as derived text recovered by the
   backfill (ADR-0031): `pnpm db:extract-text` re-reads every PDF whose text
   layer came back empty (the signature of a scanned paper original) with
@@ -178,8 +178,8 @@ feature comparison is meaningless without them.
   are single-tenant and the audit chain verifies end to end. The UI now
   renders every seat only the operations its grants hold, so the auditor
   works a clean surface instead of collecting 403s. Of what ADR-0027 left,
-  office-format renditions closed as ADR-0030 and OCR as ADR-0031;
-  relevance ranking remains.
+  office-format renditions closed as ADR-0030, OCR as ADR-0031, and
+  relevance ranking as ADR-0037.
 - **Office-format preview renditions**: shipped as client-side renditions
   of the signed bytes (ADR-0030): the queue's preview now renders Word and
   Excel files as HTML computed in the viewer's browser (mammoth for docx, a
@@ -187,8 +187,8 @@ feature comparison is meaningless without them.
   "the downloaded file is the record." The server stores and serves nothing
   new, so no rendition exists anywhere to drift from the record, and byte
   verification (§11.70) keeps hashing fetched originals. OCR for image-only
-  PDFs closed as ADR-0031; relevance ranking remains; legacy .doc/.xls and
-  presentations honestly stay download offers.
+  PDFs closed as ADR-0031 and relevance ranking as ADR-0037; legacy
+  .doc/.xls and presentations honestly stay download offers.
 - **Site-seat log workflows**: shipped as structured facts on a site-scoped
   seat (ADR-0023): a `site_staff` grant lands its holder on their site's page
   and nowhere else, and delegation-of-authority and training logs are dated
@@ -220,6 +220,16 @@ feature comparison is meaningless without them.
   (an end date, an outcome) surfaces as a derived facts-changed flag,
   never hidden and never blocking. What remains of the site-side catalog
   is EMR-routed certified copies and in-app PHI redaction.
+- **Search relevance ranking**: shipped as a deterministic rank computed
+  per query (ADR-0037). Matching is untouched — every word still
+  substring-matches the metadata or the extracted content — but results
+  now order by a documented weight table: per token, a title hit outranks
+  a taxonomy hit outranks other metadata, plus content occurrences capped
+  so a wordy protocol cannot drown a certificate, with ties falling back
+  to the old latest-upload order. No stored score, no index, nothing to
+  drift: the rank is recomputed from the same view the match reads, and
+  each result carries its rank, so "why is this first?" is answerable
+  from the response and the weight table rather than a model.
 
 ## Genuine gaps
 
@@ -234,12 +244,11 @@ rather than a policy change.
 
 ## If we built next
 
-Nothing is queued: site-side depth (screening logs, entry-level
-e-signatures) shipped 2026-07-31 (ADR-0036), on the heels of study
-creation and guided startup (ADR-0034). Remaining candidates live in the
-notes above: cross-study analytics, relevance ranking, per-site startup
-task templates, and the boundary-sensitive site items (EMR-routed copies,
-PHI redaction).
+Nothing is queued: search relevance ranking shipped 2026-07-31
+(ADR-0037), the same day as site-side depth (screening logs, entry-level
+e-signatures, ADR-0036). Remaining candidates live in the notes above:
+cross-study analytics, per-site startup task templates, and the
+boundary-sensitive site items (EMR-routed copies, PHI redaction).
 
 ## Sources
 

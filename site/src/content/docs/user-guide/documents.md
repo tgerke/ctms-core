@@ -14,8 +14,11 @@ every document's title, TMF artifact, site, person, uploader, file names,
 and the text inside the files themselves. Every word you type must match,
 which makes narrowing natural: "1572" lists every Form FDA 1572, "1572 003"
 is site 003's, and a phrase you remember from inside the monitoring plan
-finds the monitoring plan. When the match came from inside a document, the
-result shows a snippet of the surrounding text. Scanned image-only PDFs are
+finds the monitoring plan. Results come best-match first: a hit in a
+document's title or artifact name outranks a passing mention inside the
+file, so the document you named tends to be the top row. When the match
+came from inside a document, the result shows a snippet of the surrounding
+text. Scanned image-only PDFs are
 covered too: their pages are read by OCR, so a phrase from a scanned
 approval letter finds the letter. (OCR text is a machine reading of the
 scan, so a snippet from one may carry small misreadings; the download is
