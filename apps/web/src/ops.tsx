@@ -42,6 +42,13 @@ export const ISSUE_CATEGORY_LABEL: Record<IssueCategory, string> = {
   other: "Other",
 };
 
+// Shared form styling (ADR-0034's NewStudyCard set the pattern): every field
+// is a visible label above its input, laid out with `flex flex-wrap items-end`.
+export const inputCls = "rounded-md border border-hairline bg-surface px-2 py-1 text-xs";
+export const buttonCls =
+  "inline-flex items-center gap-1.5 rounded-md border border-hairline px-2 py-1 text-xs text-ink2 hover:bg-page disabled:opacity-50";
+export const fieldCls = "flex flex-col gap-1 text-xs text-ink2";
+
 /** Plain-language error line for failed mutations; renders nothing when clear. */
 export function ErrorNote({ error, className }: { error: unknown; className?: string }) {
   if (error == null) return null;
@@ -239,7 +246,7 @@ export function AddMilestoneForm({
   if (!can(me, "upload")) return null;
   return (
     <form
-      className="flex flex-wrap items-center gap-2"
+      className="flex flex-wrap items-end gap-3"
       onSubmit={(e) => {
         e.preventDefault();
         if (!name || !date) return;
@@ -257,38 +264,45 @@ export function AddMilestoneForm({
         );
       }}
     >
-      <input
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-        placeholder="New milestone…"
-        className="w-44 rounded-md border border-hairline bg-surface px-2 py-1 text-xs"
-        aria-label="Milestone name"
-      />
-      <input
-        type="date"
-        value={date}
-        onChange={(e) => setDate(e.target.value)}
-        className="rounded-md border border-hairline bg-surface px-2 py-1 text-xs"
-        aria-label="Planned date"
-        required
-      />
-      <select
-        value={siteId}
-        onChange={(e) => setSiteId(e.target.value)}
-        className="rounded-md border border-hairline bg-surface px-2 py-1 text-xs"
-        aria-label="Milestone scope"
-      >
-        <option value="">Study-wide</option>
-        {sites.map((s) => (
-          <option key={s.study_site_id} value={s.study_site_id}>
-            Site {s.site_number}
-          </option>
-        ))}
-      </select>
+      <label className={fieldCls}>
+        Milestone
+        <input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="e.g. First patient in"
+          className={`w-44 ${inputCls}`}
+          required
+        />
+      </label>
+      <label className={fieldCls}>
+        Planned date
+        <input
+          type="date"
+          value={date}
+          onChange={(e) => setDate(e.target.value)}
+          className={inputCls}
+          required
+        />
+      </label>
+      <label className={fieldCls}>
+        Scope
+        <select
+          value={siteId}
+          onChange={(e) => setSiteId(e.target.value)}
+          className={inputCls}
+        >
+          <option value="">Study-wide</option>
+          {sites.map((s) => (
+            <option key={s.study_site_id} value={s.study_site_id}>
+              Site {s.site_number}
+            </option>
+          ))}
+        </select>
+      </label>
       <button
         type="submit"
         disabled={create.isPending || !name}
-        className="inline-flex items-center gap-1.5 rounded-md border border-hairline px-2 py-1 text-xs text-ink2 hover:bg-page disabled:opacity-50"
+        className={buttonCls}
       >
         <Flag size={12} aria-hidden />
         {create.isPending ? "Adding…" : "Add milestone"}
@@ -319,7 +333,7 @@ export function NewIssueForm({
   if (!can(me, "upload")) return null;
   return (
     <form
-      className="flex flex-wrap items-center gap-2"
+      className="flex flex-wrap items-end gap-3"
       onSubmit={(e) => {
         e.preventDefault();
         if (!title || !identified) return;
@@ -345,62 +359,67 @@ export function NewIssueForm({
         );
       }}
     >
-      <select
-        value={category}
-        onChange={(e) => setCategory(e.target.value as IssueCategory)}
-        className="rounded-md border border-hairline bg-surface px-2 py-1 text-xs"
-        aria-label="Issue category"
-      >
-        {Object.entries(ISSUE_CATEGORY_LABEL).map(([k, label]) => (
-          <option key={k} value={k}>
-            {label}
-          </option>
-        ))}
-      </select>
-      <select
-        value={severity}
-        onChange={(e) => setSeverity(e.target.value as IssueSeverity)}
-        className="rounded-md border border-hairline bg-surface px-2 py-1 text-xs"
-        aria-label="Severity"
-      >
-        {(Object.keys(ISSUE_SEVERITY) as IssueSeverity[]).map((k) => (
-          <option key={k} value={k}>
-            {ISSUE_SEVERITY[k].label}
-          </option>
-        ))}
-      </select>
-      <input
-        value={title}
-        onChange={(e) => setTitle(e.target.value)}
-        placeholder="What happened?"
-        className="w-56 rounded-md border border-hairline bg-surface px-2 py-1 text-xs"
-        aria-label="Issue title"
-      />
-      <label className="flex items-center gap-1.5 text-xs text-ink2">
-        identified
+      <label className={fieldCls}>
+        Category
+        <select
+          value={category}
+          onChange={(e) => setCategory(e.target.value as IssueCategory)}
+          className={inputCls}
+        >
+          {Object.entries(ISSUE_CATEGORY_LABEL).map(([k, label]) => (
+            <option key={k} value={k}>
+              {label}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className={fieldCls}>
+        Severity
+        <select
+          value={severity}
+          onChange={(e) => setSeverity(e.target.value as IssueSeverity)}
+          className={inputCls}
+        >
+          {(Object.keys(ISSUE_SEVERITY) as IssueSeverity[]).map((k) => (
+            <option key={k} value={k}>
+              {ISSUE_SEVERITY[k].label}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className={fieldCls}>
+        What happened
+        <input
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          placeholder="Short description"
+          className={`w-56 ${inputCls}`}
+          required
+        />
+      </label>
+      <label className={fieldCls}>
+        Identified
         <input
           type="date"
           value={identified}
           onChange={(e) => setIdentified(e.target.value)}
-          className="rounded-md border border-hairline bg-surface px-2 py-1 text-xs"
-          aria-label="Identified date"
+          className={inputCls}
           required
         />
       </label>
-      <label className="flex items-center gap-1.5 text-xs text-ink2">
-        due
+      <label className={fieldCls}>
+        Due (optional)
         <input
           type="date"
           value={due}
           onChange={(e) => setDue(e.target.value)}
-          className="rounded-md border border-hairline bg-surface px-2 py-1 text-xs"
-          aria-label="Due date (optional)"
+          className={inputCls}
         />
       </label>
       <button
         type="submit"
         disabled={create.isPending || !title}
-        className="inline-flex items-center gap-1.5 rounded-md border border-hairline px-2 py-1 text-xs text-ink2 hover:bg-page disabled:opacity-50"
+        className={buttonCls}
       >
         <Plus size={12} aria-hidden />
         {create.isPending ? "Logging…" : "Log issue"}
@@ -462,7 +481,7 @@ export function ScheduleVisitForm({
   if (!can(me, "upload")) return null;
   return (
     <form
-      className="flex flex-wrap items-center gap-2"
+      className="flex flex-wrap items-end gap-3"
       onSubmit={(e) => {
         e.preventDefault();
         if (!date) return;
@@ -473,30 +492,34 @@ export function ScheduleVisitForm({
         );
       }}
     >
-      <select
-        value={type}
-        onChange={(e) => setType(e.target.value as VisitType)}
-        className="rounded-md border border-hairline bg-surface px-2 py-1 text-xs"
-        aria-label="Visit type"
-      >
-        {Object.entries(VISIT_TYPE_LABEL).map(([k, label]) => (
-          <option key={k} value={k}>
-            {label}
-          </option>
-        ))}
-      </select>
-      <input
-        type="date"
-        value={date}
-        onChange={(e) => setDate(e.target.value)}
-        className="rounded-md border border-hairline bg-surface px-2 py-1 text-xs"
-        aria-label="Scheduled date"
-        required
-      />
+      <label className={fieldCls}>
+        Visit type
+        <select
+          value={type}
+          onChange={(e) => setType(e.target.value as VisitType)}
+          className={inputCls}
+        >
+          {Object.entries(VISIT_TYPE_LABEL).map(([k, label]) => (
+            <option key={k} value={k}>
+              {label}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className={fieldCls}>
+        Scheduled date
+        <input
+          type="date"
+          value={date}
+          onChange={(e) => setDate(e.target.value)}
+          className={inputCls}
+          required
+        />
+      </label>
       <button
         type="submit"
         disabled={schedule.isPending}
-        className="inline-flex items-center gap-1.5 rounded-md border border-hairline px-2 py-1 text-xs text-ink2 hover:bg-page disabled:opacity-50"
+        className={buttonCls}
       >
         <CalendarPlus size={12} aria-hidden />
         {schedule.isPending ? "Scheduling…" : "Schedule visit"}
@@ -524,20 +547,20 @@ export function ReportEnrollmentForm({
   const [err, setErr] = useState<unknown>(null);
   if (!can(me, "upload")) return null;
   const field = (key: keyof typeof counts, label: string) => (
-    <label className="flex items-center gap-1.5 text-xs text-ink2">
+    <label className={fieldCls}>
       {label}
       <input
         type="number"
         min={0}
         value={counts[key]}
         onChange={(e) => setCounts((c) => ({ ...c, [key]: Number(e.target.value) }))}
-        className="w-16 rounded-md border border-hairline bg-surface px-2 py-1 text-xs"
+        className={`w-20 ${inputCls}`}
       />
     </label>
   );
   return (
     <form
-      className="flex flex-wrap items-center gap-3"
+      className="flex flex-wrap items-end gap-3"
       onSubmit={(e) => {
         e.preventDefault();
         setErr(null);
@@ -551,15 +574,11 @@ export function ReportEnrollmentForm({
         );
       }}
     >
-      {field("screened", "screened")}
-      {field("enrolled", "enrolled")}
-      {field("withdrawn", "withdrawn")}
-      {field("completed", "completed")}
-      <button
-        type="submit"
-        disabled={report.isPending}
-        className="rounded-md border border-hairline px-2 py-1 text-xs text-ink2 hover:bg-page disabled:opacity-50"
-      >
+      {field("screened", "Screened")}
+      {field("enrolled", "Enrolled")}
+      {field("withdrawn", "Withdrawn")}
+      {field("completed", "Completed")}
+      <button type="submit" disabled={report.isPending} className={buttonCls}>
         {report.isPending ? "Reporting…" : "Report as of today"}
       </button>
       <ErrorNote error={err} className="w-full" />

@@ -39,8 +39,11 @@ import {
   type TrainingRecord,
 } from "../api";
 import {
+  buttonCls,
   EnrollmentBars,
   ErrorNote,
+  fieldCls,
+  inputCls,
   IssueListItem,
   localToday,
   NewIssueForm,
@@ -86,6 +89,22 @@ export default function SitePage({ study }: { study: Study | undefined }) {
 
   if (!site) return <PageState query={overviewQuery} label="site" />;
 
+  // In-page jump nav: the page is deliberately one continuous record, so give
+  // it a section index instead of tabs. Entries mirror section visibility.
+  const jumpLinks: { href: string; label: string }[] = [
+    { href: "#staff", label: "Staff" },
+    { href: "#delegation", label: "Delegation" },
+    { href: "#training", label: "Training" },
+    ...(me && !siteSeat && study
+      ? [
+          { href: "#visits", label: "Visits" },
+          { href: "#issues", label: "Issues" },
+        ]
+      : []),
+    { href: "#enrollment", label: "Enrollment" },
+    { href: "#documents", label: "Documents" },
+  ];
+
   return (
     <div className="space-y-6">
       <div>
@@ -119,7 +138,24 @@ export default function SitePage({ study }: { study: Study | undefined }) {
         </div>
       </div>
 
-      <section className="card">
+      {/* Sticky under the app header at xl, where the header is reliably one
+          55px line; below that it stays a plain index at the top. */}
+      <nav
+        className="-mx-4 flex flex-wrap items-center gap-1 border-b border-hairline bg-page/90 px-4 py-2 backdrop-blur xl:sticky xl:top-[57px] xl:z-[5]"
+        aria-label="Page sections"
+      >
+        {jumpLinks.map((l) => (
+          <a
+            key={l.href}
+            href={l.href}
+            className="rounded-md px-2 py-1 text-xs text-ink2 hover:bg-surface"
+          >
+            {l.label}
+          </a>
+        ))}
+      </nav>
+
+      <section id="staff" className="card scroll-mt-28">
         <h2 className="border-b border-hairline px-4 py-3 font-medium">Staff</h2>
         <ul className="divide-y divide-hairline">
           {staff?.map((m) => (
@@ -134,7 +170,7 @@ export default function SitePage({ study }: { study: Study | undefined }) {
         )}
       </section>
 
-      <section className="card">
+      <section id="delegation" className="card scroll-mt-28">
         <h2 className="border-b border-hairline px-4 py-3 font-medium">
           Delegation of authority{" "}
           <span className="text-xs font-normal text-muted">
@@ -144,7 +180,7 @@ export default function SitePage({ study }: { study: Study | undefined }) {
         <DelegationLog studySiteId={site.study_site_id} staff={staff} />
       </section>
 
-      <section className="card">
+      <section id="training" className="card scroll-mt-28">
         <h2 className="border-b border-hairline px-4 py-3 font-medium">
           Training log{" "}
           <span className="text-xs font-normal text-muted">
@@ -155,7 +191,7 @@ export default function SitePage({ study }: { study: Study | undefined }) {
       </section>
 
       {me && !siteSeat && study && (
-        <section className="card">
+        <section id="visits" className="card scroll-mt-28">
           <div className="flex flex-wrap items-center gap-3 border-b border-hairline px-4 py-3">
             <h2 className="font-medium">Monitoring visits</h2>
             <div className="ml-auto">
@@ -175,7 +211,7 @@ export default function SitePage({ study }: { study: Study | undefined }) {
       )}
 
       {me && !siteSeat && study && (
-        <section className="card">
+        <section id="issues" className="card scroll-mt-28">
           <h2 className="border-b border-hairline px-4 py-3 font-medium">Issues & deviations</h2>
           {issues?.length === 0 ? (
             <p className="px-4 py-3 text-sm text-muted">No issues at this site.</p>
@@ -192,7 +228,7 @@ export default function SitePage({ study }: { study: Study | undefined }) {
         </section>
       )}
 
-      <section className="card">
+      <section id="enrollment" className="card scroll-mt-28">
         <h2 className="border-b border-hairline px-4 py-3 font-medium">
           Enrollment{" "}
           <span className="text-xs font-normal text-muted">
@@ -208,23 +244,25 @@ export default function SitePage({ study }: { study: Study | undefined }) {
         </div>
       </section>
 
-      {[...byZone.entries()].map(([zoneLabel, rows]) => (
-        <section key={zoneLabel} className="card">
-          <h2 className="border-b border-hairline px-4 py-3 text-sm font-medium text-ink2">
-            {zoneLabel}
-          </h2>
-          <ul className="divide-y divide-hairline">
-            {rows.map((r) => (
-              <ExpectedRow
-                key={r.expected_document_id}
-                row={r}
-                canUpload={can(me, "upload")}
-                canWaive={can(me, "administer")}
-              />
-            ))}
-          </ul>
-        </section>
-      ))}
+      <div id="documents" className="scroll-mt-28 space-y-6">
+        {[...byZone.entries()].map(([zoneLabel, rows]) => (
+          <section key={zoneLabel} className="card">
+            <h2 className="border-b border-hairline px-4 py-3 text-sm font-medium text-ink2">
+              {zoneLabel}
+            </h2>
+            <ul className="divide-y divide-hairline">
+              {rows.map((r) => (
+                <ExpectedRow
+                  key={r.expected_document_id}
+                  row={r}
+                  canUpload={can(me, "upload")}
+                  canWaive={can(me, "administer")}
+                />
+              ))}
+            </ul>
+          </section>
+        ))}
+      </div>
     </div>
   );
 }
@@ -300,6 +338,12 @@ function DelegationRow({ d, canLog }: { d: Delegation; canLog: boolean }) {
         {endable && (
           <button
             onClick={() => {
+              if (
+                !window.confirm(
+                  `End ${d.given_name} ${d.family_name}'s delegation as of today? Entries are never deleted — this records an end date.`,
+                )
+              )
+                return;
               setErr(null);
               endDelegation.mutate(
                 { delegationId: d.delegation_id, endDate: localToday() },
@@ -320,6 +364,61 @@ function DelegationRow({ d, canLog }: { d: Delegation; canLog: boolean }) {
   );
 }
 
+/**
+ * Delegated tasks as removable chips: type a task, Enter or comma adds it.
+ * Replaces the old "Tasks, comma-separated" free-text field.
+ */
+function TaskTagInput({
+  tasks,
+  onChange,
+}: {
+  tasks: string[];
+  onChange: (tasks: string[]) => void;
+}) {
+  const [draft, setDraft] = useState("");
+  const add = () => {
+    const t = draft.trim();
+    if (t && !tasks.includes(t)) onChange([...tasks, t]);
+    setDraft("");
+  };
+  return (
+    <div className="flex min-h-[26px] w-72 flex-wrap items-center gap-1 rounded-md border border-hairline bg-surface px-2 py-1">
+      {tasks.map((t) => (
+        <span
+          key={t}
+          className="inline-flex items-center gap-1 rounded-full border border-hairline px-2 py-0.5 text-xs text-ink2"
+        >
+          {t}
+          <button
+            type="button"
+            onClick={() => onChange(tasks.filter((x) => x !== t))}
+            aria-label={`Remove task ${t}`}
+            className="text-muted hover:text-ink"
+          >
+            ×
+          </button>
+        </span>
+      ))}
+      <input
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === ",") {
+            e.preventDefault();
+            add();
+          } else if (e.key === "Backspace" && draft === "" && tasks.length > 0) {
+            onChange(tasks.slice(0, -1));
+          }
+        }}
+        onBlur={add}
+        placeholder={tasks.length === 0 ? "Type a task, press Enter" : ""}
+        className="min-w-24 flex-1 bg-transparent text-xs outline-none"
+        aria-label="Add a delegated task"
+      />
+    </div>
+  );
+}
+
 function NewDelegationForm({
   studySiteId,
   staff,
@@ -331,72 +430,66 @@ function NewDelegationForm({
   const active = staff?.filter((m) => m.end_date === null) ?? [];
   const pis = active.filter((m) => m.role === "principal_investigator");
   const [personId, setPersonId] = useState("");
-  const [tasks, setTasks] = useState("");
+  const [tasks, setTasks] = useState<string[]>([]);
   const [start, setStart] = useState(localToday());
   const [authorizedBy, setAuthorizedBy] = useState("");
   const [err, setErr] = useState<unknown>(null);
   const authorizer = authorizedBy || pis[0]?.person_id || "";
   return (
     <form
-      className="flex flex-wrap items-center gap-2"
+      className="flex flex-wrap items-end gap-3"
       onSubmit={(e) => {
         e.preventDefault();
-        const taskList = tasks
-          .split(",")
-          .map((t) => t.trim())
-          .filter((t) => t.length > 0);
-        if (!personId || !authorizer || taskList.length === 0) return;
+        if (!personId || !authorizer || tasks.length === 0) return;
         setErr(null);
         create.mutate(
-          { studySiteId, personId, delegatedTasks: taskList, startDate: start, authorizedBy: authorizer },
+          { studySiteId, personId, delegatedTasks: tasks, startDate: start, authorizedBy: authorizer },
           {
             onError: (e) => setErr(e),
             onSuccess: () => {
               setPersonId("");
-              setTasks("");
+              setTasks([]);
             },
           },
         );
       }}
     >
-      <select
-        value={personId}
-        onChange={(e) => setPersonId(e.target.value)}
-        className="rounded-md border border-hairline bg-surface px-2 py-1 text-xs"
-        aria-label="Delegate"
-      >
-        <option value="">Delegate to…</option>
-        {active.map((m) => (
-          <option key={m.role_id} value={m.person_id}>
-            {m.family_name}, {m.given_name} ({ROLE_LABEL[m.role] ?? m.role})
-          </option>
-        ))}
-      </select>
-      <input
-        value={tasks}
-        onChange={(e) => setTasks(e.target.value)}
-        placeholder="Tasks, comma-separated"
-        className="w-56 rounded-md border border-hairline bg-surface px-2 py-1 text-xs"
-        aria-label="Delegated tasks"
-      />
-      <label className="flex items-center gap-1.5 text-xs text-ink2">
-        from
+      <label className={fieldCls}>
+        Delegate
+        <select
+          value={personId}
+          onChange={(e) => setPersonId(e.target.value)}
+          className={inputCls}
+          required
+        >
+          <option value="">Choose a staff member…</option>
+          {active.map((m) => (
+            <option key={m.role_id} value={m.person_id}>
+              {m.family_name}, {m.given_name} ({ROLE_LABEL[m.role] ?? m.role})
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className={fieldCls}>
+        Delegated tasks
+        <TaskTagInput tasks={tasks} onChange={setTasks} />
+      </label>
+      <label className={fieldCls}>
+        Start date
         <input
           type="date"
           value={start}
           onChange={(e) => setStart(e.target.value)}
-          className="rounded-md border border-hairline bg-surface px-2 py-1 text-xs"
-          aria-label="Start date"
+          className={inputCls}
           required
         />
       </label>
-      <label className="flex items-center gap-1.5 text-xs text-ink2">
-        authorized by
+      <label className={fieldCls}>
+        Authorized by
         <select
           value={authorizer}
           onChange={(e) => setAuthorizedBy(e.target.value)}
-          className="rounded-md border border-hairline bg-surface px-2 py-1 text-xs"
-          aria-label="Authorizing investigator"
+          className={inputCls}
         >
           {active.map((m) => (
             <option key={m.role_id} value={m.person_id}>
@@ -407,8 +500,8 @@ function NewDelegationForm({
       </label>
       <button
         type="submit"
-        disabled={create.isPending || !personId || !authorizer || !tasks.trim()}
-        className="inline-flex items-center gap-1.5 rounded-md border border-hairline px-2 py-1 text-xs text-ink2 hover:bg-page disabled:opacity-50"
+        disabled={create.isPending || !personId || !authorizer || tasks.length === 0}
+        className={buttonCls}
       >
         <UserCheck size={12} aria-hidden />
         {create.isPending ? "Recording…" : "Record delegation"}
@@ -494,7 +587,7 @@ function NewTrainingForm({
   const [err, setErr] = useState<unknown>(null);
   return (
     <form
-      className="flex flex-wrap items-center gap-2"
+      className="flex flex-wrap items-end gap-3"
       onSubmit={(e) => {
         e.preventDefault();
         if (!personId || !topic.trim()) return;
@@ -518,51 +611,55 @@ function NewTrainingForm({
         );
       }}
     >
-      <select
-        value={personId}
-        onChange={(e) => setPersonId(e.target.value)}
-        className="rounded-md border border-hairline bg-surface px-2 py-1 text-xs"
-        aria-label="Person trained"
-      >
-        <option value="">Person…</option>
-        {active.map((m) => (
-          <option key={m.role_id} value={m.person_id}>
-            {m.family_name}, {m.given_name}
-          </option>
-        ))}
-      </select>
-      <input
-        value={topic}
-        onChange={(e) => setTopic(e.target.value)}
-        placeholder="Training topic"
-        className="w-56 rounded-md border border-hairline bg-surface px-2 py-1 text-xs"
-        aria-label="Training topic"
-      />
-      <label className="flex items-center gap-1.5 text-xs text-ink2">
-        completed
+      <label className={fieldCls}>
+        Person
+        <select
+          value={personId}
+          onChange={(e) => setPersonId(e.target.value)}
+          className={inputCls}
+          required
+        >
+          <option value="">Choose a staff member…</option>
+          {active.map((m) => (
+            <option key={m.role_id} value={m.person_id}>
+              {m.family_name}, {m.given_name}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className={fieldCls}>
+        Topic
+        <input
+          value={topic}
+          onChange={(e) => setTopic(e.target.value)}
+          placeholder="e.g. Protocol amendment 3"
+          className={`w-56 ${inputCls}`}
+          required
+        />
+      </label>
+      <label className={fieldCls}>
+        Completed
         <input
           type="date"
           value={trained}
           onChange={(e) => setTrained(e.target.value)}
-          className="rounded-md border border-hairline bg-surface px-2 py-1 text-xs"
-          aria-label="Completion date"
+          className={inputCls}
           required
         />
       </label>
-      <label className="flex items-center gap-1.5 text-xs text-ink2">
-        expires
+      <label className={fieldCls}>
+        Expires (optional)
         <input
           type="date"
           value={expires}
           onChange={(e) => setExpires(e.target.value)}
-          className="rounded-md border border-hairline bg-surface px-2 py-1 text-xs"
-          aria-label="Expiry date (optional)"
+          className={inputCls}
         />
       </label>
       <button
         type="submit"
         disabled={record.isPending || !personId || !topic.trim()}
-        className="inline-flex items-center gap-1.5 rounded-md border border-hairline px-2 py-1 text-xs text-ink2 hover:bg-page disabled:opacity-50"
+        className={buttonCls}
       >
         <GraduationCap size={12} aria-hidden />
         {record.isPending ? "Recording…" : "Record training"}
@@ -785,6 +882,12 @@ function StaffRow({ m, readOnly }: { m: StaffMember; readOnly: boolean }) {
         {!ended && !readOnly && (
           <button
             onClick={() => {
+              if (
+                !window.confirm(
+                  `End ${m.given_name} ${m.family_name}'s ${ROLE_LABEL[m.role] ?? m.role} role as of today? Assignments are never deleted — this records an end date.`,
+                )
+              )
+                return;
               setErr(null);
               endRole.mutate(
                 { roleId: m.role_id, endDate: localToday() },
@@ -822,7 +925,7 @@ function AddStaffForm({
   const [err, setErr] = useState<unknown>(null);
   return (
     <form
-      className="flex flex-wrap items-center gap-2"
+      className="flex flex-wrap items-end gap-3"
       onSubmit={(e) => {
         e.preventDefault();
         if (!personId) return;
@@ -840,52 +943,56 @@ function AddStaffForm({
         );
       }}
     >
-      <select
-        value={personId}
-        onChange={(e) => setPersonId(e.target.value)}
-        className="rounded-md border border-hairline bg-surface px-2 py-1 text-xs"
-        aria-label="Person"
-      >
-        <option value="">Add staff…</option>
-        {people?.map((p) => (
-          <option key={p.id} value={p.id}>
-            {p.family_name}, {p.given_name}
-            {p.credentials ? ` (${p.credentials})` : ""}
-          </option>
-        ))}
-      </select>
-      <select
-        value={role}
-        onChange={(e) => setRole(e.target.value as StaffRole)}
-        className="rounded-md border border-hairline bg-surface px-2 py-1 text-xs"
-        aria-label="Site role"
-      >
-        {STAFF_ROLES.map((r) => (
-          <option key={r} value={r}>
-            {ROLE_LABEL[r]}
-          </option>
-        ))}
-      </select>
-      <label className="flex items-center gap-1.5 text-xs text-ink2">
-        from
+      <label className={fieldCls}>
+        Person
+        <select
+          value={personId}
+          onChange={(e) => setPersonId(e.target.value)}
+          className={inputCls}
+          required
+        >
+          <option value="">Add staff…</option>
+          {people?.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.family_name}, {p.given_name}
+              {p.credentials ? ` (${p.credentials})` : ""}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className={fieldCls}>
+        Site role
+        <select
+          value={role}
+          onChange={(e) => setRole(e.target.value as StaffRole)}
+          className={inputCls}
+        >
+          {STAFF_ROLES.map((r) => (
+            <option key={r} value={r}>
+              {ROLE_LABEL[r]}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className={fieldCls}>
+        Start date
         <input
           type="date"
           value={start}
           onChange={(e) => setStart(e.target.value)}
-          className="rounded-md border border-hairline bg-surface px-2 py-1 text-xs"
-          aria-label="Start date"
+          className={inputCls}
           required
         />
       </label>
       <button
         type="submit"
         disabled={assign.isPending || sync.isPending || !personId}
-        className="inline-flex items-center gap-1.5 rounded-md border border-hairline px-2 py-1 text-xs text-ink2 hover:bg-page disabled:opacity-50"
+        className={buttonCls}
       >
         <UserPlus size={12} aria-hidden />
         {assign.isPending || sync.isPending ? "Adding…" : "Assign role"}
       </button>
-      <span className="text-xs text-muted">
+      <span className="pb-1 text-xs text-muted">
         New person? Create them on the <Link to="/admin" className="hover:underline">admin page</Link> first.
       </span>
       <ErrorNote error={err} className="w-full" />

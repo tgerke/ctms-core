@@ -10,16 +10,12 @@ import {
   useStudies,
   type PortfolioEntry,
 } from "../api";
-import { ErrorNote, PageState } from "../ops";
+import { buttonCls, ErrorNote, inputCls, PageState } from "../ops";
 
 // Portfolio rollup (ADR-0021): every study's oversight numbers on one page,
 // computed by GET /portfolio from the same views the per-study pages read.
 // Study creation (ADR-0034) lives here too: the portfolio is where a new
 // protocol enters the picture.
-
-const inputCls = "rounded-md border border-hairline bg-surface px-2 py-1 text-xs";
-const buttonCls =
-  "inline-flex items-center gap-1.5 rounded-md border border-hairline px-2 py-1 text-xs text-ink2 hover:bg-page disabled:opacity-50";
 
 function Stat({
   label,

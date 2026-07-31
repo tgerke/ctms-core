@@ -363,6 +363,15 @@ export type AccessRole =
   | "ingest"
   | "site_staff";
 
+export const ACCESS_ROLE_LABEL: Record<AccessRole, string> = {
+  admin: "Admin",
+  trial_ops: "Trial ops",
+  monitor: "Monitor",
+  read_only: "Read-only",
+  ingest: "Ingest (machine)",
+  site_staff: "Site staff",
+};
+
 export interface Organization {
   id: string;
   name: string;

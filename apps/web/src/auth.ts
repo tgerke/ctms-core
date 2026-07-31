@@ -143,6 +143,13 @@ export async function ensureSignedIn(): Promise<void> {
   if (OIDC && !token()) await beginLogin();
 }
 
+/** Drop the session token and land on /, where ensureSignedIn restarts login. */
+export function signOut(): void {
+  if (!OIDC) return;
+  sessionStorage.removeItem("ctms_oidc_token");
+  window.location.assign("/");
+}
+
 // --- signing re-authentication ---------------------------------------------------
 
 /**

@@ -74,14 +74,14 @@ alone; the full set is listed in [what the statuses mean](/ctms-core/user-guide/
   through conducted, trip report, action items, and completion.
 - A **document page** (click any document) shows its versions, signatures,
   and complete history.
-- The **audit trail** link in the header opens the study-wide record of every
-  change ever made; see [the audit trail, briefly](/ctms-core/user-guide/documents/#the-audit-trail-briefly).
+- The **audit trail** (click the **audit chain verified** badge in the
+  header) is the study-wide record of every change ever made; see
+  [the audit trail, briefly](/ctms-core/user-guide/documents/#the-audit-trail-briefly).
 
-One more thing lives in the header: a small badge reading **audit chain
-verified**, with a running count of recorded events. The app re-verifies the
-integrity of the entire audit trail as you work and shows the result at all
-times. If the record had ever been tampered with, the badge would read
-**BROKEN**. Clicking it opens the audit trail.
+That badge deserves a word: it carries a running count of recorded events,
+and the app re-verifies the integrity of the entire audit trail as you work
+and shows the result at all times. If the record had ever been tampered
+with, the badge would read **BROKEN**.
 
 ## Who can do what
 
