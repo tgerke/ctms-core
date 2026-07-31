@@ -1,8 +1,24 @@
-import { FileCheck2, Moon, Search, ShieldCheck, ShieldX, Sun } from "lucide-react";
+import {
+  FileCheck2,
+  LogOut,
+  Moon,
+  Search,
+  ShieldCheck,
+  ShieldX,
+  Sun,
+  UserRound,
+} from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, Navigate, Route, Routes, useNavigate } from "react-router-dom";
-import { can, isSiteSeat, useChainStatus, useMe, useStudies } from "./api";
-import { authMode } from "./auth";
+import {
+  ACCESS_ROLE_LABEL,
+  can,
+  isSiteSeat,
+  useChainStatus,
+  useMe,
+  useStudies,
+} from "./api";
+import { authMode, signOut } from "./auth";
 import AdminPage from "./pages/AdminPage";
 import AuditPage from "./pages/AuditPage";
 import BinderPage from "./pages/BinderPage";
@@ -33,7 +49,7 @@ function HeaderSearch() {
   const [q, setQ] = useState("");
   return (
     <form
-      className="hidden items-center md:flex"
+      className="hidden w-40 min-w-20 shrink-[2] items-center md:flex"
       onSubmit={(e) => {
         e.preventDefault();
         if (q.trim().length < 2) return;
@@ -47,7 +63,7 @@ function HeaderSearch() {
         value={q}
         onChange={(e) => setQ(e.target.value)}
         placeholder="Search documents…"
-        className="w-44 rounded-md border border-hairline bg-surface py-1 pl-7 pr-2 text-sm"
+        className="w-full min-w-0 rounded-md border border-hairline bg-surface py-1 pl-7 pr-2 text-sm"
         aria-label="Search documents"
       />
     </form>
@@ -67,22 +83,55 @@ function DevPersonaSwitcher() {
   if (authMode !== "dev") return null;
   const current = localStorage.getItem("ctms_token") ?? "dev-admin-token";
   return (
-    <select
-      value={DEV_PERSONAS.some((p) => p.token === current) ? current : "dev-admin-token"}
-      onChange={(e) => {
-        localStorage.setItem("ctms_token", e.target.value);
-        window.location.assign("/");
-      }}
-      className="hidden rounded-md border border-hairline bg-surface px-2 py-1 text-xs text-ink2 md:inline"
-      aria-label="Switch dev persona"
-      title="Dev-mode persona (static tokens; see .env.example)"
+    <span
+      className="hidden items-center gap-1.5 md:inline-flex"
+      title="Who you are — dev-mode persona (static tokens; see .env.example)"
     >
-      {DEV_PERSONAS.map((p) => (
-        <option key={p.token} value={p.token}>
-          {p.label}
-        </option>
-      ))}
-    </select>
+      <UserRound size={13} className="text-muted" aria-hidden />
+      <select
+        value={DEV_PERSONAS.some((p) => p.token === current) ? current : "dev-admin-token"}
+        onChange={(e) => {
+          localStorage.setItem("ctms_token", e.target.value);
+          window.location.assign("/");
+        }}
+        className="rounded-md border border-hairline bg-surface px-2 py-1 text-xs text-ink2"
+        aria-label="Switch dev persona"
+      >
+        {DEV_PERSONAS.map((p) => (
+          <option key={p.token} value={p.token}>
+            {p.label}
+          </option>
+        ))}
+      </select>
+    </span>
+  );
+}
+
+/**
+ * Who am I? (the header previously never said). Renders in oidc mode only:
+ * name and seat come from /me — the API's answer for the session token — plus
+ * sign-out. In dev mode the persona switcher is the identity control.
+ */
+function Identity() {
+  const { data: me } = useMe();
+  if (authMode !== "oidc" || !me) return null;
+  const seat = [...new Set(me.grants.map((g) => ACCESS_ROLE_LABEL[g.role]))].join(", ");
+  return (
+    <span className="hidden items-center gap-1.5 whitespace-nowrap text-xs text-ink2 md:inline-flex">
+      <UserRound size={13} className="text-muted" aria-hidden />
+      <span>
+        {me.given_name} {me.family_name}
+        {seat ? <span className="text-muted"> · {seat}</span> : null}
+      </span>
+      <button
+        onClick={signOut}
+        className="inline-flex items-center gap-1 rounded-md border border-hairline px-1.5 py-0.5 text-xs text-ink2 hover:bg-surface"
+        title="Sign out"
+      >
+        <LogOut size={11} aria-hidden />
+        Sign out
+      </button>
+    </span>
   );
 }
 
@@ -93,7 +142,7 @@ function ChainBadge() {
   return (
     <Link
       to="/audit"
-      className="hidden items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs hover:bg-surface sm:inline-flex"
+      className="hidden items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-1 text-xs hover:bg-surface sm:inline-flex"
       style={{
         color: data.valid ? "var(--status-good)" : "var(--status-critical)",
         borderColor: "var(--ring)",
@@ -103,7 +152,7 @@ function ChainBadge() {
       <Icon size={13} aria-hidden />
       <span className="text-ink2">
         audit chain {data.valid ? "verified" : "BROKEN"} ·{" "}
-        <span className="mono">{data.events}</span> events
+        <span className="mono">{data.events}</span>
       </span>
     </Link>
   );
@@ -132,8 +181,9 @@ export default function App() {
   return (
     <div className="min-h-screen">
       <header className="sticky top-0 z-10 border-b border-hairline bg-page/90 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl items-center gap-3 px-4 py-3">
-          <Link to="/" className="flex items-center gap-2 font-semibold">
+        {/* Wider than main's max-w-6xl: the header's row needs the room. */}
+        <div className="mx-auto flex max-w-7xl items-center gap-3 px-4 py-3">
+          <Link to="/" className="flex shrink-0 items-center gap-2 whitespace-nowrap font-semibold">
             <FileCheck2 size={20} style={{ color: "var(--info)" }} aria-hidden />
             <span>ctms-core</span>
           </Link>
@@ -157,26 +207,28 @@ export default function App() {
               </span>
             )
           )}
-          <div className="ml-auto flex items-center gap-2">
+          <div className="ml-auto flex min-w-0 items-center gap-1.5">
             {!siteSeat && <HeaderSearch />}
             <ChainBadge />
             {!siteSeat && (
               <>
+                {/* xl:shrink-0: at xl the header is one line and the search
+                    box absorbs width pressure; below xl links may wrap. */}
                 <Link
                   to="/portfolio"
-                  className="rounded-md px-2 py-1 text-sm text-ink2 hover:bg-surface"
+                  className="rounded-md px-2 py-1 text-sm text-ink2 hover:bg-surface xl:shrink-0 xl:whitespace-nowrap"
                 >
                   Portfolio
                 </Link>
                 <Link
                   to="/binder"
-                  className="rounded-md px-2 py-1 text-sm text-ink2 hover:bg-surface"
+                  className="rounded-md px-2 py-1 text-sm text-ink2 hover:bg-surface xl:shrink-0 xl:whitespace-nowrap"
                 >
                   Binder
                 </Link>
                 <Link
                   to="/queue"
-                  className="rounded-md px-2 py-1 text-sm text-ink2 hover:bg-surface"
+                  className="rounded-md px-2 py-1 text-sm text-ink2 hover:bg-surface xl:shrink-0 xl:whitespace-nowrap"
                 >
                   Review queue
                 </Link>
@@ -185,16 +237,18 @@ export default function App() {
                 {can(me, "administer") && (
                   <Link
                     to="/admin"
-                    className="rounded-md px-2 py-1 text-sm text-ink2 hover:bg-surface"
+                    className="rounded-md px-2 py-1 text-sm text-ink2 hover:bg-surface xl:shrink-0 xl:whitespace-nowrap"
                   >
                     Admin
                   </Link>
                 )}
               </>
             )}
+            {/* The chain badge (sm+) already links to /audit; keep a plain
+                link only on screens too small to show the badge. */}
             <Link
               to="/audit"
-              className="rounded-md px-2 py-1 text-sm text-ink2 hover:bg-surface"
+              className="rounded-md px-2 py-1 text-sm text-ink2 hover:bg-surface sm:hidden"
             >
               Audit trail
             </Link>
@@ -202,10 +256,11 @@ export default function App() {
               href="/api/docs"
               target="_blank"
               rel="noreferrer"
-              className="rounded-md px-2 py-1 text-sm text-ink2 hover:bg-surface"
+              className="hidden rounded-md px-2 py-1 text-sm text-ink2 hover:bg-surface lg:inline xl:shrink-0 xl:whitespace-nowrap"
             >
               API docs
             </a>
+            <Identity />
             <DevPersonaSwitcher />
             <button
               onClick={toggle}

@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import {
+  ACCESS_ROLE_LABEL,
   can,
   useAddStudySite,
   useCreateOrganization,
@@ -34,7 +35,7 @@ import {
   type StaffRole,
   type Study,
 } from "../api";
-import { ErrorNote, localToday, PageState } from "../ops";
+import { buttonCls, ErrorNote, fieldCls, inputCls, localToday, PageState } from "../ops";
 
 // Study/site/staff administration (ADR-0016): the write surface for the rows
 // the seed script used to own. The reads (people, grants, rules, directory)
@@ -48,15 +49,6 @@ const ORG_KIND_LABEL: Record<OrgKind, string> = {
   site_org: "Site organization",
 };
 
-const ACCESS_ROLE_LABEL: Record<AccessRole, string> = {
-  admin: "Admin",
-  trial_ops: "Trial ops",
-  monitor: "Monitor",
-  read_only: "Read-only",
-  ingest: "Ingest (machine)",
-  site_staff: "Site staff",
-};
-
 const STAFF_ROLES: StaffRole[] = [
   "principal_investigator",
   "sub_investigator",
@@ -64,10 +56,6 @@ const STAFF_ROLES: StaffRole[] = [
   "pharmacist",
   "research_nurse",
 ];
-
-const inputCls = "rounded-md border border-hairline bg-surface px-2 py-1 text-xs";
-const buttonCls =
-  "inline-flex items-center gap-1.5 rounded-md border border-hairline px-2 py-1 text-xs text-ink2 hover:bg-page disabled:opacity-50";
 
 export default function AdminPage({ study }: { study: Study | undefined }) {
   const { data: me } = useMe();
@@ -255,7 +243,7 @@ function StudySitesSection({ study, admin }: { study: Study; admin: boolean }) {
       </ul>
       {admin && (
       <form
-        className="flex flex-wrap items-center gap-2 border-t border-hairline px-4 py-3"
+        className="flex flex-wrap items-end gap-3 border-t border-hairline px-4 py-3"
         onSubmit={(e) => {
           e.preventDefault();
           if (!siteId || !number.trim()) return;
@@ -273,32 +261,38 @@ function StudySitesSection({ study, admin }: { study: Study; admin: boolean }) {
           );
         }}
       >
-        <select
-          value={siteId}
-          onChange={(e) => setSiteId(e.target.value)}
-          className={inputCls}
-          aria-label="Site to add"
-        >
-          <option value="">Add a site to this study…</option>
-          {available?.map((d) => (
-            <option key={d.id} value={d.id}>
-              {d.name}
-              {d.city ? ` (${d.city}, ${d.state})` : ""}
-            </option>
-          ))}
-        </select>
-        <input
-          value={number}
-          onChange={(e) => setNumber(e.target.value)}
-          placeholder="Site number, e.g. 005"
-          className={`w-36 ${inputCls}`}
-          aria-label="Site number"
-        />
+        <label className={fieldCls}>
+          Site
+          <select
+            value={siteId}
+            onChange={(e) => setSiteId(e.target.value)}
+            className={inputCls}
+            required
+          >
+            <option value="">Add a site to this study…</option>
+            {available?.map((d) => (
+              <option key={d.id} value={d.id}>
+                {d.name}
+                {d.city ? ` (${d.city}, ${d.state})` : ""}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className={fieldCls}>
+          Site number
+          <input
+            value={number}
+            onChange={(e) => setNumber(e.target.value)}
+            placeholder="e.g. 005"
+            className={`w-36 ${inputCls}`}
+            required
+          />
+        </label>
         <button type="submit" disabled={addSite.isPending || !siteId} className={buttonCls}>
           <MapPinPlus size={12} aria-hidden />
           {addSite.isPending ? "Adding…" : "Add site"}
         </button>
-        <span className="text-xs text-muted">
+        <span className="pb-1 text-xs text-muted">
           New sites start pending; activating one stamps today and syncs its
           expected documents.
         </span>
@@ -352,7 +346,7 @@ function RulesSection({ study, admin }: { study: Study; admin: boolean }) {
       </ul>
       {admin && (
       <form
-        className="flex flex-wrap items-center gap-2 border-t border-hairline px-4 py-3"
+        className="flex flex-wrap items-end gap-3 border-t border-hairline px-4 py-3"
         onSubmit={(e) => {
           e.preventDefault();
           if (!artifactId || !name.trim()) return;
@@ -381,76 +375,83 @@ function RulesSection({ study, admin }: { study: Study; admin: boolean }) {
           );
         }}
       >
-        <select
-          value={artifactId}
-          onChange={(e) => setArtifactId(e.target.value)}
-          className={`max-w-72 ${inputCls}`}
-          aria-label="TMF artifact"
-        >
-          <option value="">New rule: TMF artifact…</option>
-          {artifacts?.map((a) => (
-            <option key={a.id} value={a.id}>
-              {a.code} {a.name}
-            </option>
-          ))}
-        </select>
-        <select
-          value={scope}
-          onChange={(e) => setScope(e.target.value as RequirementRule["scope_level"])}
-          className={inputCls}
-          aria-label="Rule scope"
-        >
-          <option value="study">Study</option>
-          <option value="study_site">Each site</option>
-          <option value="person_role">Each staff member</option>
-        </select>
-        <input
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="Rule name, e.g. 'IRB approval on file'"
-          className={`w-64 ${inputCls}`}
-          aria-label="Rule name"
-        />
-        <label className="flex items-center gap-1.5 text-xs text-ink2">
-          valid
+        <label className={fieldCls}>
+          TMF artifact
+          <select
+            value={artifactId}
+            onChange={(e) => setArtifactId(e.target.value)}
+            className={`max-w-72 ${inputCls}`}
+            required
+          >
+            <option value="">Choose an artifact…</option>
+            {artifacts?.map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.code} {a.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className={fieldCls}>
+          Scope
+          <select
+            value={scope}
+            onChange={(e) => setScope(e.target.value as RequirementRule["scope_level"])}
+            className={inputCls}
+          >
+            <option value="study">Study</option>
+            <option value="study_site">Each site</option>
+            <option value="person_role">Each staff member</option>
+          </select>
+        </label>
+        <label className={fieldCls}>
+          Rule name
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="e.g. IRB approval on file"
+            className={`w-64 ${inputCls}`}
+            required
+          />
+        </label>
+        <label className={fieldCls} title="Blank = never expires">
+          Valid (months)
           <input
             type="number"
             min={1}
             value={validity}
             onChange={(e) => setValidity(e.target.value)}
             placeholder="∞"
-            className={`w-14 ${inputCls}`}
-            aria-label="Validity in months (blank = never expires)"
+            className={`w-20 ${inputCls}`}
           />
-          mo
         </label>
-        <label className="flex items-center gap-1.5 text-xs text-ink2">
+        <label className="flex items-center gap-1.5 pb-1.5 text-xs text-ink2">
           <input
             type="checkbox"
             checked={signature}
             onChange={(e) => setSignature(e.target.checked)}
           />
-          signature required
+          Signature required
         </label>
         {scope === "person_role" && (
-          <select
-            multiple
-            value={roles}
-            onChange={(e) =>
-              setRoles(
-                [...e.target.selectedOptions].map((o) => o.value as StaffRole),
-              )
-            }
-            className={inputCls}
-            aria-label="Applies to roles (none selected = all roles)"
-            title="Applies to roles — leave unselected for all roles"
-          >
-            {STAFF_ROLES.map((r) => (
-              <option key={r} value={r}>
-                {r.replace(/_/g, " ")}
-              </option>
-            ))}
-          </select>
+          <label className={fieldCls} title="Leave unselected for all roles">
+            Applies to roles (none = all)
+            <select
+              multiple
+              value={roles}
+              onChange={(e) =>
+                setRoles(
+                  [...e.target.selectedOptions].map((o) => o.value as StaffRole),
+                )
+              }
+              className={inputCls}
+            >
+              {STAFF_ROLES.map((r) => (
+                <option key={r} value={r}>
+                  {r.replace(/_/g, " ")}
+                </option>
+              ))}
+            </select>
+          </label>
         )}
         <button
           type="submit"
@@ -508,6 +509,12 @@ function PeopleSection({ admin }: { admin: boolean }) {
                   {admin && (
                     <button
                       onClick={() => {
+                        if (
+                          !window.confirm(
+                            `Revoke ${p.given_name} ${p.family_name}'s ${ACCESS_ROLE_LABEL[g.role]} access? Grants are never deleted — this sets revoked_at.`,
+                          )
+                        )
+                          return;
                         setErr(null);
                         revoke.mutate(
                           { grantId: g.grant_id },
@@ -531,7 +538,7 @@ function PeopleSection({ admin }: { admin: boolean }) {
       {admin && (
       <div className="space-y-2 border-t border-hairline px-4 py-3">
         <form
-          className="flex flex-wrap items-center gap-2"
+          className="flex flex-wrap items-end gap-3"
           onSubmit={(e) => {
             e.preventDefault();
             if (!grantPerson) return;
@@ -542,31 +549,36 @@ function PeopleSection({ admin }: { admin: boolean }) {
             );
           }}
         >
-          <select
-            value={grantPerson}
-            onChange={(e) => setGrantPerson(e.target.value)}
-            className={inputCls}
-            aria-label="Person to grant access"
-          >
-            <option value="">Grant access…</option>
-            {people?.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.family_name}, {p.given_name}
-              </option>
-            ))}
-          </select>
-          <select
-            value={grantRole}
-            onChange={(e) => setGrantRole(e.target.value as AccessRole)}
-            className={inputCls}
-            aria-label="Access role"
-          >
-            {(Object.keys(ACCESS_ROLE_LABEL) as AccessRole[]).map((r) => (
-              <option key={r} value={r}>
-                {ACCESS_ROLE_LABEL[r]}
-              </option>
-            ))}
-          </select>
+          <label className={fieldCls}>
+            Grant access to
+            <select
+              value={grantPerson}
+              onChange={(e) => setGrantPerson(e.target.value)}
+              className={inputCls}
+              required
+            >
+              <option value="">Choose a person…</option>
+              {people?.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.family_name}, {p.given_name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className={fieldCls}>
+            Access role
+            <select
+              value={grantRole}
+              onChange={(e) => setGrantRole(e.target.value as AccessRole)}
+              className={inputCls}
+            >
+              {(Object.keys(ACCESS_ROLE_LABEL) as AccessRole[]).map((r) => (
+                <option key={r} value={r}>
+                  {ACCESS_ROLE_LABEL[r]}
+                </option>
+              ))}
+            </select>
+          </label>
           <button
             type="submit"
             disabled={grant.isPending || !grantPerson}
@@ -577,7 +589,7 @@ function PeopleSection({ admin }: { admin: boolean }) {
           </button>
         </form>
         <form
-          className="flex flex-wrap items-center gap-2"
+          className="flex flex-wrap items-end gap-3"
           onSubmit={(e) => {
             e.preventDefault();
             if (!given.trim() || !family.trim() || !email.trim()) return;
@@ -601,35 +613,44 @@ function PeopleSection({ admin }: { admin: boolean }) {
             );
           }}
         >
-          <input
-            value={given}
-            onChange={(e) => setGiven(e.target.value)}
-            placeholder="Given name"
-            className={`w-28 ${inputCls}`}
-            aria-label="Given name"
-          />
-          <input
-            value={family}
-            onChange={(e) => setFamily(e.target.value)}
-            placeholder="Family name"
-            className={`w-28 ${inputCls}`}
-            aria-label="Family name"
-          />
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="email@example.org"
-            className={`w-52 ${inputCls}`}
-            aria-label="Email"
-          />
-          <input
-            value={credentials}
-            onChange={(e) => setCredentials(e.target.value)}
-            placeholder="Credentials (MD, CCRC…)"
-            className={`w-40 ${inputCls}`}
-            aria-label="Credentials (optional)"
-          />
+          <label className={fieldCls}>
+            Given name
+            <input
+              value={given}
+              onChange={(e) => setGiven(e.target.value)}
+              className={`w-28 ${inputCls}`}
+              required
+            />
+          </label>
+          <label className={fieldCls}>
+            Family name
+            <input
+              value={family}
+              onChange={(e) => setFamily(e.target.value)}
+              className={`w-28 ${inputCls}`}
+              required
+            />
+          </label>
+          <label className={fieldCls}>
+            Email
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="email@example.org"
+              className={`w-52 ${inputCls}`}
+              required
+            />
+          </label>
+          <label className={fieldCls}>
+            Credentials (optional)
+            <input
+              value={credentials}
+              onChange={(e) => setCredentials(e.target.value)}
+              placeholder="MD, CCRC…"
+              className={`w-40 ${inputCls}`}
+            />
+          </label>
           <button
             type="submit"
             disabled={createPerson.isPending || !given.trim() || !family.trim() || !email.trim()}
@@ -681,7 +702,7 @@ function DirectorySection({ admin }: { admin: boolean }) {
       {admin && (
       <div className="space-y-2 border-t border-hairline px-4 py-3">
         <form
-          className="flex flex-wrap items-center gap-2"
+          className="flex flex-wrap items-end gap-3"
           onSubmit={(e) => {
             e.preventDefault();
             if (!orgName.trim()) return;
@@ -692,25 +713,30 @@ function DirectorySection({ admin }: { admin: boolean }) {
             );
           }}
         >
-          <input
-            value={orgName}
-            onChange={(e) => setOrgName(e.target.value)}
-            placeholder="New organization…"
-            className={`w-56 ${inputCls}`}
-            aria-label="Organization name"
-          />
-          <select
-            value={orgKind}
-            onChange={(e) => setOrgKind(e.target.value as OrgKind)}
-            className={inputCls}
-            aria-label="Organization kind"
-          >
-            {(Object.keys(ORG_KIND_LABEL) as OrgKind[]).map((k) => (
-              <option key={k} value={k}>
-                {ORG_KIND_LABEL[k]}
-              </option>
-            ))}
-          </select>
+          <label className={fieldCls}>
+            New organization
+            <input
+              value={orgName}
+              onChange={(e) => setOrgName(e.target.value)}
+              placeholder="Organization name"
+              className={`w-56 ${inputCls}`}
+              required
+            />
+          </label>
+          <label className={fieldCls}>
+            Kind
+            <select
+              value={orgKind}
+              onChange={(e) => setOrgKind(e.target.value as OrgKind)}
+              className={inputCls}
+            >
+              {(Object.keys(ORG_KIND_LABEL) as OrgKind[]).map((k) => (
+                <option key={k} value={k}>
+                  {ORG_KIND_LABEL[k]}
+                </option>
+              ))}
+            </select>
+          </label>
           <button
             type="submit"
             disabled={createOrg.isPending || !orgName.trim()}
@@ -721,7 +747,7 @@ function DirectorySection({ admin }: { admin: boolean }) {
           </button>
         </form>
         <form
-          className="flex flex-wrap items-center gap-2"
+          className="flex flex-wrap items-end gap-3"
           onSubmit={(e) => {
             e.preventDefault();
             if (!siteName.trim() || !siteOrg) return;
@@ -746,49 +772,59 @@ function DirectorySection({ admin }: { admin: boolean }) {
             );
           }}
         >
-          <input
-            value={siteName}
-            onChange={(e) => setSiteName(e.target.value)}
-            placeholder="New site…"
-            className={`w-56 ${inputCls}`}
-            aria-label="Site name"
-          />
-          <select
-            value={siteOrg}
-            onChange={(e) => setSiteOrg(e.target.value)}
-            className={inputCls}
-            aria-label="Owning organization"
-          >
-            <option value="">Organization…</option>
-            {orgs?.map((o) => (
-              <option key={o.id} value={o.id}>
-                {o.name}
-              </option>
-            ))}
-          </select>
-          <input
-            value={city}
-            onChange={(e) => setCity(e.target.value)}
-            placeholder="City"
-            className={`w-32 ${inputCls}`}
-            aria-label="City (optional)"
-          />
-          <input
-            value={state}
-            onChange={(e) => setState(e.target.value)}
-            placeholder="State"
-            className={`w-16 ${inputCls}`}
-            aria-label="State (optional)"
-          />
+          <label className={fieldCls}>
+            New site
+            <input
+              value={siteName}
+              onChange={(e) => setSiteName(e.target.value)}
+              placeholder="Site name"
+              className={`w-56 ${inputCls}`}
+              required
+            />
+          </label>
+          <label className={fieldCls}>
+            Organization
+            <select
+              value={siteOrg}
+              onChange={(e) => setSiteOrg(e.target.value)}
+              className={inputCls}
+              required
+            >
+              <option value="">Choose an organization…</option>
+              {orgs?.map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className={fieldCls}>
+            City (optional)
+            <input
+              value={city}
+              onChange={(e) => setCity(e.target.value)}
+              className={`w-32 ${inputCls}`}
+            />
+          </label>
+          <label className={fieldCls}>
+            State (optional)
+            <input
+              value={state}
+              onChange={(e) => setState(e.target.value)}
+              className={`w-16 ${inputCls}`}
+            />
+          </label>
           {/* ISO 3166-1 alpha-3; the eTMF-EMS <COUNTRYID> for the site's documents (ADR-0024) */}
-          <input
-            value={country}
-            onChange={(e) => setCountry(e.target.value)}
-            placeholder="USA"
-            maxLength={3}
-            className={`w-16 ${inputCls}`}
-            aria-label="Country code, ISO 3166-1 alpha-3 (optional)"
-          />
+          <label className={fieldCls} title="ISO 3166-1 alpha-3">
+            Country (optional)
+            <input
+              value={country}
+              onChange={(e) => setCountry(e.target.value)}
+              placeholder="USA"
+              maxLength={3}
+              className={`w-20 ${inputCls}`}
+            />
+          </label>
           <button
             type="submit"
             disabled={createSite.isPending || !siteName.trim() || !siteOrg}
