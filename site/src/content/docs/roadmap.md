@@ -85,8 +85,11 @@ restated here because a feature comparison is meaningless without them.
   job (ADR-0017): `pnpm digest`, run from cron at whatever cadence the team
   wants, emails each study's expiring/expired documents, overdue visits,
   action items, issues, and milestones (with a broken audit chain leading
-  the message) to everyone holding study-wide admin/trial-ops access. What
-  remains is the per-user subscription and flash-report scheduling UI
+  the message) to everyone holding study-wide admin/trial-ops access. The
+  study dashboard now shows the same digest live (ADR-0035): an oversight
+  card with the identical derived data, the rendered email, and its
+  recipient list, so what the email says is never terminal-only knowledge.
+  What remains is the per-user subscription and flash-report scheduling UI
   incumbents ship (Veeva's any-frequency flash reports); the daily-use hole
   (nothing emails anyone) is closed.
 - **Task assignment and review queues**: shipped as review assignments with
@@ -130,7 +133,10 @@ restated here because a feature comparison is meaningless without them.
   flipped byte fails verification with stock tooling. Initially shipped
   without CDISC eTMF-EMS output (the EMS text was not yet in the verified
   source library, ADR-0012); the remainder, purpose-built in-app auditor
-  UX, closed as ADR-0028.
+  UX, closed as ADR-0028. The package now also downloads from the study
+  dashboard (ADR-0035): the API serves the data, the browser fetches every
+  blob, re-hashes it locally, and writes the identical layout into a zip,
+  so producing a transfer package no longer requires a terminal.
 - **eTMF-EMS serialization**: shipped as a schema-validated layer over the
   export package (ADR-0024): `pnpm export-tmf -- --study <p> --ems
   <agreement-id>` adds an exchange.xml (eTMF-EMS v1.0.2) validated against

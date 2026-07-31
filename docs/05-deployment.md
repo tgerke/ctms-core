@@ -160,6 +160,9 @@ cadence the team wants:
 ```
 
 The digest connects as the least-privilege `ctms_app` role, same as the api.
+The study dashboard shows the same digest live (ADR-0035), so the cron
+cadence only decides how often people are emailed, not how fresh the
+information is.
 
 Configuration is three env vars: `SMTP_URL` (the relay; the compose file's
 mailpit on `smtp://localhost:1025` for dev, inbox UI on :8025),

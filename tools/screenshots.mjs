@@ -26,6 +26,8 @@ mkdirSync(outdir, { recursive: true });
 
 // which dashboard cards to keep, by heading prefix → filename
 const DASHBOARD_SECTIONS = {
+  "Oversight digest": "oversight-digest.png",
+  "TMF export": "tmf-export.png",
   "Milestones": "milestones.png",
   "Enrollment vs target": "enrollment.png",
   "Monitoring visits": "monitoring-visits.png",

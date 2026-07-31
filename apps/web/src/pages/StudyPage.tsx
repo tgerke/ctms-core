@@ -1,9 +1,10 @@
-import { CheckCircle2, Circle, Flag, RefreshCw, Rocket } from "lucide-react";
+import { CheckCircle2, Circle, Download, Flag, RefreshCw, Rocket } from "lucide-react";
 import { useMemo, useState, type ReactNode } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
   can,
   useCreateMilestone,
+  useDigest,
   useEnrollment,
   useExpected,
   useIssues,
@@ -15,6 +16,7 @@ import {
   useSyncExpected,
   useUpdateStudy,
   useVisits,
+  type DigestDocumentRow,
   type ExpectedDocument,
   type IssueStatus,
   type StartupSite,
@@ -23,6 +25,7 @@ import {
 } from "../api";
 import {
   AddMilestoneForm,
+  buttonCls,
   EnrollmentBars,
   ErrorNote,
   IssueListItem,
@@ -31,6 +34,7 @@ import {
   PageState,
   VisitListItem,
 } from "../ops";
+import { downloadTmfPackage, type TmfDownloadResult } from "../tmf-export";
 import {
   ISSUE_STATUS,
   SpecChip,
@@ -154,6 +158,8 @@ export default function StudyPage({ study }: { study: Study | undefined }) {
           cssVar={stats.pending ? "--info" : undefined}
         />
       </div>
+
+      <OversightDigest studyId={study.id} />
 
       {/* Operational layer: milestones, enrollment, visits, issues */}
       <section className="card">
@@ -303,7 +309,207 @@ export default function StudyPage({ study }: { study: Study | undefined }) {
           ))}
         </ul>
       </section>
+
+      <TmfExportCard studyId={study.id} />
     </div>
+  );
+}
+
+// --- Oversight digest, live (ADR-0017) ---------------------------------------
+// The same derived data the scheduled digest email carries, shown on demand.
+// No notification state: this section and the email read the identical views.
+
+const digestWho = (r: DigestDocumentRow) =>
+  r.person_family_name
+    ? `${r.person_given_name} ${r.person_family_name}`
+    : r.site_number
+      ? `Site ${r.site_number}`
+      : "study-level";
+
+function DigestList({ title, rows }: { title: string; rows: string[] }) {
+  if (rows.length === 0) return null;
+  return (
+    <div className="px-4 py-2.5">
+      <h3 className="text-xs font-medium text-ink2">
+        {title} <span className="text-muted">({rows.length})</span>
+      </h3>
+      <ul className="mt-1 space-y-0.5 text-sm">
+        {rows.map((r) => (
+          <li key={r}>{r}</li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function OversightDigest({ studyId }: { studyId: string }) {
+  const { data: d, error } = useDigest(studyId);
+  if (!d) return <ErrorNote error={error} />;
+  const n = d.attention_count;
+
+  return (
+    <section className="card">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-hairline px-4 py-3">
+        <h2 className="font-medium">Oversight digest</h2>
+        <span className="text-xs font-normal text-muted">
+          what the scheduled digest email carries — derived live from the record
+        </span>
+        <span
+          className="ml-auto text-xs font-medium"
+          style={{ color: n === 0 ? "var(--status-good)" : "var(--status-critical)" }}
+        >
+          {n === 0 ? "all clear" : `${n} item${n === 1 ? "" : "s"} need${n === 1 ? "s" : ""} attention`}
+        </span>
+      </div>
+
+      {!d.chain.valid && (
+        <p className="px-4 py-2.5 text-sm font-medium" style={{ color: "var(--status-critical)" }}>
+          Audit chain BROKEN — verification failed over {d.chain.events} events.
+          Investigate before anything else.
+        </p>
+      )}
+
+      <div className="divide-y divide-hairline/60">
+        <DigestList
+          title="Expired documents"
+          rows={d.expired.map(
+            (r) => `${r.artifact_name} — ${digestWho(r)} — expired ${r.effective_expiry}`,
+          )}
+        />
+        <DigestList
+          title="Expiring within 60 days"
+          rows={d.expiring_soon.map(
+            (r) => `${r.artifact_name} — ${digestWho(r)} — expires ${r.effective_expiry}`,
+          )}
+        />
+        <DigestList
+          title="Overdue monitoring visits"
+          rows={d.overdue_visits.map(
+            (r) =>
+              `Site ${r.site_number} — ${r.visit_type.replace(/_/g, " ")} visit scheduled ${r.scheduled_date}`,
+          )}
+        />
+        <DigestList
+          title="Overdue action items"
+          rows={d.overdue_action_items.map(
+            (r) => `Site ${r.site_number} — ${r.description} — due ${r.due_date}`,
+          )}
+        />
+        <DigestList
+          title="Overdue issues"
+          rows={d.overdue_issues.map(
+            (r) =>
+              `${r.site_number ? `Site ${r.site_number}` : "Study-level"} — [${r.severity}] ${r.title} — due ${r.due_date}`,
+          )}
+        />
+        <DigestList
+          title="Overdue review assignments"
+          rows={d.overdue_reviews.map(
+            (r) =>
+              `${r.title}${r.site_number ? ` (Site ${r.site_number})` : ""} — ${r.assignee_given_name} ${r.assignee_family_name} — due ${r.due_date}`,
+          )}
+        />
+        <DigestList
+          title="Overdue milestones"
+          rows={d.overdue_milestones.map(
+            (r) =>
+              `${r.name}${r.site_number ? ` (Site ${r.site_number})` : ""} — planned ${r.planned_date}`,
+          )}
+        />
+        {n === 0 && (
+          <p className="px-4 py-2.5 text-sm text-muted">Nothing needs attention today.</p>
+        )}
+      </div>
+
+      <div className="space-y-1 border-t border-hairline px-4 py-3 text-xs text-ink2">
+        <p>
+          Standing counts: {d.counts.total} expected documents · {d.counts.missing} missing ·{" "}
+          {d.counts.pending_review} pending review · {d.counts.returned} returned ·{" "}
+          {d.counts.waived} waived.
+        </p>
+        <p>
+          {d.chain.valid
+            ? `Audit chain verified: ${d.chain.events} events.`
+            : "Audit chain: BROKEN (see above)."}
+        </p>
+        <p className="text-muted">
+          {d.recipients.length === 0
+            ? "No one currently holds a study-wide admin or trial-ops grant, so the scheduled email has no recipients."
+            : `Emailed to ${d.recipients
+                .map((r) => `${r.given_name} ${r.family_name}`)
+                .join(", ")} — everyone holding a study-wide admin or trial-ops grant.`}
+        </p>
+        <details className="pt-1">
+          <summary className="cursor-pointer text-muted hover:text-ink2">
+            Email preview
+          </summary>
+          <pre className="mono mt-2 overflow-x-auto rounded-md border border-hairline bg-page p-3 text-xs whitespace-pre-wrap">
+            {`Subject: ${d.email.subject}\n\n${d.email.text}`}
+          </pre>
+        </details>
+      </div>
+    </section>
+  );
+}
+
+// --- TMF export, in the browser (ADR-0020/0035) ------------------------------
+
+function TmfExportCard({ studyId }: { studyId: string }) {
+  const [progress, setProgress] = useState<{ done: number; total: number }>();
+  const [result, setResult] = useState<TmfDownloadResult>();
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<unknown>(null);
+
+  return (
+    <section className="card">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-hairline px-4 py-3">
+        <h2 className="font-medium">TMF export</h2>
+        <span className="text-xs font-normal text-muted">
+          the verifiable transfer / inspection package, assembled in this browser
+        </span>
+        <button
+          onClick={async () => {
+            setBusy(true);
+            setErr(null);
+            setResult(undefined);
+            try {
+              setResult(await downloadTmfPackage(studyId, (done, total) => setProgress({ done, total })));
+            } catch (e) {
+              setErr(e);
+            } finally {
+              setBusy(false);
+              setProgress(undefined);
+            }
+          }}
+          disabled={busy}
+          className={`ml-auto ${buttonCls}`}
+        >
+          <Download size={12} aria-hidden />
+          {busy
+            ? progress
+              ? `Fetching file ${progress.done}/${progress.total}…`
+              : "Preparing…"
+            : "Download TMF package (.zip)"}
+        </button>
+      </div>
+      <div className="space-y-1 px-4 py-3 text-xs text-ink2">
+        <p>
+          Every document version's bytes (content-addressed and re-hashed here before
+          packaging), signatures, returns, the expected-status snapshot, and the full
+          hash-chained audit trail. Verify the received package with{" "}
+          <span className="mono">shasum -a 256 -c manifest.sha256</span>.
+        </p>
+        {result && (
+          <p style={{ color: result.missing ? "var(--status-critical)" : "var(--status-good)" }}>
+            {result.zipName}: {result.documents} documents, {result.uniqueFiles} files,{" "}
+            {result.auditEvents} audit events (chain{" "}
+            {result.chainValid ? "verified" : "BROKEN"})
+            {result.missing ? ` — ${result.missing} file(s) missing or failed verification; package is INCOMPLETE` : ""}
+          </p>
+        )}
+        <ErrorNote error={err} />
+      </div>
+    </section>
   );
 }
 

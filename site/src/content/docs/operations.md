@@ -133,6 +133,13 @@ image ships the tools). `SMTP_URL` names the relay (the dev stack ships
 on `:8025`), and without it the job prints to stdout. It connects as the
 same least-privilege database role the API uses.
 
+The same digest is on the study dashboard (ADR-0035): an "Oversight digest"
+card serves the identical derived data live — attention items, standing
+counts, chain verification, the recipient list, and a preview of the exact
+email — so nobody needs to wait for cron, or a terminal, to see it.
+
+![The oversight digest on the dashboard: the email's exact content, computed at page load.](../../assets/screenshots/oversight-digest.png)
+
 ## Handing over the TMF
 
 When the study transfers, archives, or gets inspected, `pnpm export-tmf`
@@ -141,6 +148,14 @@ When the study transfers, archives, or gets inspected, `pnpm export-tmf`
 content hash they signed, returns, waivers, the completeness snapshot),
 and the entire hash-chained audit trail. The receiving party checks it with
 nothing but `shasum -a 256 -c manifest.sha256`; a single altered byte fails.
+
+The same package downloads from the study dashboard as a zip (ADR-0035):
+the browser fetches the export data and every blob through the
+authenticated API, recomputes each blob's sha256 locally before letting it
+into the package, and writes the exact layout the CLI writes. A mismatched
+or missing blob is reported and excluded, never silently included. The
+`--ems` serialization below stays CLI-only, because it requires an exchange
+agreement nobody should claim from a dashboard button.
 
 Adding `--ems <agreement-id>` (ADR-0024) puts a CDISC eTMF-EMS v1.0.2
 `exchange.xml` in the package: the industry interchange inventory, one

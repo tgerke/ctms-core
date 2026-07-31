@@ -368,6 +368,111 @@ export const FiledVersionSchema = z
   })
   .openapi("FiledVersion");
 
+// The oversight digest (ADR-0017), served live: the same derived data the
+// scheduled email carries, plus the rendered email and its recipient list.
+const DigestDocumentSchema = z.object({
+  artifact_code: z.string(),
+  artifact_name: z.string(),
+  rule_name: z.string(),
+  site_number: z.string().nullable(),
+  person_given_name: z.string().nullable(),
+  person_family_name: z.string().nullable(),
+  effective_expiry: z.string().nullable(),
+  status: z.string(),
+});
+
+export const DigestSchema = z
+  .object({
+    study: z.object({
+      id: z.string().uuid(),
+      protocol_number: z.string(),
+      title: z.string(),
+    }),
+    generated_on: z.string(),
+    attention_count: z.number().int(),
+    chain: z.object({ events: z.number().int(), valid: z.boolean() }),
+    counts: z.object({
+      total: z.number().int(),
+      missing: z.number().int(),
+      pending_review: z.number().int(),
+      returned: z.number().int(),
+      waived: z.number().int(),
+    }),
+    expired: z.array(DigestDocumentSchema),
+    expiring_soon: z.array(DigestDocumentSchema),
+    overdue_visits: z.array(
+      z.object({
+        site_number: z.string(),
+        visit_type: z.string(),
+        scheduled_date: z.string(),
+      }),
+    ),
+    overdue_action_items: z.array(
+      z.object({
+        site_number: z.string(),
+        description: z.string(),
+        due_date: z.string(),
+      }),
+    ),
+    overdue_issues: z.array(
+      z.object({
+        site_number: z.string().nullable(),
+        severity: z.string(),
+        title: z.string(),
+        due_date: z.string(),
+      }),
+    ),
+    overdue_milestones: z.array(
+      z.object({
+        name: z.string(),
+        site_number: z.string().nullable(),
+        planned_date: z.string(),
+      }),
+    ),
+    overdue_reviews: z.array(
+      z.object({
+        title: z.string(),
+        site_number: z.string().nullable(),
+        assignee_given_name: z.string(),
+        assignee_family_name: z.string(),
+        due_date: z.string(),
+      }),
+    ),
+    email: z.object({ subject: z.string(), text: z.string() }),
+    recipients: z.array(
+      z.object({
+        email: z.string(),
+        given_name: z.string(),
+        family_name: z.string(),
+      }),
+    ),
+  })
+  .openapi("Digest");
+
+// The data half of the TMF export package (ADR-0020/ADR-0035): everything but
+// the bytes, which the client fetches per version and verifies by hash.
+export const TmfExportSchema = z
+  .object({
+    study: z.record(z.any()),
+    documents: z.array(z.record(z.any())),
+    expected: z.array(z.record(z.any())),
+    audit_events: z.array(z.record(z.any())),
+    chain: z.object({
+      events: z.number().int(),
+      valid: z.boolean(),
+      head_hash: z.string().nullable(),
+    }),
+    blobs: z.array(
+      z.object({
+        sha256: z.string().length(64),
+        size_bytes: z.number().int(),
+        mime_type: z.string(),
+      }),
+    ),
+    tmf_rm_version: z.string().nullable(),
+  })
+  .openapi("TmfExport");
+
 // --- Operational layer -------------------------------------------------------
 
 export const VisitTypeSchema = z
