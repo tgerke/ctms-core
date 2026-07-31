@@ -67,7 +67,7 @@ alone; the full set is listed in [what the statuses mean](/ctms-core/user-guide/
 
 - A **site page** (click any site) holds the site's staff roster (each
   person with their role and a count of their open document items), plus the
-  [delegation of authority and training logs](/ctms-core/user-guide/site-logs/), visits, issues,
+  [delegation of authority, training, and screening logs](/ctms-core/user-guide/site-logs/), visits, issues,
   enrollment reporting, and the site's expected documents grouped by TMF
   zone, each with an upload button where one is needed.
 - A **visit page** (click any visit) walks a monitoring visit from scheduled
@@ -126,8 +126,9 @@ how those filings appear.
 - [Administration](/ctms-core/user-guide/administration/) — onboarding sites, staffing them,
   granting access, adjusting requirement rules, and waiving expected
   documents.
-- [The site seat and its logs](/ctms-core/user-guide/site-logs/) — the site-scoped view, and
-  the delegation of authority and training logs.
+- [The site seat and its logs](/ctms-core/user-guide/site-logs/) — the site-scoped view; the
+  delegation of authority, training, and screening logs; and e-signatures
+  on individual log entries.
 - [What the statuses mean](/ctms-core/user-guide/statuses/) — every chip in the app, and what to
   do about each.
 - [Glossary](/ctms-core/glossary/) — the trial and system terms used throughout.

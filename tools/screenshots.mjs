@@ -214,6 +214,7 @@ await shoot("site-seat.png");
 await shootSections({
   "Delegation of authority": "delegation-log.png",
   "Training log": "training-log.png",
+  "Screening log": "screening-log.png",
 });
 await evaluate("localStorage.setItem('ctms_token', 'dev-admin-token'); true");
 

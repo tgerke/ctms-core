@@ -46,7 +46,12 @@ no third category, and no stored status column anywhere in the system.
     person ||--o{ delegation : authorizes
     study_site ||--o{ training_record : logs
     person ||--o{ training_record : trainee
-    document o|--o{ training_record : certifies`}
+    document o|--o{ training_record : certifies
+    study_site ||--o{ screening_entry : logs
+    delegation o|--o{ log_signature : signs
+    training_record o|--o{ log_signature : signs
+    screening_entry o|--o{ log_signature : signs
+    person ||--o{ log_signature : signer`}
 />
 
 ## Reference taxonomy
@@ -196,6 +201,23 @@ open credential items from `v_expected_document_status`. `v_training_log`
 derives `current | expiring_soon (≤60 days) | expired`. The signed DoA log
 document stays the authoritative Part 11 record; these rows are the
 queryable layer beside it.
+
+The screening log (ADR-0036) adds **screening_entry**: a site-assigned
+pseudonymous `screening_number` (unique per site, never a name — subject
+clinical data stays in the EDC), `screened_on`, then at most one outcome
+ever: `enrolled_on`, or `screen_failed_on` with a required
+`failure_reason`. `v_screening_log` derives
+`in_screening | enrolled | screen_failed`, and `v_screening_summary` puts
+the log's counts beside the site's latest as-reported `enrollment_report`
+numbers, so a log that disagrees with its own report flags itself.
+
+**log_signature** carries entry-level e-signatures (ADR-0036) on exactly
+one delegation, training record, or screening entry (a CHECK enforces one
+foreign key set): signer, meaning, timestamp, the §11.200
+re-authentication evidence (NOT NULL), and `signed_sha256` — the SHA-256
+of the entry's canonical fact columns at signing. Rows are append-only
+like `signature`; whether an entry's current facts still match its
+signatures is derived at read time, never stored.
 
 ## Audit trail
 

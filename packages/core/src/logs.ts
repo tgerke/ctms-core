@@ -1,6 +1,15 @@
-import { delegation, trainingRecord, type Db, type Sql } from "@ctms/db";
-import { and, eq, isNull } from "drizzle-orm";
-import { withActor, type Actor } from "./actor.js";
+import {
+  delegation,
+  logEntrySha256,
+  logSignature,
+  screeningEntry,
+  trainingRecord,
+  type Db,
+  type LogEntryKind,
+  type Sql,
+} from "@ctms/db";
+import { and, eq, isNull, sql as dsql } from "drizzle-orm";
+import { withActor, type Actor, type Tx } from "./actor.js";
 
 // Site-seat log workflows (ADR-0023). Delegation and training entries are
 // dated facts with derived status — same discipline as admin.ts: ending a
@@ -10,6 +19,7 @@ import { withActor, type Actor } from "./actor.js";
 
 export type DelegationStatus = "active" | "ended";
 export type TrainingStatus = "current" | "expiring_soon" | "expired";
+export type ScreeningStatus = "in_screening" | "enrolled" | "screen_failed";
 
 export async function createDelegation(
   db: Db,
@@ -103,6 +113,213 @@ export async function trainingLog(
     WHERE t.study_site_id = ${filter.studySiteId}
       AND (${filter.status ?? null}::text IS NULL OR t.status = ${filter.status ?? null})
     ORDER BY t.trained_on DESC, t.family_name`;
+}
+
+// --- Screening log (ADR-0036) -----------------------------------------------
+// The site's operational record of its own screening: pseudonymous numbers
+// and dated disposition facts, no clinical data. Recording the one outcome is
+// the row's single permitted mutation (the end_date pattern above).
+
+export async function createScreeningEntry(
+  db: Db,
+  actor: Actor,
+  input: { studySiteId: string; screeningNumber: string; screenedOn: string },
+) {
+  return withActor(db, actor, async (tx) => {
+    const rows = await tx
+      .insert(screeningEntry)
+      .values({
+        studySiteId: input.studySiteId,
+        screeningNumber: input.screeningNumber,
+        screenedOn: input.screenedOn,
+      })
+      .returning();
+    return rows[0]!;
+  });
+}
+
+export async function recordScreeningOutcome(
+  db: Db,
+  actor: Actor,
+  input: {
+    screeningEntryId: string;
+    enrolledOn?: string;
+    screenFailedOn?: string;
+    failureReason?: string;
+  },
+) {
+  if (!input.enrolledOn === !input.screenFailedOn) {
+    throw new Error("record exactly one outcome: enrolled_on or screen_failed_on");
+  }
+  if (!input.screenFailedOn !== !input.failureReason?.trim()) {
+    throw new Error("a screen failure requires its reason; enrollment takes none");
+  }
+  return withActor(db, actor, async (tx) => {
+    const rows = await tx
+      .update(screeningEntry)
+      .set(
+        input.enrolledOn
+          ? { enrolledOn: input.enrolledOn }
+          : { screenFailedOn: input.screenFailedOn, failureReason: input.failureReason!.trim() },
+      )
+      .where(
+        and(
+          eq(screeningEntry.id, input.screeningEntryId),
+          isNull(screeningEntry.enrolledOn),
+          isNull(screeningEntry.screenFailedOn),
+        ),
+      )
+      .returning();
+    if (!rows[0]) throw new Error("screening entry not found or outcome already recorded");
+    return rows[0];
+  });
+}
+
+export async function screeningLog(
+  sql: Sql,
+  filter: { studySiteId: string; status?: ScreeningStatus },
+) {
+  return sql`
+    SELECT se.*
+    FROM v_screening_log se
+    WHERE se.study_site_id = ${filter.studySiteId}
+      AND (${filter.status ?? null}::text IS NULL OR se.status = ${filter.status ?? null})
+    ORDER BY se.screened_on DESC, se.screening_number DESC`;
+}
+
+/** Log counts beside the site's latest as-reported aggregates (ADR-0011). */
+export async function screeningSummary(sql: Sql, studySiteId: string) {
+  const rows = await sql`
+    SELECT s.* FROM v_screening_summary s
+    WHERE s.study_site_id = ${studySiteId}`;
+  return rows[0] ?? null;
+}
+
+// --- Entry-level e-signatures (ADR-0036) -------------------------------------
+// The §11.200 ceremony applied to individual log entries. The signature binds
+// to the entry's canonical facts by hash (logEntrySha256); a later permitted
+// mutation surfaces as facts_match = false at read time, never a block.
+
+/** Fact columns in their SQL text forms — the one shape logEntrySha256
+ *  hashes. Casts keep dates/uuids identical across drivers and call sites;
+ *  the entry's table name is its kind. */
+const FACT_COLUMNS: Record<LogEntryKind, string> = {
+  delegation:
+    "id::text, study_site_id::text, person_id::text, delegated_tasks, start_date::text, end_date::text, authorized_by::text",
+  training_record:
+    "id::text, study_site_id::text, person_id::text, topic, trained_on::text, expires_at::text, document_id::text",
+  screening_entry:
+    "id::text, study_site_id::text, screening_number, screened_on::text, enrolled_on::text, screen_failed_on::text, failure_reason",
+};
+
+async function entryFacts(tx: Tx, kind: LogEntryKind, entryId: string) {
+  const rows = (await tx.execute(
+    dsql`SELECT ${dsql.raw(FACT_COLUMNS[kind])} FROM ${dsql.raw(kind)} WHERE id = ${entryId}`,
+  )) as unknown as Record<string, unknown>[];
+  return rows[0] ?? null;
+}
+
+export interface SignLogEntryInput {
+  kind: LogEntryKind;
+  entryId: string;
+  signerPersonId: string;
+  meaning: "author" | "review" | "approval";
+  // §11.200: the API layer verifies the ceremony; this layer records it.
+  reauthMethod: "oidc_fresh_token" | "dev_token" | "seed_fixture";
+  reauthAt: Date;
+}
+
+export async function signLogEntry(db: Db, actor: Actor, input: SignLogEntryInput) {
+  return withActor(db, actor, async (tx) => {
+    const facts = await entryFacts(tx, input.kind, input.entryId);
+    if (!facts) throw new Error("log entry not found");
+    const rows = await tx
+      .insert(logSignature)
+      .values({
+        delegationId: input.kind === "delegation" ? input.entryId : null,
+        trainingRecordId: input.kind === "training_record" ? input.entryId : null,
+        screeningEntryId: input.kind === "screening_entry" ? input.entryId : null,
+        signerPersonId: input.signerPersonId,
+        meaning: input.meaning,
+        signedSha256: logEntrySha256(input.kind, facts),
+        reauthMethod: input.reauthMethod,
+        reauthAt: input.reauthAt,
+      })
+      .returning();
+    return rows[0]!;
+  });
+}
+
+export interface LogSignatureRow {
+  entry_id: string;
+  signature_id: string;
+  signer_person_id: string;
+  signer_given_name: string;
+  signer_family_name: string;
+  meaning: "author" | "review" | "approval";
+  signed_at: Date | string;
+  signed_sha256: string;
+  reauth_method: string;
+  facts_match: boolean;
+}
+
+const ENTRY_COLUMN: Record<LogEntryKind, string> = {
+  delegation: "delegation_id",
+  training_record: "training_record_id",
+  screening_entry: "screening_entry_id",
+};
+
+/**
+ * Signatures for every entry of one site's log, grouped by entry id, each
+ * verified against the entry's current facts. Verification recomputes the
+ * canonical hash here, at read time — no stored validity flag exists to
+ * drift (ADR-0006).
+ */
+export async function siteLogSignatures(
+  sql: Sql,
+  kind: LogEntryKind,
+  studySiteId: string,
+): Promise<Map<string, LogSignatureRow[]>> {
+  const rows = await sql`
+    SELECT ls.id AS signature_id, ls.${sql(ENTRY_COLUMN[kind])}::text AS entry_id,
+           ls.signer_person_id, p.given_name AS signer_given_name,
+           p.family_name AS signer_family_name, ls.meaning, ls.signed_at,
+           ls.signed_sha256, ls.reauth_method
+    FROM log_signature ls
+    JOIN ${sql(kind)} e ON e.id = ls.${sql(ENTRY_COLUMN[kind])}
+    JOIN person p ON p.id = ls.signer_person_id
+    WHERE e.study_site_id = ${studySiteId}
+    ORDER BY ls.signed_at`;
+  const grouped = new Map<string, LogSignatureRow[]>();
+  if (rows.length === 0) return grouped;
+  // Signed entries are few; re-derive each entry's current hash once.
+  const currentHash = new Map<string, string>();
+  for (const entryId of new Set(rows.map((r) => r.entry_id as string))) {
+    const factsRows = await sql.unsafe(
+      `SELECT ${FACT_COLUMNS[kind]} FROM ${kind} WHERE id = $1`,
+      [entryId],
+    );
+    const facts = factsRows[0] as Record<string, unknown> | undefined;
+    if (facts) currentHash.set(entryId, logEntrySha256(kind, facts));
+  }
+  for (const r of rows) {
+    const entryId = r.entry_id as string;
+    const list = grouped.get(entryId) ?? [];
+    list.push({
+      entry_id: entryId,
+      signature_id: r.signature_id as string,
+      signer_person_id: r.signer_person_id as string,
+      signer_given_name: r.signer_given_name as string,
+      signer_family_name: r.signer_family_name as string,
+      meaning: r.meaning as LogSignatureRow["meaning"],
+      signed_at: r.signed_at as Date,
+      signed_sha256: r.signed_sha256 as string,
+      reauth_method: r.reauth_method as string,
+      facts_match: currentHash.get(entryId) === r.signed_sha256,
+    });
+    grouped.set(entryId, list);
+  }
+  return grouped;
 }
 
 /**

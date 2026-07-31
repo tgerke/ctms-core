@@ -48,6 +48,11 @@ erDiagram
     study_site ||--o{ training_record : logs
     person ||--o{ training_record : trainee
     document o|--o{ training_record : certifies
+    study_site ||--o{ screening_entry : logs
+    delegation o|--o{ log_signature : signs
+    training_record o|--o{ log_signature : signs
+    screening_entry o|--o{ log_signature : signs
+    person ||--o{ log_signature : signer
 ```
 
 ## Reference taxonomy
@@ -197,6 +202,19 @@ views** (ADR-0006). No table in this layer has a status column.
 - **training_record**: a training log entry: person, topic (non-blank),
   `trained_on`, optional `expires_at` and a link to the filed certificate
   document. Insert-only through the API.
+- **screening_entry**: a screening log entry (ADR-0036): site-assigned
+  pseudonymous `screening_number` (unique per site, never a name — subject
+  clinical data stays in the EDC), `screened_on`, then at most one outcome
+  ever: `enrolled_on`, or `screen_failed_on` with a required
+  `failure_reason`. CHECKs enforce the shape; recording the outcome is the
+  row's single permitted mutation.
+- **log_signature**: an entry-level e-signature (ADR-0036) on exactly one
+  delegation, training record, or screening entry (CHECK: one FK set).
+  Signer, meaning, timestamp, `reauth_method`/`reauth_at` (NOT NULL — the
+  §11.200 evidence), and `signed_sha256`: the SHA-256 of the entry's
+  canonical fact columns at signing. Append-only like `signature`
+  (immutability trigger); whether an entry's current facts still match its
+  signatures is derived at read time, never stored.
 
 Derived views: **v_monitoring_visit_status** (stage: `scheduled → overdue →
 awaiting_report → report_pending_review → follow_up → complete`, computed from the
@@ -208,6 +226,10 @@ per site vs target), **v_milestone_status** (`achieved | overdue | upcoming`),
 the authorizer held an active PI role at that site on the start date, and the
 delegate's count of open credential items from `v_expected_document_status`),
 **v_training_log** (`current | expiring_soon (≤60d) | expired`),
+**v_screening_log** (`in_screening | enrolled | screen_failed`, from the dated
+outcome facts), **v_screening_summary** (the log's counts beside the site's
+latest as-reported `enrollment_report` numbers — the ADR-0036 cross-check: a
+log that disagrees with its own report flags itself),
 **v_study_startup** (ADR-0034: one row per study of startup-readiness counts —
 sites by status, sites lacking an active PI, rules by scope, placeholders the
 sync function would insert but hasn't, expected/missing totals, milestones,

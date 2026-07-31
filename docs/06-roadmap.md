@@ -195,9 +195,9 @@ feature comparison is meaningless without them.
   fact rows whose status is derived beside the document record: a delegation
   whose authorizer never held the PI role, or whose delegate's license has
   expired, flags itself. The signed DoA log document stays the authoritative
-  Part 11 record. What remains of the original gap is the rest of the
-  site-side catalog (screening logs, EMR-routed certified copies) and
-  entry-level e-signatures on log rows.
+  Part 11 record. Of what remained, screening logs and entry-level
+  e-signatures closed as ADR-0036; EMR-routed certified copies and in-app
+  PHI redaction are still open.
 - **Multi-study operation in the UI**: shipped as a persisted study
   switcher plus a portfolio page over `GET /portfolio` (ADR-0021): one
   rollup query across the same views the study dashboards read
@@ -207,23 +207,39 @@ feature comparison is meaningless without them.
   custom dashboards à la Medidata Visual Analytics) and a grant-aware
   study switcher; the rollup numbers are already on the API and in SQL for
   anything downstream.
+- **Screening log and entry-level e-signatures**: shipped as facts plus a
+  parallel signature table (ADR-0036). The screening log is the site's
+  operational record of its own screening: pseudonymous site-assigned
+  numbers and dated disposition facts (no clinical data — the EDC boundary
+  stands), with status derived and the log's counts cross-checked against
+  the site's own latest as-reported enrollment aggregates, so a log that
+  disagrees with its report flags itself. E-signatures now land on
+  individual log entries — delegation, training, screening — through the
+  same §11.200 re-authentication ceremony as documents, each signature
+  hash-bound to the entry's facts at signing; a later permitted mutation
+  (an end date, an outcome) surfaces as a derived facts-changed flag,
+  never hidden and never blocking. What remains of the site-side catalog
+  is EMR-routed certified copies and in-app PHI redaction.
 
 ## Genuine gaps
 
-### Site-side depth beyond the first logs
+### Site-side depth beyond the logs
 
-The site seat now exists (ADR-0023), but Florence still ships more of the
-coordinator's day: screening logs, certified copies routed from the EMR,
-entry-level e-signatures on log rows, and in-app PHI redaction. The seat's
-schema is shared with oversight, so each of these is an increment, not a
-new system.
+The site seat's logs are now structured and signable (ADR-0023, ADR-0036),
+but Florence still ships two things this system does not: certified copies
+routed from the EMR, and in-app PHI redaction. Both sit close to the
+subject-data boundary, so each would need the kind of explicit boundary
+decision ADR-0036 made for screening numbers before it is an increment
+rather than a policy change.
 
 ## If we built next
 
-Nothing is queued: study creation and guided startup, the loudest
-commercial-CTMS gap left, shipped 2026-07-31 (ADR-0034). Remaining
-candidates live in the notes above: site-side depth, cross-study
-analytics, relevance ranking, per-site startup task templates.
+Nothing is queued: site-side depth (screening logs, entry-level
+e-signatures) shipped 2026-07-31 (ADR-0036), on the heels of study
+creation and guided startup (ADR-0034). Remaining candidates live in the
+notes above: cross-study analytics, relevance ranking, per-site startup
+task templates, and the boundary-sensitive site items (EMR-routed copies,
+PHI redaction).
 
 ## Sources
 

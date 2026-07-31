@@ -6,6 +6,11 @@ export {
   extractContentText,
   type ExtractedContent,
 } from "./content-text.js";
+export {
+  logEntryPayload,
+  logEntrySha256,
+  type LogEntryKind,
+} from "./log-payload.js";
 // Demo/test PDF generator; also what the seed files.
 export { makePdf } from "./seed/pdf.js";
 export {

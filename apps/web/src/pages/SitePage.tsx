@@ -1,7 +1,9 @@
 import {
   ArrowLeft,
   CircleSlash,
+  ClipboardList,
   GraduationCap,
+  PenLine,
   Undo2,
   Upload,
   UserCheck,
@@ -14,14 +16,19 @@ import {
   isSiteSeat,
   useAssignSiteRole,
   useCreateDelegation,
+  useCreateScreeningEntry,
   useDelegationLog,
   useEndDelegation,
   useEndSiteRole,
   useIssues,
   useMe,
   usePeople,
+  useRecordScreeningOutcome,
   useRecordTraining,
   useRevokeWaiver,
+  useScreeningLog,
+  useScreeningSummary,
+  useSignLogEntry,
   useSiteEnrollment,
   useSiteExpected,
   useSiteOverview,
@@ -33,6 +40,9 @@ import {
   useWaive,
   type Delegation,
   type ExpectedDocument,
+  type LogEntryKind,
+  type LogSignature,
+  type ScreeningEntry,
   type StaffMember,
   type StaffRole,
   type Study,
@@ -52,7 +62,7 @@ import {
   ScheduleVisitForm,
   VisitListItem,
 } from "../ops";
-import { DELEGATION_STATUS, SpecChip, StatusChip } from "../status";
+import { DELEGATION_STATUS, SCREENING_STATUS, SpecChip, StatusChip } from "../status";
 
 const ROLE_LABEL: Record<string, string> = {
   principal_investigator: "Principal Investigator",
@@ -95,6 +105,7 @@ export default function SitePage({ study }: { study: Study | undefined }) {
     { href: "#staff", label: "Staff" },
     { href: "#delegation", label: "Delegation" },
     { href: "#training", label: "Training" },
+    { href: "#screening", label: "Screening" },
     ...(me && !siteSeat && study
       ? [
           { href: "#visits", label: "Visits" },
@@ -188,6 +199,16 @@ export default function SitePage({ study }: { study: Study | undefined }) {
           </span>
         </h2>
         <TrainingLog studySiteId={site.study_site_id} staff={staff} />
+      </section>
+
+      <section id="screening" className="card scroll-mt-28">
+        <h2 className="border-b border-hairline px-4 py-3 font-medium">
+          Screening log{" "}
+          <span className="text-xs font-normal text-muted">
+            pseudonymous numbers and dated dispositions; no clinical data (ADR-0036)
+          </span>
+        </h2>
+        <ScreeningLog studySiteId={site.study_site_id} />
       </section>
 
       {me && !siteSeat && study && (
@@ -359,8 +380,110 @@ function DelegationRow({ d, canLog }: { d: Delegation; canLog: boolean }) {
         )}
         <SpecChip spec={DELEGATION_STATUS[d.status]} />
       </span>
+      <EntrySignatures kind="delegation" entryId={d.delegation_id} signatures={d.signatures} />
       <ErrorNote error={err} className="w-full" />
     </li>
+  );
+}
+
+// --- Entry-level e-signatures (ADR-0036) --------------------------------------
+
+/**
+ * The §11.200 ceremony applied to one log entry: existing signatures render
+ * with signer, meaning, and time (§11.50), each verified server-side against
+ * the entry's current facts; the sign action mirrors the document ceremony,
+ * re-authentication included.
+ */
+function EntrySignatures({
+  kind,
+  entryId,
+  signatures,
+}: {
+  kind: LogEntryKind;
+  entryId: string;
+  signatures: LogSignature[];
+}) {
+  const { data: me } = useMe();
+  const sign = useSignLogEntry();
+  const [confirming, setConfirming] = useState(false);
+  const [meaning, setMeaning] = useState<LogSignature["meaning"]>("author");
+  const [err, setErr] = useState<unknown>(null);
+  return (
+    <div className="w-full space-y-1 pl-0 text-xs">
+      {signatures.map((sg) => (
+        <div key={sg.signature_id} className="flex flex-wrap items-center gap-x-2 text-muted">
+          <PenLine size={11} aria-hidden style={{ color: "var(--info)" }} />
+          <span className="text-ink2">
+            {sg.signer_given_name} {sg.signer_family_name}
+          </span>
+          <span>meaning: {sg.meaning}</span>
+          <span>{new Date(sg.signed_at).toLocaleString()}</span>
+          <span
+            className="mono"
+            title={`Signature is bound to the SHA-256 of the entry's facts at signing: ${sg.signed_sha256}`}
+          >
+            {sg.signed_sha256.slice(0, 12)}…
+          </span>
+          {!sg.facts_match && (
+            <span style={{ color: "var(--status-serious)" }}>
+              entry changed since signing — signature covers the earlier facts
+            </span>
+          )}
+        </div>
+      ))}
+      {can(me, "sign") &&
+        (confirming ? (
+          <div className="rounded-md border border-hairline bg-page px-3 py-2">
+            <p className="text-ink2">
+              Signing records your name, the date and time, and the meaning you
+              choose, bound to this entry's current facts. You'll be asked to
+              confirm your identity before the signature is applied.
+            </p>
+            <div className="mt-2 flex items-center gap-2">
+              <select
+                value={meaning}
+                onChange={(e) => setMeaning(e.target.value as LogSignature["meaning"])}
+                className={inputCls}
+                aria-label="Signature meaning"
+              >
+                <option value="author">author</option>
+                <option value="review">review</option>
+                <option value="approval">approval</option>
+              </select>
+              <button
+                onClick={() => {
+                  setConfirming(false);
+                  setErr(null);
+                  sign.mutate({ kind, entryId, meaning }, { onError: (e) => setErr(e) });
+                }}
+                disabled={sign.isPending}
+                className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50"
+                style={{ background: "var(--info)" }}
+              >
+                <PenLine size={12} aria-hidden />
+                {sign.isPending ? "Signing…" : "Confirm & sign"}
+              </button>
+              <button
+                onClick={() => setConfirming(false)}
+                className="rounded-md border border-hairline px-3 py-1.5 text-xs text-ink2 hover:bg-surface"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : (
+          <button
+            onClick={() => setConfirming(true)}
+            disabled={sign.isPending}
+            className="inline-flex items-center gap-1.5 rounded-md border border-hairline px-2 py-1 text-xs text-ink2 hover:bg-page disabled:opacity-50"
+            title="Apply a Part 11 e-signature to this entry"
+          >
+            <PenLine size={11} aria-hidden />
+            {sign.isPending ? "Signing…" : "Sign entry"}
+          </button>
+        ))}
+      <ErrorNote error={err} />
+    </div>
   );
 }
 
@@ -567,6 +690,11 @@ function TrainingRow({ t }: { t: TrainingRecord }) {
       <span className="ml-auto">
         <StatusChip status={t.status} />
       </span>
+      <EntrySignatures
+        kind="training_record"
+        entryId={t.training_record_id}
+        signatures={t.signatures}
+      />
     </li>
   );
 }
@@ -663,6 +791,209 @@ function NewTrainingForm({
       >
         <GraduationCap size={12} aria-hidden />
         {record.isPending ? "Recording…" : "Record training"}
+      </button>
+      <ErrorNote error={err} className="w-full" />
+    </form>
+  );
+}
+
+// --- Screening log (ADR-0036) --------------------------------------------------
+
+function ScreeningLog({ studySiteId }: { studySiteId: string }) {
+  const { data: entries } = useScreeningLog(studySiteId);
+  const { data: summary } = useScreeningSummary(studySiteId);
+  const { data: me } = useMe();
+  const canLog = can(me, "log");
+  // The oversight cross-check: the log's derived counts vs the site's own
+  // latest as-reported aggregates (ADR-0011). Disagreement flags, not blocks.
+  const mismatch =
+    summary?.reported_screened != null &&
+    (summary.log_screened !== summary.reported_screened ||
+      summary.log_enrolled !== summary.reported_enrolled);
+  return (
+    <>
+      {summary && (
+        <div className="border-b border-hairline px-4 py-2.5 text-xs text-ink2">
+          Log: {summary.log_screened} screened · {summary.log_enrolled} enrolled ·{" "}
+          {summary.log_screen_failed} screen failed · {summary.log_in_screening} in
+          screening
+          {summary.reported_screened != null && (
+            <>
+              {" · "}last reported ({summary.reported_as_of}): {summary.reported_screened}{" "}
+              screened / {summary.reported_enrolled} enrolled
+            </>
+          )}
+          {mismatch && (
+            <span style={{ color: "var(--status-serious)" }}>
+              {" "}
+              — log and report disagree; update the enrollment report below
+            </span>
+          )}
+        </div>
+      )}
+      {entries?.length === 0 ? (
+        <p className="px-4 py-3 text-sm text-muted">No screenings recorded.</p>
+      ) : (
+        <ul className="divide-y divide-hairline">
+          {entries?.map((e) => (
+            <ScreeningRow key={e.screening_entry_id} e={e} canLog={canLog} />
+          ))}
+        </ul>
+      )}
+      {canLog && (
+        <div className="border-t border-hairline px-4 py-3">
+          <NewScreeningForm studySiteId={studySiteId} />
+        </div>
+      )}
+    </>
+  );
+}
+
+function ScreeningRow({ e, canLog }: { e: ScreeningEntry; canLog: boolean }) {
+  const record = useRecordScreeningOutcome();
+  const [failing, setFailing] = useState(false);
+  const [reason, setReason] = useState("");
+  const [err, setErr] = useState<unknown>(null);
+  return (
+    <li className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2.5">
+      <span className="mono text-sm font-medium">{e.screening_number}</span>
+      <div className="min-w-0 text-xs text-muted">
+        screened {e.screened_on}
+        {e.enrolled_on ? ` · enrolled ${e.enrolled_on}` : ""}
+        {e.screen_failed_on ? ` · failed ${e.screen_failed_on}: ${e.failure_reason}` : ""}
+      </div>
+      <span className="ml-auto flex items-center gap-2 text-xs">
+        {canLog && e.status === "in_screening" && !failing && (
+          <>
+            <button
+              onClick={() => {
+                if (
+                  !window.confirm(
+                    `Record ${e.screening_number} as enrolled today? The outcome is recorded once — entries are never deleted or edited.`,
+                  )
+                )
+                  return;
+                setErr(null);
+                record.mutate(
+                  { screeningEntryId: e.screening_entry_id, enrolledOn: localToday() },
+                  { onError: (er) => setErr(er) },
+                );
+              }}
+              disabled={record.isPending}
+              className="rounded-md border border-hairline px-2 py-1 text-xs text-ink2 hover:bg-page disabled:opacity-50"
+              title="Records today as the enrollment date — the entry's single permitted change"
+            >
+              {record.isPending ? "Recording…" : "Enrolled"}
+            </button>
+            <button
+              onClick={() => setFailing(true)}
+              className="rounded-md border border-hairline px-2 py-1 text-xs text-ink2 hover:bg-page"
+            >
+              Screen fail
+            </button>
+          </>
+        )}
+        <SpecChip spec={SCREENING_STATUS[e.status]} />
+      </span>
+      {failing && (
+        <form
+          className="flex w-full items-center gap-2"
+          onSubmit={(ev) => {
+            ev.preventDefault();
+            if (!reason.trim()) return;
+            setErr(null);
+            record.mutate(
+              {
+                screeningEntryId: e.screening_entry_id,
+                screenFailedOn: localToday(),
+                failureReason: reason.trim(),
+              },
+              { onError: (er) => setErr(er), onSuccess: () => setFailing(false) },
+            );
+          }}
+        >
+          <input
+            value={reason}
+            onChange={(ev) => setReason(ev.target.value)}
+            placeholder="Reason — criterion reference, not clinical detail"
+            className="w-80 rounded-md border border-hairline bg-surface px-2 py-1 text-xs"
+            aria-label="Screen-failure reason"
+            autoFocus
+          />
+          <button
+            type="submit"
+            disabled={record.isPending || !reason.trim()}
+            className="rounded-md border border-hairline px-2 py-1 text-xs text-ink2 hover:bg-page disabled:opacity-50"
+          >
+            {record.isPending ? "Recording…" : "Record screen fail"}
+          </button>
+          <button
+            type="button"
+            onClick={() => setFailing(false)}
+            className="text-xs text-muted hover:underline"
+          >
+            cancel
+          </button>
+        </form>
+      )}
+      <EntrySignatures
+        kind="screening_entry"
+        entryId={e.screening_entry_id}
+        signatures={e.signatures}
+      />
+      <ErrorNote error={err} className="w-full" />
+    </li>
+  );
+}
+
+function NewScreeningForm({ studySiteId }: { studySiteId: string }) {
+  const create = useCreateScreeningEntry();
+  const [number, setNumber] = useState("");
+  const [screened, setScreened] = useState(localToday());
+  const [err, setErr] = useState<unknown>(null);
+  return (
+    <form
+      className="flex flex-wrap items-end gap-3"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (!number.trim()) return;
+        setErr(null);
+        create.mutate(
+          { studySiteId, screeningNumber: number.trim(), screenedOn: screened },
+          {
+            onError: (er) => setErr(er),
+            onSuccess: () => setNumber(""),
+          },
+        );
+      }}
+    >
+      <label className={fieldCls}>
+        Screening number
+        <input
+          value={number}
+          onChange={(e) => setNumber(e.target.value)}
+          placeholder="e.g. S-017 — the site-assigned code, never a name"
+          className={`w-72 ${inputCls}`}
+          required
+        />
+      </label>
+      <label className={fieldCls}>
+        Screened on
+        <input
+          type="date"
+          value={screened}
+          onChange={(e) => setScreened(e.target.value)}
+          className={inputCls}
+          required
+        />
+      </label>
+      <button
+        type="submit"
+        disabled={create.isPending || !number.trim()}
+        className={buttonCls}
+      >
+        <ClipboardList size={12} aria-hidden />
+        {create.isPending ? "Recording…" : "Record screening"}
       </button>
       <ErrorNote error={err} className="w-full" />
     </form>

@@ -400,6 +400,30 @@ the logs but never authors a site's own record):
 queryable layer beside it, and every write is a hash-chained audit event
 attributed to the site person.
 
+The screening log (ADR-0036) follows the same shape, carrying pseudonymous
+site-assigned numbers and dated dispositions only — no clinical data.
+`GET /study-sites/{id}/screening-log` derives
+`in_screening | enrolled | screen_failed`;
+`POST /study-sites/{id}/screening-log` (`screening_number`, `screened_on`)
+records a screening, and `PATCH /screening-entries/{id}` records the one
+outcome the row will ever take (`enrolled_on`, or `screen_failed_on` with a
+required `failure_reason`). `GET /study-sites/{id}/screening-summary` puts
+the log's counts beside the site's latest as-reported enrollment numbers —
+the cross-check that flags a log disagreeing with its own report:
+
+```r
+site("screening-summary") |>
+  select(starts_with("log_"), starts_with("reported_"))
+```
+
+Individual log entries take Part 11 e-signatures through the same ceremony
+as documents (ADR-0036): `POST /delegations/{id}/sign`,
+`POST /training-records/{id}/sign`, or `POST /screening-entries/{id}/sign`
+with `meaning` (author/review/approval) and the §11.200 `reauth_token`.
+The signature is hash-bound to the entry's facts at signing, and every log
+read returns each entry's signatures with a derived `facts_match` — an
+entry mutated after signing (an end date, an outcome) says so on its face.
+
 ## Skip the API entirely: the views are the contract
 
 The `v_*` views are documented public surface (see `02-data-model.md`). With a

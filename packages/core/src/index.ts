@@ -86,13 +86,21 @@ export {
 } from "./admin.js";
 export {
   createDelegation,
+  createScreeningEntry,
   delegationLog,
   endDelegation,
+  recordScreeningOutcome,
   recordTraining,
+  screeningLog,
+  screeningSummary,
+  signLogEntry,
   siteEnrollment,
+  siteLogSignatures,
   siteOverview,
   trainingLog,
   type DelegationStatus,
+  type LogSignatureRow,
+  type ScreeningStatus,
   type TrainingStatus,
 } from "./logs.js";
 export {

@@ -81,7 +81,9 @@ export type ScopeParam =
   | "grantId"
   | "ruleId"
   | "expectedDocumentId"
-  | "delegationId";
+  | "delegationId"
+  | "trainingRecordId"
+  | "screeningEntryId";
 
 /**
  * Resolve a path parameter to the study/site it belongs to (one indexed
@@ -171,6 +173,18 @@ export async function resolveScope(
       const [r] = await sql`
         SELECT ss.study_id, d.study_site_id FROM delegation d
         JOIN study_site ss ON ss.id = d.study_site_id WHERE d.id = ${id}`;
+      return r ? { studyId: r.study_id, studySiteId: r.study_site_id } : null;
+    }
+    case "trainingRecordId": {
+      const [r] = await sql`
+        SELECT ss.study_id, tr.study_site_id FROM training_record tr
+        JOIN study_site ss ON ss.id = tr.study_site_id WHERE tr.id = ${id}`;
+      return r ? { studyId: r.study_id, studySiteId: r.study_site_id } : null;
+    }
+    case "screeningEntryId": {
+      const [r] = await sql`
+        SELECT ss.study_id, se.study_site_id FROM screening_entry se
+        JOIN study_site ss ON ss.id = se.study_site_id WHERE se.id = ${id}`;
       return r ? { studyId: r.study_id, studySiteId: r.study_site_id } : null;
     }
   }

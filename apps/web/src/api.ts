@@ -497,6 +497,25 @@ export interface SiteOverview {
   pct_current: number;
 }
 
+/**
+ * Entry-level e-signature on a log row (ADR-0036): signer, meaning, and
+ * timestamp (§11.50), plus whether the entry's current facts still hash to
+ * what was signed — derived server-side at read time.
+ */
+export interface LogSignature {
+  signature_id: string;
+  signer_person_id: string;
+  signer_given_name: string;
+  signer_family_name: string;
+  meaning: "author" | "review" | "approval";
+  signed_at: string;
+  signed_sha256: string;
+  reauth_method: string;
+  facts_match: boolean;
+}
+
+export type LogEntryKind = "delegation" | "training_record" | "screening_entry";
+
 export interface Delegation {
   delegation_id: string;
   study_id: string;
@@ -516,6 +535,7 @@ export interface Delegation {
   authorizer_was_pi: boolean;
   credential_open_items: number;
   status: "active" | "ended";
+  signatures: LogSignature[];
 }
 
 export interface TrainingRecord {
@@ -534,6 +554,38 @@ export interface TrainingRecord {
   document_id: string | null;
   document_status: string | null;
   status: "current" | "expiring_soon" | "expired";
+  signatures: LogSignature[];
+}
+
+/** Screening log entry (ADR-0036): pseudonymous number and dated
+ *  disposition facts only — no clinical data (the ADR-0011 EDC boundary). */
+export interface ScreeningEntry {
+  screening_entry_id: string;
+  study_id: string;
+  study_site_id: string;
+  site_number: string;
+  site_name: string;
+  screening_number: string;
+  screened_on: string;
+  enrolled_on: string | null;
+  screen_failed_on: string | null;
+  failure_reason: string | null;
+  status: "in_screening" | "enrolled" | "screen_failed";
+  signatures: LogSignature[];
+}
+
+export interface ScreeningSummary {
+  study_id: string;
+  study_site_id: string;
+  site_number: string;
+  site_name: string;
+  log_screened: number;
+  log_enrolled: number;
+  log_screen_failed: number;
+  log_in_screening: number;
+  reported_as_of: string | null;
+  reported_screened: number | null;
+  reported_enrolled: number | null;
 }
 
 export class ApiError extends Error {
@@ -1593,6 +1645,90 @@ export function useRecordTraining() {
           ...(input.expiresAt ? { expires_at: input.expiresAt } : {}),
         }),
       ),
+    onSuccess: () => qc.invalidateQueries(),
+  });
+}
+
+export const useScreeningLog = (studySiteId: string | undefined) =>
+  useQuery({
+    queryKey: ["screening-log", studySiteId],
+    queryFn: () => api<ScreeningEntry[]>(`/study-sites/${studySiteId}/screening-log`),
+    enabled: !!studySiteId,
+  });
+
+export const useScreeningSummary = (studySiteId: string | undefined) =>
+  useQuery({
+    queryKey: ["screening-summary", studySiteId],
+    queryFn: () => api<ScreeningSummary>(`/study-sites/${studySiteId}/screening-summary`),
+    enabled: !!studySiteId,
+  });
+
+export function useCreateScreeningEntry() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      studySiteId: string;
+      screeningNumber: string;
+      screenedOn: string;
+    }) =>
+      api<{ id: string }>(
+        `/study-sites/${input.studySiteId}/screening-log`,
+        jsonInit("POST", {
+          screening_number: input.screeningNumber,
+          screened_on: input.screenedOn,
+        }),
+      ),
+    onSuccess: () => qc.invalidateQueries(),
+  });
+}
+
+/** The entry's single permitted mutation: one outcome, recorded once. */
+export function useRecordScreeningOutcome() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      screeningEntryId: string;
+      enrolledOn?: string;
+      screenFailedOn?: string;
+      failureReason?: string;
+    }) =>
+      api<{ id: string }>(
+        `/screening-entries/${input.screeningEntryId}`,
+        jsonInit("PATCH", {
+          ...(input.enrolledOn ? { enrolled_on: input.enrolledOn } : {}),
+          ...(input.screenFailedOn ? { screen_failed_on: input.screenFailedOn } : {}),
+          ...(input.failureReason ? { failure_reason: input.failureReason } : {}),
+        }),
+      ),
+    onSuccess: () => qc.invalidateQueries(),
+  });
+}
+
+const SIGN_PATH: Record<LogEntryKind, (id: string) => string> = {
+  delegation: (id) => `/delegations/${id}/sign`,
+  training_record: (id) => `/training-records/${id}/sign`,
+  screening_entry: (id) => `/screening-entries/${id}/sign`,
+};
+
+/**
+ * Entry-level e-signature (ADR-0036): the same §11.200 ceremony as document
+ * signing — fresh proof of identity obtained here, then one signature bound
+ * to the entry's facts at signing.
+ */
+export function useSignLogEntry() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: {
+      kind: LogEntryKind;
+      entryId: string;
+      meaning: "author" | "review" | "approval";
+    }) => {
+      const reauthToken = await getReauthToken();
+      return api<{ signature_id: string; signed_sha256: string }>(
+        SIGN_PATH[input.kind](input.entryId),
+        jsonInit("POST", { meaning: input.meaning, reauth_token: reauthToken }),
+      );
+    },
     onSuccess: () => qc.invalidateQueries(),
   });
 }
