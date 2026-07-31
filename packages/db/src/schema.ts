@@ -608,6 +608,57 @@ export const trainingRecord = pgTable(
   ],
 );
 
+// Screening log (ADR-0036): the site's operational record of its own
+// screening activity. Pseudonymous site-assigned numbers and dated
+// disposition facts only — no clinical data, the EDC boundary (ADR-0011)
+// stands. Recording the single outcome is the row's one permitted mutation;
+// status is derived (v_screening_log).
+export const screeningEntry = pgTable(
+  "screening_entry",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    studySiteId: uuid("study_site_id")
+      .notNull()
+      .references(() => studySite.id),
+    screeningNumber: text("screening_number").notNull(),
+    screenedOn: date("screened_on").notNull(),
+    enrolledOn: date("enrolled_on"),
+    screenFailedOn: date("screen_failed_on"),
+    failureReason: text("failure_reason"), // required exactly when failed (CHECK)
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex("screening_entry_site_number_idx").on(t.studySiteId, t.screeningNumber)],
+);
+
+// Entry-level e-signatures (ADR-0036): append-only beside the log tables,
+// the same discipline as signature beside document_version. Exactly one
+// entry reference per row (CHECK in the SQL migration); signed_sha256 hashes
+// the entry's canonical facts at signing (logEntrySha256), so a later
+// permitted mutation is derived as facts_match = false, never hidden.
+export const logSignature = pgTable(
+  "log_signature",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    delegationId: uuid("delegation_id").references(() => delegation.id),
+    trainingRecordId: uuid("training_record_id").references(() => trainingRecord.id),
+    screeningEntryId: uuid("screening_entry_id").references(() => screeningEntry.id),
+    signerPersonId: uuid("signer_person_id")
+      .notNull()
+      .references(() => person.id),
+    meaning: signatureMeaning("meaning").notNull(),
+    signedSha256: char("signed_sha256", { length: 64 }).notNull(),
+    signedAt: timestamp("signed_at", { withTimezone: true }).notNull().defaultNow(),
+    // §11.200 evidence, NOT NULL from birth — no 0003-style retrofit exemption.
+    reauthMethod: reauthMethod("reauth_method").notNull(),
+    reauthAt: timestamp("reauth_at", { withTimezone: true }).notNull(),
+  },
+  (t) => [
+    index("log_signature_delegation_idx").on(t.delegationId),
+    index("log_signature_training_record_idx").on(t.trainingRecordId),
+    index("log_signature_screening_entry_idx").on(t.screeningEntryId),
+  ],
+);
+
 // ---------------------------------------------------------------------------
 // Audit trail — rows are inserted by database triggers (see SQL migration),
 // never directly by application code. Append-only, hash-chained.

@@ -80,6 +80,16 @@ export const DELEGATION_STATUS: Record<"active" | "ended", Omit<StatusSpec, "ran
   ended: { label: "Ended", icon: Archive, cssVar: "--muted" },
 };
 
+/** Screening entries (ADR-0036): disposition derived from dated facts. */
+export const SCREENING_STATUS: Record<
+  "in_screening" | "enrolled" | "screen_failed",
+  Omit<StatusSpec, "rank">
+> = {
+  in_screening: { label: "In screening", icon: Hourglass, cssVar: "--info" },
+  enrolled: { label: "Enrolled", icon: Check, cssVar: "--status-good" },
+  screen_failed: { label: "Screen failed", icon: X, cssVar: "--muted" },
+};
+
 export const ISSUE_STATUS: Record<IssueStatus, Omit<StatusSpec, "rank">> = {
   overdue: { label: "Overdue", icon: CircleAlert, cssVar: "--status-critical" },
   open: { label: "Open", icon: CircleDot, cssVar: "--status-warn" },

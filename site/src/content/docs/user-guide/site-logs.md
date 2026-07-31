@@ -12,7 +12,7 @@ A site person holds a **Site staff** grant limited to one site. When they sign
 in, the app takes them straight to their site's page. There is no study
 dashboard, portfolio, or admin surface to get lost in, because none of those
 would show them anything they're permitted to see. What they get is their
-site, whole: staff roster, the two logs below, enrollment reporting, and every
+site, whole: staff roster, the logs below, enrollment reporting, and every
 expected document with an upload button where one is needed.
 
 ![The site seat: one site, its logs, its documents, and nothing else in the header.](../../../assets/screenshots/site-seat.png)
@@ -58,10 +58,46 @@ soon, expired) is computed from the dates on every page load, never stored.
 
 ![The training log: completions with derived expiry status.](../../../assets/screenshots/training-log.png)
 
+## The screening log
+
+The screening log records the site's own screening activity as dated facts:
+a site-assigned screening number, the screening date, and (once, when it
+happens) the outcome: enrolled on a date, or screen-failed on a date with
+a required reason. The number is a code like `S-017`, never a name; subject
+clinical data stays in the EDC, and the reason field is for criterion
+references, not clinical detail.
+
+![The screening log: pseudonymous numbers, dated dispositions, and the reconciliation line against the site's own reports.](../../../assets/screenshots/screening-log.png)
+
+Because the entries are data, the log reconciles itself against the
+enrollment numbers the site reports: the summary line shows the log's
+counts beside the latest report, and if the two disagree, the page says so
+and points at the enrollment form. That is the point of the structured log:
+the reconciliation a monitor does by hand across a paper log and a
+spreadsheet happens on every page load instead.
+
+## Signing log entries
+
+Individual log entries — a delegation, a training completion, a screening
+record — can now carry Part 11 e-signatures, through the same ceremony as
+documents: choose a meaning (author, review, approval), confirm your
+identity, and the system records your name, the date and time, and the
+meaning, bound to the entry's facts at that moment.
+
+The binding is a hash of the entry itself, and the page re-checks it on
+every load. If a signed entry later changes in one of the few ways entries
+can change (a delegation gains its end date, a screening entry gets its
+outcome), the signature stays, and the log says, right on the entry, that
+it covers the earlier facts. Nothing blocks the change, because the change
+is itself an audited fact; a fresh signature can attest the updated entry.
+
 ## Who writes the logs
 
 The logs are the site's record of itself. Site staff and administrators can
 write entries; monitors and trial operations read them: oversight reviews
-the log, it does not author it. The signed delegation log document remains
-the authoritative Part 11 record; signing individual entries electronically
-is on the roadmap, not claimed today.
+the log, it does not author it. Signing is attestation, not authorship: the
+site seat signs its own entries (the PI approving a delegation, a
+coordinator attesting a screening record), and a monitor can add a review
+signature from oversight. The signed delegation log document remains the
+authoritative Part 11 record; the structured entries and their signatures
+are the layer growing up beside it.

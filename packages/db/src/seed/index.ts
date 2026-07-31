@@ -8,6 +8,7 @@
  */
 import { createDb } from "../client.js";
 import { backfillContentText, backfillOcr } from "../content-text.js";
+import { logEntrySha256 } from "../log-payload.js";
 import * as s from "../schema.js";
 import { putBlob } from "../storage.js";
 import { makeDocx, makeXlsx } from "./office.js";
@@ -35,7 +36,8 @@ await sql`SELECT set_config('ctms.actor_label', 'seed', false)`;
 
 await sql`TRUNCATE audit_event, signature, document_return, document_version, document_content_text, expected_document,
   monitoring_visit_document, visit_action_item, issue, monitoring_visit,
-  enrollment_report, study_milestone, access_grant, delegation, training_record,
+  enrollment_report, study_milestone, access_grant, log_signature, screening_entry,
+  delegation, training_record,
   document, requirement_rule, study_site_role, study_site, protocol_version,
   requirement_rule, person, site, study, organization,
   tmf_artifact, tmf_section, tmf_zone, app_meta RESTART IDENTITY CASCADE`;
@@ -744,15 +746,20 @@ const delegationSpecs: {
   { site: "002", person: "oduya", tasks: ["informed consent", "eCRF data entry"], start: monthsAgo(7), authorizedBy: "raman" },
   { site: "002", person: "lin", tasks: ["study drug administration", "vital signs and sample collection"], start: monthsAgo(7), authorizedBy: "raman" },
 ];
+const seededDelegations: (typeof s.delegation.$inferSelect)[] = [];
 for (const d of delegationSpecs) {
-  await db.insert(s.delegation).values({
-    studySiteId: studySiteId.get(d.site)!,
-    personId: personId.get(d.person)!,
-    delegatedTasks: d.tasks,
-    startDate: d.start,
-    endDate: d.end ?? null,
-    authorizedBy: personId.get(d.authorizedBy)!,
-  });
+  const [row] = await db
+    .insert(s.delegation)
+    .values({
+      studySiteId: studySiteId.get(d.site)!,
+      personId: personId.get(d.person)!,
+      delegatedTasks: d.tasks,
+      startDate: d.start,
+      endDate: d.end ?? null,
+      authorizedBy: personId.get(d.authorizedBy)!,
+    })
+    .returning();
+  seededDelegations.push(row!);
 }
 
 const trainingSpecs: {
@@ -780,6 +787,123 @@ for (const t of trainingSpecs) {
     trainedOn: t.trained,
     expiresAt: t.expires ?? null,
     documentId: t.documentId ?? null,
+  });
+}
+
+// --- Screening log (ADR-0036): pseudonymous numbers, dated dispositions -------
+// Site 001's log reconciles with its latest report (16 screened / 11
+// enrolled); site 002's log deliberately runs ahead of its last report
+// (8/4 logged vs 7/3 reported) so the summary cross-check has a story.
+// Site 003 has no structured log yet — an honest empty state beside its
+// reported numbers.
+const screeningSpecs: {
+  site: string;
+  n: number; // screening number suffix
+  screened: string;
+  enrolled?: string;
+  failed?: string;
+  reason?: string;
+}[] = [];
+{
+  // Site 001: 11 enrolled, 4 screen-failed, 1 still in screening.
+  const failures = [
+    { at: 2, reason: "Inclusion criterion 3 not met" },
+    { at: 5, reason: "Exclusion criterion 7 met" },
+    { at: 9, reason: "Inclusion criterion 4 not met" },
+    { at: 13, reason: "Withdrew consent before eligibility confirmation" },
+  ];
+  for (let i = 1; i <= 16; i++) {
+    const monthsBack = Math.max(0, 8 - Math.floor((i - 1) / 2));
+    const screened = monthsAgo(monthsBack);
+    const failure = failures.find((f) => f.at === i);
+    screeningSpecs.push({
+      site: "001",
+      n: i,
+      screened,
+      ...(failure
+        ? { failed: daysAgo(Math.max(1, monthsBack * 30 - 10)), reason: failure.reason }
+        : i === 16
+          ? {} // most recent candidate: still in screening
+          : { enrolled: daysAgo(Math.max(1, monthsBack * 30 - 14)) }),
+    });
+  }
+  // Site 002: 4 enrolled, 3 screen-failed, 1 in screening.
+  const reasons = [
+    "Inclusion criterion 2 not met",
+    "Exclusion criterion 1 met",
+    "Screen-fail: baseline labs out of range per protocol section 5.2",
+  ];
+  for (let i = 1; i <= 8; i++) {
+    const monthsBack = Math.max(0, 7 - (i - 1));
+    const screened = monthsAgo(monthsBack);
+    screeningSpecs.push({
+      site: "002",
+      n: i,
+      screened,
+      ...(i <= 4
+        ? { enrolled: daysAgo(Math.max(1, monthsBack * 30 - 12)) }
+        : i <= 7
+          ? { failed: daysAgo(Math.max(1, monthsBack * 30 - 9)), reason: reasons[i - 5] }
+          : {}),
+    });
+  }
+}
+const seededScreenings: (typeof s.screeningEntry.$inferSelect)[] = [];
+for (const spec of screeningSpecs) {
+  const [row] = await db
+    .insert(s.screeningEntry)
+    .values({
+      studySiteId: studySiteId.get(spec.site)!,
+      screeningNumber: `S-${String(spec.n).padStart(3, "0")}`,
+      screenedOn: spec.screened,
+      enrolledOn: spec.enrolled ?? null,
+      screenFailedOn: spec.failed ?? null,
+      failureReason: spec.reason ?? null,
+    })
+    .returning();
+  seededScreenings.push(row!);
+}
+
+// --- Entry-level e-signatures (ADR-0036): demo fixtures ------------------------
+// The PI's approval on the coordinator's standing delegation, and the
+// coordinator's own attestation on an enrolled screening entry. seed_fixture
+// states honestly that no real §11.200 ceremony happened.
+{
+  const kimDelegation = seededDelegations[0]!; // site 001, Kim, authorized by Vasquez
+  await db.insert(s.logSignature).values({
+    delegationId: kimDelegation.id,
+    signerPersonId: personId.get("vasquez")!,
+    meaning: "approval",
+    signedSha256: logEntrySha256("delegation", {
+      id: kimDelegation.id,
+      study_site_id: kimDelegation.studySiteId,
+      person_id: kimDelegation.personId,
+      delegated_tasks: kimDelegation.delegatedTasks,
+      start_date: kimDelegation.startDate,
+      end_date: kimDelegation.endDate,
+      authorized_by: kimDelegation.authorizedBy,
+    }),
+    reauthMethod: "seed_fixture",
+    reauthAt: new Date(),
+  });
+  const enrolledEntry = seededScreenings.find(
+    (r) => r.studySiteId === studySiteId.get("001") && r.enrolledOn !== null,
+  )!;
+  await db.insert(s.logSignature).values({
+    screeningEntryId: enrolledEntry.id,
+    signerPersonId: personId.get("kim")!,
+    meaning: "author",
+    signedSha256: logEntrySha256("screening_entry", {
+      id: enrolledEntry.id,
+      study_site_id: enrolledEntry.studySiteId,
+      screening_number: enrolledEntry.screeningNumber,
+      screened_on: enrolledEntry.screenedOn,
+      enrolled_on: enrolledEntry.enrolledOn,
+      screen_failed_on: enrolledEntry.screenFailedOn,
+      failure_reason: enrolledEntry.failureReason,
+    }),
+    reauthMethod: "seed_fixture",
+    reauthAt: new Date(),
   });
 }
 

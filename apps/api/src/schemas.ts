@@ -672,6 +672,23 @@ export const SiteOverviewSchema = z
 
 export const DelegationStatusSchema = z.enum(["active", "ended"]).openapi("DelegationStatus");
 
+// Entry-level e-signature (ADR-0036): signer, meaning, timestamp (§11.50),
+// the hash of the entry's facts at signing (§11.70 pattern), and whether the
+// current facts still match it — derived at read time, never stored.
+export const LogSignatureSchema = z
+  .object({
+    signature_id: z.string().uuid(),
+    signer_person_id: z.string().uuid(),
+    signer_given_name: z.string(),
+    signer_family_name: z.string(),
+    meaning: z.enum(["author", "review", "approval"]),
+    signed_at: z.string(),
+    signed_sha256: z.string(),
+    reauth_method: z.string(),
+    facts_match: z.boolean(),
+  })
+  .openapi("LogSignature");
+
 export const DelegationSchema = z
   .object({
     delegation_id: z.string().uuid(),
@@ -692,6 +709,7 @@ export const DelegationSchema = z
     authorizer_was_pi: z.boolean(),
     credential_open_items: z.number().int(),
     status: DelegationStatusSchema,
+    signatures: z.array(LogSignatureSchema),
   })
   .openapi("Delegation");
 
@@ -716,8 +734,50 @@ export const TrainingRecordSchema = z
     document_id: z.string().uuid().nullable(),
     document_status: z.string().nullable(),
     status: TrainingStatusSchema,
+    signatures: z.array(LogSignatureSchema),
   })
   .openapi("TrainingRecord");
+
+export const ScreeningStatusSchema = z
+  .enum(["in_screening", "enrolled", "screen_failed"])
+  .openapi("ScreeningStatus");
+
+// Screening log entry (ADR-0036): pseudonymous site-assigned number and dated
+// disposition facts only — no clinical data (the ADR-0011 EDC boundary).
+export const ScreeningEntrySchema = z
+  .object({
+    screening_entry_id: z.string().uuid(),
+    study_id: z.string().uuid(),
+    study_site_id: z.string().uuid(),
+    site_number: z.string(),
+    site_name: z.string(),
+    screening_number: z.string(),
+    screened_on: z.string(),
+    enrolled_on: z.string().nullable(),
+    screen_failed_on: z.string().nullable(),
+    failure_reason: z.string().nullable(),
+    status: ScreeningStatusSchema,
+    signatures: z.array(LogSignatureSchema),
+  })
+  .openapi("ScreeningEntry");
+
+// The log's derived counts beside the site's latest as-reported aggregates
+// (ADR-0011) — the oversight cross-check of ADR-0036.
+export const ScreeningSummarySchema = z
+  .object({
+    study_id: z.string().uuid(),
+    study_site_id: z.string().uuid(),
+    site_number: z.string(),
+    site_name: z.string(),
+    log_screened: z.number().int(),
+    log_enrolled: z.number().int(),
+    log_screen_failed: z.number().int(),
+    log_in_screening: z.number().int(),
+    reported_as_of: z.string().nullable(),
+    reported_screened: z.number().int().nullable(),
+    reported_enrolled: z.number().int().nullable(),
+  })
+  .openapi("ScreeningSummary");
 
 export const VisitDetailSchema = z
   .object({

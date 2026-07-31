@@ -19,6 +19,7 @@ import {
   createOrganization,
   createPerson,
   createRequirementRule,
+  createScreeningEntry,
   createSite,
   createStudy,
   delegationLog,
@@ -29,9 +30,14 @@ import {
   endSiteRole,
   expectedDocuments,
   filedVersions,
+  recordScreeningOutcome,
   recordTraining,
   renderDigest,
+  screeningLog,
+  screeningSummary,
+  signLogEntry,
   siteEnrollment,
+  siteLogSignatures,
   siteOverview,
   trainingLog,
   grantAccess,
@@ -77,10 +83,11 @@ import {
   type Grant,
   type IssueStatus,
   type QueueStatus,
+  type ScreeningStatus,
   type TrainingStatus,
   type VisitStage,
 } from "@ctms/core";
-import { getBlob, type Db, type Sql } from "@ctms/db";
+import { getBlob, type Db, type LogEntryKind, type Sql } from "@ctms/db";
 import {
   authMiddleware,
   authMode,
@@ -116,6 +123,9 @@ import {
   QueueEntrySchema,
   QueueStatusSchema,
   RequirementRuleSchema,
+  ScreeningEntrySchema,
+  ScreeningStatusSchema,
+  ScreeningSummarySchema,
   SearchResultSchema,
   SiteCompletenessSchema,
   SiteDirectorySchema,
@@ -221,9 +231,38 @@ export function buildApp(db: Db, sql: Sql) {
     requirePermission(sql, readOrLog, "studySiteId"),
   );
   app.use(
+    "/study-sites/:studySiteId/screening-log",
+    auth,
+    requirePermission(sql, readOrLog, "studySiteId"),
+  );
+  app.use(
     "/delegations/:delegationId",
     auth,
     requirePermission(sql, "log", "delegationId"),
+  );
+  app.use(
+    "/screening-entries/:screeningEntryId",
+    auth,
+    requirePermission(sql, "log", "screeningEntryId"),
+  );
+  // Entry-level e-signatures (ADR-0036): signing attests an entry, it does
+  // not author one — the ceremony takes 'sign' on the entry's site scope,
+  // so the site seat signs its own log and monitors add review attestations,
+  // while the read-only auditor cannot sign.
+  app.use(
+    "/delegations/:delegationId/sign",
+    auth,
+    requirePermission(sql, "sign", "delegationId"),
+  );
+  app.use(
+    "/training-records/:trainingRecordId/sign",
+    auth,
+    requirePermission(sql, "sign", "trainingRecordId"),
+  );
+  app.use(
+    "/screening-entries/:screeningEntryId/sign",
+    auth,
+    requirePermission(sql, "sign", "screeningEntryId"),
   );
   // POST /documents carries its study/site scope in the multipart body; the
   // handler completes the scope check after parsing.
@@ -607,14 +646,20 @@ export function buildApp(db: Db, sql: Sql) {
       },
       responses: { 200: json(z.array(DelegationSchema), "Delegation log") },
     }),
-    async (c) =>
-      c.json(
-        (await delegationLog(sql, {
-          studySiteId: c.req.valid("param").studySiteId,
+    async (c) => {
+      const studySiteId = c.req.valid("param").studySiteId;
+      const [rows, sigs] = await Promise.all([
+        delegationLog(sql, {
+          studySiteId,
           status: c.req.valid("query").status as DelegationStatus | undefined,
-        })) as never,
+        }),
+        siteLogSignatures(sql, "delegation", studySiteId),
+      ]);
+      return c.json(
+        rows.map((r) => ({ ...r, signatures: sigs.get(r.delegation_id as string) ?? [] })) as never,
         200,
-      ),
+      );
+    },
   );
 
   app.openapi(
@@ -707,14 +752,23 @@ export function buildApp(db: Db, sql: Sql) {
       },
       responses: { 200: json(z.array(TrainingRecordSchema), "Training log") },
     }),
-    async (c) =>
-      c.json(
-        (await trainingLog(sql, {
-          studySiteId: c.req.valid("param").studySiteId,
+    async (c) => {
+      const studySiteId = c.req.valid("param").studySiteId;
+      const [rows, sigs] = await Promise.all([
+        trainingLog(sql, {
+          studySiteId,
           status: c.req.valid("query").status as TrainingStatus | undefined,
+        }),
+        siteLogSignatures(sql, "training_record", studySiteId),
+      ]);
+      return c.json(
+        rows.map((r) => ({
+          ...r,
+          signatures: sigs.get(r.training_record_id as string) ?? [],
         })) as never,
         200,
-      ),
+      );
+    },
   );
 
   app.openapi(
@@ -763,6 +817,220 @@ export function buildApp(db: Db, sql: Sql) {
       }
     },
   );
+
+  app.openapi(
+    createRoute({
+      method: "get",
+      path: "/study-sites/{studySiteId}/screening-log",
+      security,
+      summary: "Screening log with derived disposition status",
+      description:
+        "The site's operational record of its own screening (ADR-0036): pseudonymous site-assigned numbers and dated disposition facts, no clinical data — the EDC boundary (ADR-0011) stands. Status is derived, never stored.",
+      request: {
+        params: z.object({ studySiteId: z.string().uuid() }),
+        query: z.object({ status: ScreeningStatusSchema.optional() }),
+      },
+      responses: { 200: json(z.array(ScreeningEntrySchema), "Screening log") },
+    }),
+    async (c) => {
+      const studySiteId = c.req.valid("param").studySiteId;
+      const [rows, sigs] = await Promise.all([
+        screeningLog(sql, {
+          studySiteId,
+          status: c.req.valid("query").status as ScreeningStatus | undefined,
+        }),
+        siteLogSignatures(sql, "screening_entry", studySiteId),
+      ]);
+      return c.json(
+        rows.map((r) => ({
+          ...r,
+          signatures: sigs.get(r.screening_entry_id as string) ?? [],
+        })) as never,
+        200,
+      );
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: "post",
+      path: "/study-sites/{studySiteId}/screening-log",
+      security,
+      summary: "Record a screening",
+      description:
+        "A dated fact: site-assigned pseudonymous screening number and screening date. Requires 'log' (site_staff or admin) — the log is the site's record of itself (ADR-0023).",
+      request: {
+        params: z.object({ studySiteId: z.string().uuid() }),
+        body: {
+          content: {
+            "application/json": {
+              schema: z.object({
+                screening_number: z.string().trim().min(1).max(100),
+                screened_on: z.string().date(),
+              }),
+            },
+          },
+        },
+      },
+      responses: {
+        201: json(z.object({ id: z.string().uuid() }), "Recorded"),
+        400: json(ErrorSchema, "Invalid input (e.g. duplicate screening number)"),
+      },
+    }),
+    async (c) => {
+      const body = c.req.valid("json");
+      try {
+        const created = await createScreeningEntry(db, c.get("actor"), {
+          studySiteId: c.req.valid("param").studySiteId,
+          screeningNumber: body.screening_number,
+          screenedOn: body.screened_on,
+        });
+        return c.json({ id: created.id }, 201);
+      } catch (e) {
+        return c.json({ error: e instanceof Error ? e.message : "record failed" }, 400);
+      }
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: "get",
+      path: "/study-sites/{studySiteId}/screening-summary",
+      security,
+      summary: "Screening log counts beside the latest as-reported aggregates",
+      description:
+        "The oversight cross-check (ADR-0036): the log's derived counts next to the site's latest enrollment report. A site whose log disagrees with its own report flags itself.",
+      request: { params: z.object({ studySiteId: z.string().uuid() }) },
+      responses: {
+        200: json(ScreeningSummarySchema, "Summary"),
+        404: json(ErrorSchema, "Unknown site"),
+      },
+    }),
+    async (c) => {
+      const summary = await screeningSummary(sql, c.req.valid("param").studySiteId);
+      if (!summary) return c.json({ error: "study site not found" }, 404);
+      return c.json(summary as never, 200);
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: "patch",
+      path: "/screening-entries/{screeningEntryId}",
+      security,
+      summary: "Record a screening outcome",
+      description:
+        "The row's single permitted mutation, recorded once: an enrolled_on date, or a screen_failed_on date with a required reason (criterion references, not clinical detail). Entries are never deleted.",
+      request: {
+        params: z.object({ screeningEntryId: z.string().uuid() }),
+        body: {
+          content: {
+            "application/json": {
+              schema: z.object({
+                enrolled_on: z.string().date().optional(),
+                screen_failed_on: z.string().date().optional(),
+                failure_reason: z.string().trim().min(1).max(1000).optional(),
+              }),
+            },
+          },
+        },
+      },
+      responses: {
+        200: json(z.object({ id: z.string().uuid() }), "Recorded"),
+        400: json(ErrorSchema, "Invalid input"),
+        404: json(ErrorSchema, "Not found or outcome already recorded"),
+      },
+    }),
+    async (c) => {
+      const body = c.req.valid("json");
+      try {
+        const updated = await recordScreeningOutcome(db, c.get("actor"), {
+          screeningEntryId: c.req.valid("param").screeningEntryId,
+          enrolledOn: body.enrolled_on,
+          screenFailedOn: body.screen_failed_on,
+          failureReason: body.failure_reason,
+        });
+        return c.json({ id: updated.id }, 200);
+      } catch (e) {
+        const message = e instanceof Error ? e.message : "record failed";
+        return c.json({ error: message }, message.includes("not found") ? 404 : 400);
+      }
+    },
+  );
+
+  // Entry-level e-signatures (ADR-0036): the same §11.200 ceremony as document
+  // signing, applied to one log entry. The signature binds to the entry's
+  // canonical facts by hash; a later permitted mutation (an end date, an
+  // outcome) surfaces as facts_match = false on the log read, never a block.
+  const signEntryRoutes = [
+    { path: "/delegations/{delegationId}/sign", param: "delegationId", kind: "delegation" },
+    {
+      path: "/training-records/{trainingRecordId}/sign",
+      param: "trainingRecordId",
+      kind: "training_record",
+    },
+    {
+      path: "/screening-entries/{screeningEntryId}/sign",
+      param: "screeningEntryId",
+      kind: "screening_entry",
+    },
+  ] as const;
+  for (const { path, param, kind } of signEntryRoutes) {
+    app.openapi(
+      createRoute({
+        method: "post",
+        path,
+        security,
+        summary: `Apply a Part 11 e-signature to a ${kind.replace("_", " ")} entry`,
+        description:
+          "Records signer, meaning, timestamp, and the SHA-256 of the entry's canonical facts at signing. §11.200: the request must carry proof of re-authentication (reauth_token) — in OIDC mode a freshly issued token for the same subject, in dev mode the bearer token restated.",
+        request: {
+          params: z.object({ [param]: z.string().uuid() }),
+          body: {
+            content: {
+              "application/json": {
+                schema: z.object({
+                  meaning: z.enum(["author", "review", "approval"]),
+                  reauth_token: z.string().min(1),
+                }),
+              },
+            },
+          },
+        },
+        responses: {
+          201: json(
+            z.object({ signature_id: z.string().uuid(), signed_sha256: z.string() }),
+            "Signed",
+          ),
+          400: json(ErrorSchema, "Invalid input"),
+          403: json(ErrorSchema, "Re-authentication failed"),
+          404: json(ErrorSchema, "Entry not found"),
+        },
+      }),
+      async (c) => {
+        const actor = c.get("actor");
+        if (!actor.personId) {
+          return c.json({ error: "signing requires a person-linked token" }, 400);
+        }
+        const body = c.req.valid("json") as { meaning: "author" | "review" | "approval"; reauth_token: string };
+        const reauth = await verifyReauth(c, body.reauth_token);
+        if (!reauth.ok) return c.json({ error: reauth.error }, 403);
+        try {
+          const sig = await signLogEntry(db, actor, {
+            kind: kind as LogEntryKind,
+            entryId: c.req.param(param)!,
+            signerPersonId: actor.personId,
+            meaning: body.meaning,
+            reauthMethod: reauth.method,
+            reauthAt: reauth.at,
+          });
+          return c.json({ signature_id: sig.id, signed_sha256: sig.signedSha256 }, 201);
+        } catch (e) {
+          return c.json({ error: e instanceof Error ? e.message : "sign failed" }, 404);
+        }
+      },
+    );
+  }
 
   app.openapi(
     createRoute({

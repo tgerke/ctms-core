@@ -473,6 +473,25 @@ receiving machine, where ADR-0028 put signature verification. eTMF-EMS
 serialization stays CLI-only, since it requires an exchange agreement nobody
 should claim from a dashboard button.
 
+## ADR-0036: Screening log as facts; e-signatures land on log entries
+
+The site seat's remaining named gaps close on the two patterns the system
+already trusts. The screening log is dated fact rows carrying a
+pseudonymous site-assigned number and at most one outcome ever — no names,
+no clinical data, an explicit line drawn so the EDC boundary survives the
+feature — and `v_screening_summary` puts the log's derived counts beside
+the site's own latest as-reported enrollment numbers, so a log that
+disagrees with its report flags itself. Entry-level e-signatures are a
+parallel append-only `log_signature` table: the same §11.200
+re-authentication ceremony as document signing, but the hash binds to a
+canonical serialization of the entry's facts, and every log read re-derives
+whether the current facts still match each signature. Ending a signed
+delegation or recording an outcome on a signed screening entry stays legal;
+the record then honestly shows the signature covers the earlier facts, and
+a fresh attestation can be added. The signed paper DoA log remains the
+authoritative Part 11 record — the structured layer grows toward replacing
+it without claiming it has.
+
 ---
 
 Three of these (ADR-0004, ADR-0006, and ADR-0010) are the same idea applied
