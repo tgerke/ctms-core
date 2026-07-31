@@ -490,6 +490,39 @@ export const MilestoneSchema = z
   })
   .openapi("Milestone");
 
+// --- Study startup (ADR-0034) --------------------------------------------------
+
+const StartupSiteSchema = z.object({
+  study_site_id: z.string().uuid(),
+  site_number: z.string(),
+  site_name: z.string(),
+});
+
+// Derived readiness rollup (v_study_startup): every count computed from
+// existing facts, nothing stored. The startup checklist renders from this.
+export const StudyStartupSchema = z
+  .object({
+    study_id: z.string().uuid(),
+    status: z.enum(["planning", "active", "closed"]),
+    site_count: z.number().int(),
+    pending_site_count: z.number().int(),
+    active_site_count: z.number().int(),
+    sites_without_pi_count: z.number().int(),
+    rule_count: z.number().int(),
+    study_rule_count: z.number().int(),
+    site_rule_count: z.number().int(),
+    person_rule_count: z.number().int(),
+    unsynced_expected_count: z.number().int(),
+    expected_total: z.number().int(),
+    missing_count: z.number().int(),
+    milestone_count: z.number().int(),
+    overdue_milestone_count: z.number().int(),
+    granted_people_count: z.number().int(),
+    pending_sites: z.array(StartupSiteSchema),
+    sites_without_pi: z.array(StartupSiteSchema),
+  })
+  .openapi("StudyStartup");
+
 // --- Site seat (ADR-0023) ------------------------------------------------------
 
 export const MeSchema = z

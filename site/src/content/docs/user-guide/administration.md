@@ -13,6 +13,11 @@ You need the administrator role for everything on this page. The actions
 render for everyone; without the role, the app will tell you that you don't
 have permission when you try.
 
+Creating the study itself happens on the Portfolio page, not here; see
+[Starting a study](/ctms-core/user-guide/study-startup/). The *Study
+settings* card at the top of this page edits its title and phase and moves
+its status forward.
+
 ## Onboarding a site
 
 A new site arrives in three steps, top card first:

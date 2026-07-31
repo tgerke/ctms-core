@@ -286,6 +286,35 @@ adm(paste0("expected-documents/", expected_id, "/waive"),
     list(reason = "Central IRB of record; local approval letter not applicable."))
 ```
 
+The study itself is created the same way (ADR-0034) — this one takes an
+*unscoped* admin grant, since a new study is a new top-level scope. Name a
+template study and its requirement rules are cloned verbatim in the same
+transaction, with expected documents synced before the response returns:
+
+```r
+new_study <- adm("studies", list(
+  protocol_number = "CORC-2301",
+  title = "A Phase 2 Study of Combination Therapy in Biochemically Recurrent Prostate Cancer",
+  phase = "II",
+  sponsor_org_id = org$id,
+  template_study_id = study
+))
+
+# Startup readiness, derived — the dashboard's checklist reads this payload
+request("http://localhost:8787") |>
+  req_url_path_append("studies", new_study$id, "startup") |>
+  req_auth_bearer_token("dev-admin-token") |>
+  req_perform() |> resp_body_json()
+
+# When the checklist is worked through, move the study forward (status only
+# ever advances: planning → active → closed)
+request("http://localhost:8787") |>
+  req_url_path_append("studies", new_study$id) |>
+  req_auth_bearer_token("dev-admin-token") |>
+  req_body_json(list(status = "active")) |>
+  req_method("PATCH") |> req_perform()
+```
+
 ## Auditability is an endpoint
 
 ```r

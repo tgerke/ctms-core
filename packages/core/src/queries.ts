@@ -635,6 +635,65 @@ export async function studyMilestones(sql: Sql, studyId: string) {
     ORDER BY m.planned_date, m.site_number NULLS FIRST`;
 }
 
+// --- Study startup (ADR-0034) -----------------------------------------------
+
+export interface StartupSite {
+  study_site_id: string;
+  site_number: string;
+  site_name: string;
+}
+
+/**
+ * One row of v_study_startup plus the two detail lists the checklist links
+ * to. Derived end to end: nothing here is stored checklist state.
+ */
+export interface StudyStartup {
+  study_id: string;
+  status: "planning" | "active" | "closed";
+  site_count: number;
+  pending_site_count: number;
+  active_site_count: number;
+  sites_without_pi_count: number;
+  rule_count: number;
+  study_rule_count: number;
+  site_rule_count: number;
+  person_rule_count: number;
+  unsynced_expected_count: number;
+  expected_total: number;
+  missing_count: number;
+  milestone_count: number;
+  overdue_milestone_count: number;
+  granted_people_count: number;
+  pending_sites: StartupSite[];
+  sites_without_pi: StartupSite[];
+}
+
+export async function studyStartup(sql: Sql, studyId: string): Promise<StudyStartup | null> {
+  const [row] = await sql`
+    SELECT * FROM v_study_startup WHERE study_id = ${studyId}`;
+  if (!row) return null;
+  const pendingSites = await sql<StartupSite[]>`
+    SELECT ss.id AS study_site_id, ss.site_number, si.name AS site_name
+    FROM study_site ss JOIN site si ON si.id = ss.site_id
+    WHERE ss.study_id = ${studyId} AND ss.status = 'pending'
+    ORDER BY ss.site_number`;
+  const sitesWithoutPi = await sql<StartupSite[]>`
+    SELECT ss.id AS study_site_id, ss.site_number, si.name AS site_name
+    FROM study_site ss JOIN site si ON si.id = ss.site_id
+    WHERE ss.study_id = ${studyId} AND ss.status IN ('pending', 'active')
+      AND NOT EXISTS (
+        SELECT 1 FROM study_site_role ssr
+        WHERE ssr.study_site_id = ss.id
+          AND ssr.role = 'principal_investigator'
+          AND (ssr.end_date IS NULL OR ssr.end_date >= CURRENT_DATE))
+    ORDER BY ss.site_number`;
+  return {
+    ...(row as unknown as Omit<StudyStartup, "pending_sites" | "sites_without_pi">),
+    pending_sites: [...pendingSites],
+    sites_without_pi: [...sitesWithoutPi],
+  };
+}
+
 export async function syncExpectedDocuments(sql: Sql, studyId: string) {
   const [{ synced }] = await sql<[{ synced: number }]>`
     SELECT ctms_sync_expected_documents(${studyId}) AS synced`;

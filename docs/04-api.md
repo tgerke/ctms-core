@@ -303,6 +303,53 @@ document always beats the waiver, and
 `POST /expected-documents/{id}/revoke-waiver` (reason required) lifts it as a
 recorded fact; the waiver history is never deleted (ADR-0016).
 
+## Starting a study (ADR-0034)
+
+The study itself is created the same way, with one stricter rule: creation
+requires an *unscoped* admin grant, because a new study is a new top-level
+scope — the same authority that mints unscoped access. The creator's grant
+already covers the new study, so no bootstrap grant is written. Optionally
+name a template study to clone its requirement rules — user-authored
+configuration, copied verbatim in the same transaction, with expected
+documents synced before the response returns:
+
+```r
+new_study <- adm("studies", list(
+  protocol_number = "CORC-2301",
+  title = "A Phase 2 Study of Combination Therapy in Biochemically Recurrent Prostate Cancer",
+  phase = "II",
+  sponsor_org_id = org$id,
+  template_study_id = study        # clone this study's requirement rules
+))
+new_study$cloned_rules             # rules the template contributed
+new_study$expected_created         # study-scope placeholders already materialized
+
+# The startup checklist: derived readiness counts, nothing stored.
+request("http://localhost:8787") |>
+  req_url_path_append("studies", new_study$id, "startup") |>
+  req_auth_bearer_token("dev-admin-token") |>
+  req_perform() |> resp_body_json()
+```
+
+The startup payload (also `v_study_startup` in SQL) reports sites by
+status, sites lacking an active PI, rules by scope, placeholders not yet
+synced, missing documents, milestones, and who holds study-scoped access.
+Each count moves when the underlying fact changes; the dashboard renders it
+as a checklist for `planning` studies, with no checkbox state to drift.
+
+`PATCH /studies/{id}` edits title and phase and moves status forward only
+(`planning → active → closed`); the protocol number and sponsor are the
+record's identity and are immutable — a different protocol is a different
+study. Marking the study active is the checklist's last step:
+
+```r
+request("http://localhost:8787") |>
+  req_url_path_append("studies", new_study$id) |>
+  req_auth_bearer_token("dev-admin-token") |>
+  req_body_json(list(status = "active")) |>
+  req_method("PATCH") |> req_perform()
+```
+
 ## The site seat (ADR-0023)
 
 A person whose grant is `site_staff` scoped to one study-site works entirely

@@ -6,11 +6,12 @@ import {
   person,
   requirementRule,
   site,
+  study,
   studySite,
   studySiteRole,
   type Db,
 } from "@ctms/db";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { withActor, type Actor } from "./actor.js";
 import type { AccessRole } from "./authz.js";
 
@@ -27,6 +28,145 @@ export type StaffRole =
   | "research_nurse";
 export type StudySiteStatus = "pending" | "active" | "closed";
 export type RuleScopeLevel = "study" | "study_site" | "person_role";
+export type StudyStatus = "planning" | "active" | "closed";
+
+/** Lets the API map study-write failures to a status without string-matching. */
+export class StudyAdminError extends Error {
+  constructor(
+    message: string,
+    public readonly kind: "invalid" | "conflict" | "not_found",
+  ) {
+    super(message);
+    this.name = "StudyAdminError";
+  }
+}
+
+// Forward-only: a study never returns to a phase it left. planning → closed
+// covers a study abandoned before activation.
+const STUDY_TRANSITIONS: Record<StudyStatus, readonly StudyStatus[]> = {
+  planning: ["active", "closed"],
+  active: ["closed"],
+  closed: [],
+};
+
+export async function createStudy(
+  db: Db,
+  actor: Actor,
+  input: {
+    protocolNumber: string;
+    title: string;
+    phase?: string | null;
+    sponsorOrgId: string;
+    /**
+     * Copy this study's requirement rules verbatim (ADR-0034). The template
+     * is user-authored configuration against the loaded TMF taxonomy — rules
+     * are never generated (ADR-0005). Cloned in the same transaction, then
+     * synced, so the new study's placeholders exist before anyone looks.
+     */
+    templateStudyId?: string | null;
+  },
+) {
+  return withActor(db, actor, async (tx) => {
+    const [sponsor] = await tx
+      .select({ id: organization.id })
+      .from(organization)
+      .where(eq(organization.id, input.sponsorOrgId));
+    if (!sponsor) throw new StudyAdminError("sponsor organization not found", "invalid");
+    if (input.templateStudyId) {
+      const [template] = await tx
+        .select({ id: study.id })
+        .from(study)
+        .where(eq(study.id, input.templateStudyId));
+      if (!template) throw new StudyAdminError("template study not found", "invalid");
+    }
+    const [existing] = await tx
+      .select({ id: study.id })
+      .from(study)
+      .where(eq(study.protocolNumber, input.protocolNumber));
+    if (existing) {
+      throw new StudyAdminError(
+        `a study with protocol number ${input.protocolNumber} already exists`,
+        "conflict",
+      );
+    }
+
+    const rows = await tx
+      .insert(study)
+      .values({
+        protocolNumber: input.protocolNumber,
+        title: input.title,
+        phase: input.phase ?? null,
+        sponsorOrgId: input.sponsorOrgId,
+      })
+      .returning();
+    const created = rows[0]!;
+
+    let clonedRules = 0;
+    if (input.templateStudyId) {
+      // One insert-select; the requirement_rule audit trigger records every
+      // cloned row under this transaction's actor.
+      const cloned = (await tx.execute(sql`
+        INSERT INTO requirement_rule
+          (study_id, tmf_artifact_id, scope_level, name, description,
+           applies_to_roles, validity_months, requires_signature)
+        SELECT ${created.id}, rr.tmf_artifact_id, rr.scope_level, rr.name,
+               rr.description, rr.applies_to_roles, rr.validity_months,
+               rr.requires_signature
+        FROM requirement_rule rr
+        WHERE rr.study_id = ${input.templateStudyId}
+        RETURNING id`)) as unknown as { id: string }[];
+      clonedRules = cloned.length;
+    }
+
+    // Inside the transaction (not the pool) so the materialized placeholders'
+    // audit rows keep this actor's attribution.
+    const [{ synced }] = (await tx.execute(sql`
+      SELECT ctms_sync_expected_documents(${created.id}) AS synced`)) as unknown as [
+      { synced: number },
+    ];
+
+    return { ...created, clonedRules, expectedCreated: Number(synced) };
+  });
+}
+
+// protocol_number and sponsor are the record's identity and stay immutable —
+// a different protocol is a different study (the updateRequirementRule stance).
+export async function updateStudy(
+  db: Db,
+  actor: Actor,
+  input: {
+    studyId: string;
+    title?: string;
+    phase?: string | null;
+    status?: StudyStatus;
+  },
+) {
+  return withActor(db, actor, async (tx) => {
+    const [current] = await tx
+      .select({ status: study.status })
+      .from(study)
+      .where(eq(study.id, input.studyId));
+    if (!current) throw new StudyAdminError("study not found", "not_found");
+    if (input.status !== undefined && input.status !== current.status) {
+      if (!STUDY_TRANSITIONS[current.status].includes(input.status)) {
+        throw new StudyAdminError(
+          `a ${current.status} study cannot move to ${input.status}`,
+          "invalid",
+        );
+      }
+    }
+    const rows = await tx
+      .update(study)
+      .set({
+        ...(input.title !== undefined ? { title: input.title } : {}),
+        ...(input.phase !== undefined ? { phase: input.phase } : {}),
+        ...(input.status !== undefined ? { status: input.status } : {}),
+      })
+      .where(eq(study.id, input.studyId))
+      .returning();
+    return rows[0]!;
+  });
+}
 
 export async function createOrganization(
   db: Db,

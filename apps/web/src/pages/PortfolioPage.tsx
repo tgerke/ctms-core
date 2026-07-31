@@ -1,10 +1,25 @@
-import { ArrowRight } from "lucide-react";
-import { Link } from "react-router-dom";
-import { usePortfolio, type PortfolioEntry } from "../api";
-import { PageState } from "../ops";
+import { ArrowRight, FolderPlus } from "lucide-react";
+import { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import {
+  canCreateStudy,
+  useCreateStudy,
+  useMe,
+  useOrganizations,
+  usePortfolio,
+  useStudies,
+  type PortfolioEntry,
+} from "../api";
+import { ErrorNote, PageState } from "../ops";
 
 // Portfolio rollup (ADR-0021): every study's oversight numbers on one page,
 // computed by GET /portfolio from the same views the per-study pages read.
+// Study creation (ADR-0034) lives here too: the portfolio is where a new
+// protocol enters the picture.
+
+const inputCls = "rounded-md border border-hairline bg-surface px-2 py-1 text-xs";
+const buttonCls =
+  "inline-flex items-center gap-1.5 rounded-md border border-hairline px-2 py-1 text-xs text-ink2 hover:bg-page disabled:opacity-50";
 
 function Stat({
   label,
@@ -34,6 +49,7 @@ export default function PortfolioPage({
   onSelectStudy: (studyId: string) => void;
 }) {
   const portfolioQuery = usePortfolio();
+  const { data: me } = useMe();
   if (!portfolioQuery.data) return <PageState query={portfolioQuery} label="portfolio" />;
 
   return (
@@ -48,7 +64,137 @@ export default function PortfolioPage({
       {portfolioQuery.data.map((s) => (
         <StudyCard key={s.id} s={s} onSelect={() => onSelectStudy(s.id)} />
       ))}
+      {canCreateStudy(me) && <NewStudyCard onSelectStudy={onSelectStudy} />}
     </div>
+  );
+}
+
+// Creating a study takes an unscoped admin grant (ADR-0034); the API is the
+// authority — this card is hidden for every other seat.
+function NewStudyCard({ onSelectStudy }: { onSelectStudy: (studyId: string) => void }) {
+  const navigate = useNavigate();
+  const create = useCreateStudy();
+  const { data: orgs } = useOrganizations();
+  const { data: studies } = useStudies();
+  const [protocolNumber, setProtocolNumber] = useState("");
+  const [title, setTitle] = useState("");
+  const [phase, setPhase] = useState("");
+  const [sponsorOrgId, setSponsorOrgId] = useState("");
+  const [templateStudyId, setTemplateStudyId] = useState("");
+  const [err, setErr] = useState<unknown>(null);
+
+  const sponsors = orgs?.filter((o) => o.kind !== "site_org") ?? [];
+
+  return (
+    <section className="card">
+      <h2 className="border-b border-hairline px-4 py-3 font-medium">New study</h2>
+      <form
+        className="space-y-3 px-4 py-3"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (!protocolNumber || !title || !sponsorOrgId) return;
+          setErr(null);
+          create.mutate(
+            {
+              protocolNumber,
+              title,
+              phase: phase || undefined,
+              sponsorOrgId,
+              templateStudyId: templateStudyId || undefined,
+            },
+            {
+              onError: (e) => setErr(e),
+              onSuccess: ({ id }) => {
+                // Land on the new study's dashboard, where the startup
+                // checklist takes over.
+                onSelectStudy(id);
+                navigate("/");
+              },
+            },
+          );
+        }}
+      >
+        <div className="flex flex-wrap items-end gap-3">
+          <label className="flex flex-col gap-1 text-xs text-ink2">
+            Protocol number
+            <input
+              value={protocolNumber}
+              onChange={(e) => setProtocolNumber(e.target.value)}
+              placeholder="e.g. CORC-2301"
+              className={`${inputCls} w-36`}
+              required
+            />
+          </label>
+          <label className="flex flex-1 flex-col gap-1 text-xs text-ink2">
+            Title
+            <input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Full protocol title"
+              className={`${inputCls} min-w-64 w-full`}
+              required
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-xs text-ink2">
+            Phase
+            <input
+              value={phase}
+              onChange={(e) => setPhase(e.target.value)}
+              placeholder="e.g. II"
+              className={`${inputCls} w-20`}
+            />
+          </label>
+        </div>
+        <div className="flex flex-wrap items-end gap-3">
+          <label className="flex flex-col gap-1 text-xs text-ink2">
+            Sponsor
+            <select
+              value={sponsorOrgId}
+              onChange={(e) => setSponsorOrgId(e.target.value)}
+              className={inputCls}
+              required
+            >
+              <option value="">Choose an organization…</option>
+              {sponsors.map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="flex flex-col gap-1 text-xs text-ink2">
+            Copy requirement rules from
+            <select
+              value={templateStudyId}
+              onChange={(e) => setTemplateStudyId(e.target.value)}
+              className={inputCls}
+              title="Clones the study's requirement rules verbatim — what it expects on file, not its documents"
+            >
+              <option value="">Start empty</option>
+              {studies?.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.protocol_number}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button
+            type="submit"
+            disabled={create.isPending || !protocolNumber || !title || !sponsorOrgId}
+            className={buttonCls}
+          >
+            <FolderPlus size={12} aria-hidden />
+            {create.isPending ? "Creating…" : "Create study"}
+          </button>
+        </div>
+        <p className="text-xs text-muted">
+          The study starts in planning. A startup checklist on its dashboard
+          walks through sites, staff, requirements, and milestones before you
+          mark it active.
+        </p>
+        <ErrorNote error={err} />
+      </form>
+    </section>
   );
 }
 

@@ -99,6 +99,13 @@
       "when": 1784170800000,
       "tag": "0013_ems_serialization",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1784257200000,
+      "tag": "0014_study_startup",
+      "breakpoints": true
     }
   ]
 }

@@ -34,6 +34,7 @@ export default defineConfig({
             "user-guide/monitoring-visits",
             "user-guide/issues",
             "user-guide/enrollment-milestones",
+            "user-guide/study-startup",
             "user-guide/administration",
             "user-guide/site-logs",
             "user-guide/inspection",

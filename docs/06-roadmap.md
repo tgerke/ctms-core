@@ -55,9 +55,21 @@ feature comparison is meaningless without them.
   surface (ADR-0016): organizations, sites, study-site activation, people,
   role assignments, access grants, and requirement rules are all creatable
   through the API and the admin page, with endings as dated facts and every
-  step in the audit trail. What remains is the startup *workflow* incumbents
-  layer on top (Medidata's site-specific startup milestones and task
-  checklists). The write surface exists; the guided process does not.
+  step in the audit trail. The startup-workflow remainder closed as
+  ADR-0034.
+- **Study creation and guided startup**: shipped as an API write plus a
+  derived checklist (ADR-0034): `POST /studies` creates a protocol in
+  `planning` (requires an *unscoped* admin grant — a new study is a new
+  top-level scope), optionally cloning another study's requirement rules
+  verbatim in the same transaction, with expected documents synced before
+  the response returns. The dashboard renders `v_study_startup` as a
+  startup checklist for planning studies: sites, PI coverage, rules, sync,
+  filing, milestones (names reusable from another study, dates always
+  entered fresh), and access — every item derived from facts, nothing
+  stored to tick, and `PATCH /studies/{id}` moves status forward to
+  `active` as the last step. What remains of the incumbents' startup story
+  is per-site startup task templates with date projections (Medidata's
+  site-specific checklists), not the guided process.
 - **Expected-document waivers**: shipped as waiver fact rows (ADR-0016): an
   admin records why an expected document is not applicable; the row shows
   `waived` instead of `missing`, leaves the completeness denominator, and a
@@ -202,10 +214,10 @@ new system.
 
 ## If we built next
 
-Nothing is queued: OCR for scanned documents, the last candidate pulled
-from the "what remains" notes, shipped 2026-07-12 (ADR-0031). Remaining
+Nothing is queued: study creation and guided startup, the loudest
+commercial-CTMS gap left, shipped 2026-07-31 (ADR-0034). Remaining
 candidates live in the notes above: site-side depth, cross-study
-analytics, relevance ranking.
+analytics, relevance ranking, per-site startup task templates.
 
 ## Sources
 

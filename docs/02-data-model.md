@@ -69,6 +69,11 @@ facts (`end_date`, `revoked_at`), never deletes.
 
 - **organization**: sponsor, CRO, or site institution (`kind`).
 - **study**: protocol number, title, phase, status; FK to sponsoring organization.
+  Creatable through the API since ADR-0034 (an *unscoped* admin grant — a new
+  study is a new top-level scope), optionally cloning another study's
+  requirement rules in the same transaction. Title and phase are editable;
+  status moves forward only (`planning → active → closed`); protocol number
+  and sponsor are the record's identity and never change.
 - **protocol_version**: labeled versions with effective dates; requirement rules can
   demand re-collection per version (e.g. amended protocol signature pages).
 - **site**: a physical/institutional site, FK to organization.
@@ -202,7 +207,12 @@ per site vs target), **v_milestone_status** (`achieved | overdue | upcoming`),
 **v_delegation_log** (`active | ended`, plus two derived cross-checks: whether
 the authorizer held an active PI role at that site on the start date, and the
 delegate's count of open credential items from `v_expected_document_status`),
-**v_training_log** (`current | expiring_soon (≤60d) | expired`).
+**v_training_log** (`current | expiring_soon (≤60d) | expired`),
+**v_study_startup** (ADR-0034: one row per study of startup-readiness counts —
+sites by status, sites lacking an active PI, rules by scope, placeholders the
+sync function would insert but hasn't, expected/missing totals, milestones,
+people with study-scoped access. The startup checklist renders from this view;
+an item completes when the underlying fact changes, never by a checkbox).
 
 ### Views are public API
 
