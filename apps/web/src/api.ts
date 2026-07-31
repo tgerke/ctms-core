@@ -679,6 +679,87 @@ export function useVersionContent(versionId: string | undefined) {
 export const useStudies = () =>
   useQuery({ queryKey: ["studies"], queryFn: () => api<Study[]>("/studies") });
 
+// --- Oversight digest, live (ADR-0017) ---------------------------------------
+
+export interface DigestDocumentRow {
+  artifact_code: string;
+  artifact_name: string;
+  rule_name: string;
+  site_number: string | null;
+  person_given_name: string | null;
+  person_family_name: string | null;
+  effective_expiry: string | null;
+  status: string;
+}
+
+export interface Digest {
+  study: { id: string; protocol_number: string; title: string };
+  generated_on: string;
+  attention_count: number;
+  chain: { events: number; valid: boolean };
+  counts: {
+    total: number;
+    missing: number;
+    pending_review: number;
+    returned: number;
+    waived: number;
+  };
+  expired: DigestDocumentRow[];
+  expiring_soon: DigestDocumentRow[];
+  overdue_visits: { site_number: string; visit_type: string; scheduled_date: string }[];
+  overdue_action_items: { site_number: string; description: string; due_date: string }[];
+  overdue_issues: {
+    site_number: string | null;
+    severity: string;
+    title: string;
+    due_date: string;
+  }[];
+  overdue_milestones: {
+    name: string;
+    site_number: string | null;
+    planned_date: string;
+  }[];
+  overdue_reviews: {
+    title: string;
+    site_number: string | null;
+    assignee_given_name: string;
+    assignee_family_name: string;
+    due_date: string;
+  }[];
+  email: { subject: string; text: string };
+  recipients: { email: string; given_name: string; family_name: string }[];
+}
+
+export const useDigest = (studyId: string | undefined) =>
+  useQuery({
+    queryKey: ["digest", studyId],
+    queryFn: () => api<Digest>(`/studies/${studyId}/digest`),
+    enabled: !!studyId,
+  });
+
+// --- TMF export package data (ADR-0020/0035) ---------------------------------
+
+export interface TmfExport {
+  study: Record<string, unknown> & { protocol_number: string };
+  documents: (Record<string, unknown> & {
+    versions: { id: string; sha256: string }[];
+  })[];
+  expected: Record<string, unknown>[];
+  audit_events: Record<string, unknown>[];
+  chain: { events: number; valid: boolean; head_hash: string | null };
+  blobs: { sha256: string; size_bytes: number; mime_type: string }[];
+  tmf_rm_version: string | null;
+}
+
+export const fetchTmfExport = (studyId: string) =>
+  api<TmfExport>(`/studies/${studyId}/export`);
+
+/** A version's raw bytes, for the client-side package writer (ADR-0035). */
+export async function fetchVersionBytes(versionId: string): Promise<Uint8Array> {
+  const { blob } = await fetchVersionContent(versionId);
+  return new Uint8Array(await blob.arrayBuffer());
+}
+
 // --- Study startup hooks (ADR-0034) --------------------------------------------
 
 export const useStudyStartup = (studyId: string | undefined) =>

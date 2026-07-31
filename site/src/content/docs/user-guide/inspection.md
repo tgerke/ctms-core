@@ -55,7 +55,12 @@ badge in the header on every page.
 ## Taking the record with you
 
 A live seat answers questions during the inspection; the transfer package
-answers them afterwards. `pnpm export-tmf` writes every version's bytes, the
-full metadata with signature hashes, and the entire audit chain, verifiable
-with stock tooling (`shasum -c`) and optionally as a CDISC eTMF-EMS exchange
-package; see [operations](/ctms-core/operations/) for both.
+answers them afterwards. The "TMF export" card at the bottom of the study
+page downloads it as a zip: every version's bytes, re-hashed in the browser
+before packaging, the full metadata with signature hashes, and the entire
+audit chain, verifiable with stock tooling (`shasum -c`). The CLI
+(`pnpm export-tmf`) writes the identical package and adds the optional
+CDISC eTMF-EMS exchange output; see
+[operations](/ctms-core/operations/) for both.
+
+![The TMF export card: the package assembled and hash-verified in the browser.](../../../assets/screenshots/tmf-export.png)

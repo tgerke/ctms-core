@@ -455,6 +455,24 @@ be invented data. Status moves forward only, and the facts inform rather
 than gate: activation with open items takes a confirmation, not a
 permission.
 
+## ADR-0035: The digest and TMF export get a UI; the package zips in the browser
+
+The two flagship oversight outputs stop being terminal-only.
+`GET /studies/{id}/digest` serves the digest email's exact derived data live
+— attention items, standing counts, chain verification, the rendered email,
+and its recipient list — and the study dashboard renders it as an oversight
+card; no notification state exists on either path, so the card and the email
+cannot disagree. `GET /studies/{id}/export` serves the transfer package's
+data, and the browser assembles the package itself: every blob is fetched
+through the authenticated content endpoint, re-hashed locally, refused on
+mismatch, and written into the exact CLI layout as a zip that
+`shasum -a 256 -c manifest.sha256` verifies identically. Server-side zip
+streaming was rejected: client-side assembly reuses the byte path the app
+already trusts (ADR-0030's pattern) and puts hash verification on the
+receiving machine, where ADR-0028 put signature verification. eTMF-EMS
+serialization stays CLI-only, since it requires an exchange agreement nobody
+should claim from a dashboard button.
+
 ---
 
 Three of these (ADR-0004, ADR-0006, and ADR-0010) are the same idea applied

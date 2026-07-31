@@ -99,6 +99,16 @@ information. One GET is a TMF binder. The seat that pairs with it is an
 unscoped `read_only` grant (`dev-auditor-token` in the demo): every read on
 this page works, every mutation answers 403.
 
+The oversight outputs are plain reads too (ADR-0035).
+`GET /studies/{id}/digest` is the digest email's data computed at request
+time — attention items, standing counts, chain verification, the rendered
+email, and the derived recipient list. `GET /studies/{id}/export` is the
+transfer package's data half (ADR-0020): documents with versions,
+signatures, and returns, the expected snapshot, the full audit trail, and
+the unique content hashes; the web client assembles the verifiable zip from
+it, blob by re-hashed blob, and the CLI writes the same layout from the
+same collector.
+
 ## Writing
 
 ```r

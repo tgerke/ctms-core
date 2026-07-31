@@ -5,10 +5,13 @@ import {
   addStudySite,
   assignReview,
   assignSiteRole,
+  attentionCount,
   auditEvents,
   bulkApproveVersions,
   bulkReturnVersions,
   BulkReviewError,
+  collectDigest,
+  collectTmfExport,
   createActionItem,
   createIssue,
   createMilestone,
@@ -19,6 +22,7 @@ import {
   createSite,
   createStudy,
   delegationLog,
+  digestRecipients,
   documentAuditTrail,
   documentDetail,
   endDelegation,
@@ -26,6 +30,7 @@ import {
   expectedDocuments,
   filedVersions,
   recordTraining,
+  renderDigest,
   siteEnrollment,
   siteOverview,
   trainingLog,
@@ -91,6 +96,7 @@ import {
   BinderZoneSchema,
   DelegationSchema,
   DelegationStatusSchema,
+  DigestSchema,
   DocumentDetailSchema,
   ErrorSchema,
   ExpectedDocumentSchema,
@@ -120,6 +126,7 @@ import {
   StudySchema,
   StudyStartupSchema,
   TmfArtifactSchema,
+  TmfExportSchema,
   TrainingRecordSchema,
   TrainingStatusSchema,
   VisitDetailSchema,
@@ -1254,6 +1261,94 @@ export function buildApp(db: Db, sql: Sql) {
         )) as never,
         200,
       ),
+  );
+
+  // --- Oversight digest & TMF export, in the UI (ADR-0017/0020/0035) --------
+
+  app.openapi(
+    createRoute({
+      method: "get",
+      path: "/studies/{studyId}/digest",
+      security,
+      summary: "The oversight digest, computed live",
+      description:
+        "The same summary the scheduled digest email carries (ADR-0017), computed from the derived views at request time: expired and expiring documents, overdue visits, action items, issues, reviews and milestones, standing counts, audit-chain verification — plus the exact email rendering and its derived recipient list. There is no notification state: this is the email's data, on demand.",
+      request: { params: z.object({ studyId: z.string().uuid() }) },
+      responses: {
+        200: json(DigestSchema, "Digest"),
+        404: json(ErrorSchema, "Study not found"),
+      },
+    }),
+    async (c) => {
+      const studyId = c.req.valid("param").studyId;
+      let data;
+      try {
+        data = await collectDigest(sql, studyId);
+      } catch (e) {
+        if (e instanceof Error && e.message.endsWith("not found")) {
+          return c.json({ error: "study not found" }, 404);
+        }
+        throw e;
+      }
+      const recipients = await digestRecipients(sql, studyId);
+      return c.json(
+        {
+          study: data.study,
+          generated_on: data.generatedOn,
+          attention_count: attentionCount(data),
+          chain: data.chain,
+          counts: data.counts,
+          expired: data.expired,
+          expiring_soon: data.expiringSoon,
+          overdue_visits: data.overdueVisits,
+          overdue_action_items: data.overdueActionItems,
+          overdue_issues: data.overdueIssues,
+          overdue_milestones: data.overdueMilestones,
+          overdue_reviews: data.overdueReviews,
+          email: renderDigest(data),
+          recipients,
+        } as never,
+        200,
+      );
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: "get",
+      path: "/studies/{studyId}/export",
+      security,
+      summary: "The TMF export package's data, everything but the bytes",
+      description:
+        "The data half of the transfer/inspection package (ADR-0020): study, every document with versions, signatures and returns, the expected-status snapshot, the full hash-chained audit trail, and the unique content hashes with sizes. The web client assembles the same package layout the CLI writes (ADR-0035), fetching each blob through the authenticated content endpoint and verifying its sha256 before zipping. eTMF-EMS serialization stays CLI-side (ADR-0024).",
+      request: { params: z.object({ studyId: z.string().uuid() }) },
+      responses: {
+        200: json(TmfExportSchema, "Export data"),
+        404: json(ErrorSchema, "Study not found"),
+      },
+    }),
+    async (c) => {
+      try {
+        const data = await collectTmfExport(sql, c.req.valid("param").studyId);
+        return c.json(
+          {
+            study: data.study,
+            documents: data.documents,
+            expected: data.expected,
+            audit_events: data.auditEvents,
+            chain: data.chain,
+            blobs: data.blobs,
+            tmf_rm_version: data.tmfRmVersion,
+          } as never,
+          200,
+        );
+      } catch (e) {
+        if (e instanceof Error && e.message.endsWith("not found")) {
+          return c.json({ error: "study not found" }, 404);
+        }
+        throw e;
+      }
+    },
   );
 
   // --- Review queue (ADR-0018) ---------------------------------------------
