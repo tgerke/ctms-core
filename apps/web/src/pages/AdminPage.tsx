@@ -26,6 +26,7 @@ import {
   useSites,
   useSyncExpected,
   useTmfArtifacts,
+  useUpdateStudy,
   useUpdateStudySite,
   type AccessRole,
   type OrgKind,
@@ -84,11 +85,102 @@ export default function AdminPage({ study }: { study: Study | undefined }) {
           deletes.
         </p>
       </div>
+      <StudySettingsSection study={study} admin={admin} />
       <StudySitesSection study={study} admin={admin} />
       <RulesSection study={study} admin={admin} />
       <PeopleSection admin={admin} />
       <DirectorySection admin={admin} />
     </div>
+  );
+}
+
+// Study settings (ADR-0034): title and phase are editable; the protocol
+// number and sponsor are the record's identity and never change. Status only
+// moves forward — planning → active → closed.
+const NEXT_STATUS: Record<Study["status"], Study["status"] | null> = {
+  planning: "active",
+  active: "closed",
+  closed: null,
+};
+
+function StudySettingsSection({ study, admin }: { study: Study; admin: boolean }) {
+  const update = useUpdateStudy();
+  const [title, setTitle] = useState(study.title);
+  const [phase, setPhase] = useState(study.phase ?? "");
+  const [err, setErr] = useState<unknown>(null);
+  const next = NEXT_STATUS[study.status];
+  const dirty = title !== study.title || phase !== (study.phase ?? "");
+
+  return (
+    <section className="card">
+      <div className="flex flex-wrap items-center gap-3 border-b border-hairline px-4 py-3">
+        <h2 className="font-medium">Study settings</h2>
+        <span className="text-xs text-ink2">
+          {study.protocol_number} · {study.status}
+        </span>
+        {admin && next && (
+          <button
+            onClick={() => {
+              if (
+                !window.confirm(
+                  `Move ${study.protocol_number} from ${study.status} to ${next}? Status only moves forward.`,
+                )
+              )
+                return;
+              setErr(null);
+              update.mutate(
+                { studyId: study.id, status: next },
+                { onError: (e) => setErr(e) },
+              );
+            }}
+            disabled={update.isPending}
+            className={`ml-auto ${buttonCls}`}
+          >
+            <Power size={12} aria-hidden />
+            {study.status === "planning" ? "Mark active" : "Close study"}
+          </button>
+        )}
+      </div>
+      {admin ? (
+        <form
+          className="flex flex-wrap items-end gap-3 px-4 py-3"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!title.trim()) return;
+            setErr(null);
+            update.mutate(
+              { studyId: study.id, title: title.trim(), phase: phase.trim() || null },
+              { onError: (e) => setErr(e) },
+            );
+          }}
+        >
+          <label className="flex flex-1 flex-col gap-1 text-xs text-ink2">
+            Title
+            <input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              className={`${inputCls} min-w-64 w-full`}
+              required
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-xs text-ink2">
+            Phase
+            <input
+              value={phase}
+              onChange={(e) => setPhase(e.target.value)}
+              placeholder="e.g. II"
+              className={`${inputCls} w-20`}
+            />
+          </label>
+          <button type="submit" disabled={update.isPending || !dirty} className={buttonCls}>
+            {update.isPending ? "Saving…" : "Save"}
+          </button>
+          <ErrorNote error={err} className="w-full" />
+        </form>
+      ) : (
+        <p className="px-4 py-3 text-sm text-ink2">{study.title}</p>
+      )}
+    </section>
   );
 }
 

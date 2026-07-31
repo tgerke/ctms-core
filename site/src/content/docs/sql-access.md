@@ -37,6 +37,7 @@ grant, not a feature request.
 | `v_issue_status` | Issues and deviations: `open`, `overdue`, `resolved` |
 | `v_site_enrollment` | Latest enrollment report per site vs its target |
 | `v_milestone_status` | Milestones: `achieved`, `overdue`, `upcoming` |
+| `v_study_startup` | Per-study startup readiness (ADR-0034): sites by status, sites without an active PI, rules by scope, unsynced placeholders, missing documents, milestones, granted people — the dashboard's startup checklist |
 
 The base tables are readable too (the grant is schema-wide), but the views are
 the *stable* surface: treat their columns like endpoint fields. Additive

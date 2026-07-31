@@ -17,9 +17,38 @@ export interface Study {
   protocol_number: string;
   title: string;
   phase: string | null;
-  status: string;
+  status: "planning" | "active" | "closed";
   sponsor_name: string;
   site_count: number;
+}
+
+// --- Study startup (ADR-0034) --------------------------------------------------
+
+export interface StartupSite {
+  study_site_id: string;
+  site_number: string;
+  site_name: string;
+}
+
+export interface StudyStartup {
+  study_id: string;
+  status: "planning" | "active" | "closed";
+  site_count: number;
+  pending_site_count: number;
+  active_site_count: number;
+  sites_without_pi_count: number;
+  rule_count: number;
+  study_rule_count: number;
+  site_rule_count: number;
+  person_rule_count: number;
+  unsynced_expected_count: number;
+  expected_total: number;
+  missing_count: number;
+  milestone_count: number;
+  overdue_milestone_count: number;
+  granted_people_count: number;
+  pending_sites: StartupSite[];
+  sites_without_pi: StartupSite[];
 }
 
 export interface SiteCompleteness {
@@ -640,6 +669,60 @@ export function useVersionContent(versionId: string | undefined) {
 
 export const useStudies = () =>
   useQuery({ queryKey: ["studies"], queryFn: () => api<Study[]>("/studies") });
+
+// --- Study startup hooks (ADR-0034) --------------------------------------------
+
+export const useStudyStartup = (studyId: string | undefined) =>
+  useQuery({
+    queryKey: ["startup", studyId],
+    queryFn: () => api<StudyStartup>(`/studies/${studyId}/startup`),
+    enabled: !!studyId,
+  });
+
+export function useCreateStudy() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      protocolNumber: string;
+      title: string;
+      phase?: string;
+      sponsorOrgId: string;
+      templateStudyId?: string;
+    }) =>
+      api<{ id: string; cloned_rules: number; expected_created: number }>(
+        "/studies",
+        jsonInit("POST", {
+          protocol_number: input.protocolNumber,
+          title: input.title,
+          ...(input.phase ? { phase: input.phase } : {}),
+          sponsor_org_id: input.sponsorOrgId,
+          ...(input.templateStudyId ? { template_study_id: input.templateStudyId } : {}),
+        }),
+      ),
+    onSuccess: () => qc.invalidateQueries(),
+  });
+}
+
+export function useUpdateStudy() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      studyId: string;
+      title?: string;
+      phase?: string | null;
+      status?: "planning" | "active" | "closed";
+    }) =>
+      api<{ id: string }>(
+        `/studies/${input.studyId}`,
+        jsonInit("PATCH", {
+          ...(input.title !== undefined ? { title: input.title } : {}),
+          ...(input.phase !== undefined ? { phase: input.phase } : {}),
+          ...(input.status !== undefined ? { status: input.status } : {}),
+        }),
+      ),
+    onSuccess: () => qc.invalidateQueries(),
+  });
+}
 
 export const useSites = (studyId: string | undefined) =>
   useQuery({
@@ -1324,6 +1407,11 @@ const ROLE_OPERATIONS: Record<AccessRole, readonly Operation[]> = {
  */
 export const can = (me: Me | undefined, op: Operation): boolean =>
   !!me?.grants.some((g) => ROLE_OPERATIONS[g.role].includes(op));
+
+// Mirror of the API's permitsGrantScope for an empty scope (ADR-0034), which
+// stays the authority: creating a study takes an *unscoped* admin grant.
+export const canCreateStudy = (me: Me | undefined): boolean =>
+  !!me?.grants.some((g) => g.role === "admin" && !g.study_id && !g.study_site_id);
 
 export const useSiteOverview = (studySiteId: string | undefined) =>
   useQuery({

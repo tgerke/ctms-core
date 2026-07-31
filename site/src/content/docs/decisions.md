@@ -438,6 +438,23 @@ docs are part of the product probe and should read like the docs of the
 commercial systems the roadmap benchmarks against; the sibling edc-core made
 the same move for the same reason.
 
+## ADR-0034: Study creation takes unscoped admin; startup is a derived checklist and a cloned template
+
+The last spine entity the seed script exclusively owned becomes creatable
+through the API: `POST /studies` requires an *unscoped* admin grant, because
+a new study is a new top-level scope — the same authority ADR-0016 demands
+for minting unscoped access, and the reason no bootstrap grant row is
+needed (the creator's grant already covers the new study). A template
+study's requirement rules can be cloned verbatim in the same transaction
+(user-authored configuration, never generated — ADR-0005), with expected
+documents synced before the response returns. The guided startup itself is
+`v_study_startup`, a view over existing facts that the dashboard renders as
+a checklist for planning studies; milestone *names* prefill from another
+study but dates are always entered fresh, since a prior study's dates would
+be invented data. Status moves forward only, and the facts inform rather
+than gate: activation with open items takes a confirmation, not a
+permission.
+
 ---
 
 Three of these (ADR-0004, ADR-0006, and ADR-0010) are the same idea applied

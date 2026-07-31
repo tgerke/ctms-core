@@ -17,6 +17,7 @@ import {
   createPerson,
   createRequirementRule,
   createSite,
+  createStudy,
   delegationLog,
   documentAuditTrail,
   documentDetail,
@@ -48,14 +49,17 @@ import {
   signDocumentVersion,
   siteStaff,
   studyBinder,
+  StudyAdminError,
   studyEnrollment,
   studyIssues,
   studyMilestones,
   studyRequirementRules,
   studySites,
+  studyStartup,
   studyVisits,
   syncExpectedDocuments,
   updateRequirementRule,
+  updateStudy,
   updateStudySite,
   updateVisit,
   uploadDocument,
@@ -114,6 +118,7 @@ import {
   StaffMemberSchema,
   StaffRoleSchema,
   StudySchema,
+  StudyStartupSchema,
   TmfArtifactSchema,
   TrainingRecordSchema,
   TrainingStatusSchema,
@@ -168,8 +173,16 @@ export function buildApp(db: Db, sql: Sql) {
   const auth = authMiddleware(sql);
   const readOrUpload = (c: { req: { method: string } }) =>
     c.req.method === "GET" ? ("read" as const) : ("upload" as const);
+  const readOrAdminister = (c: { req: { method: string } }) =>
+    c.req.method === "GET" ? ("read" as const) : ("administer" as const);
 
-  app.use("/studies", auth, requirePermission(sql, "read"));
+  // GET stays an ordinary read; POST /studies additionally requires an
+  // *unscoped* admin grant, completed in the handler (ADR-0034) — creating a
+  // study creates a new top-level scope, the permitsGrantScope reasoning.
+  app.use("/studies", auth, requirePermission(sql, readOrAdminister));
+  // The /studies/:studyId/* wildcard below does not match the bare path, so
+  // PATCH /studies/:studyId needs its own gate.
+  app.use("/studies/:studyId", auth, requirePermission(sql, readOrAdminister, "studyId"));
   app.use("/portfolio", auth, requirePermission(sql, "read"));
   // Who am I: any authenticated, provisioned identity may ask (ADR-0023).
   app.use("/me", auth);
@@ -285,8 +298,6 @@ export function buildApp(db: Db, sql: Sql) {
   // study so a study-scoped admin grant works; grant creation/revocation
   // carries its scope in the body or the grant row, so the handlers finish
   // those checks.
-  const readOrAdminister = (c: { req: { method: string } }) =>
-    c.req.method === "GET" ? ("read" as const) : ("administer" as const);
   app.use("/organizations", auth, requirePermission(sql, readOrAdminister));
   app.use("/sites", auth, requirePermission(sql, readOrAdminister));
   app.use("/people", auth, requirePermission(sql, readOrAdminister));
@@ -343,6 +354,27 @@ export function buildApp(db: Db, sql: Sql) {
       responses: { 200: json(z.array(StudySchema), "Studies") },
     }),
     async (c) => c.json((await listStudies(sql)) as never, 200),
+  );
+
+  app.openapi(
+    createRoute({
+      method: "get",
+      path: "/studies/{studyId}/startup",
+      security,
+      summary: "Startup readiness, derived from facts",
+      description:
+        "The guided-startup checklist's data (ADR-0034): site, PI, requirement-rule, sync, expected-document, and milestone counts for the study, all computed from existing facts (ADR-0004). Nothing here is stored checklist state — an item completes by the underlying fact changing.",
+      request: { params: z.object({ studyId: z.string().uuid() }) },
+      responses: {
+        200: json(StudyStartupSchema, "Startup readiness"),
+        404: json(ErrorSchema, "Not found"),
+      },
+    }),
+    async (c) => {
+      const startup = await studyStartup(sql, c.req.valid("param").studyId);
+      if (!startup) return c.json({ error: "study not found" }, 404);
+      return c.json(startup as never, 200);
+    },
   );
 
   app.openapi(
@@ -1926,6 +1958,120 @@ export function buildApp(db: Db, sql: Sql) {
     scope.studyId || scope.studySiteId
       ? permits(grants, "administer", scope)
       : grants.some((g) => g.role === "admin" && !g.study_id && !g.study_site_id);
+
+  app.openapi(
+    createRoute({
+      method: "post",
+      path: "/studies",
+      security,
+      summary: "Create a study",
+      description:
+        "Creates a study in 'planning' (ADR-0034). Requires an unscoped admin grant — a new study is a new top-level scope, the same authority that mints unscoped access — and that grant already covers the new study, so no bootstrap grant is written. Optionally clones another study's requirement rules verbatim (they are user-authored configuration, never generated) and syncs expected documents in the same transaction. The startup checklist at GET /studies/{id}/startup guides what comes next.",
+      request: {
+        body: {
+          content: {
+            "application/json": {
+              schema: z.object({
+                protocol_number: z.string().trim().min(1),
+                title: z.string().trim().min(1),
+                phase: z.string().trim().min(1).optional(),
+                sponsor_org_id: z.string().uuid(),
+                template_study_id: z.string().uuid().optional(),
+              }),
+            },
+          },
+        },
+      },
+      responses: {
+        201: json(
+          z.object({
+            id: z.string().uuid(),
+            cloned_rules: z.number().int(),
+            expected_created: z.number().int(),
+          }),
+          "Created",
+        ),
+        400: json(ErrorSchema, "Unknown sponsor or template study"),
+        403: json(ErrorSchema, "Requires an unscoped admin grant"),
+        409: json(ErrorSchema, "Protocol number already exists"),
+      },
+    }),
+    async (c) => {
+      if (!permitsGrantScope(c.get("grants"), {})) {
+        return c.json({ error: "creating a study requires an unscoped admin grant" }, 403);
+      }
+      const body = c.req.valid("json");
+      try {
+        const created = await createStudy(db, c.get("actor"), {
+          protocolNumber: body.protocol_number,
+          title: body.title,
+          phase: body.phase ?? null,
+          sponsorOrgId: body.sponsor_org_id,
+          templateStudyId: body.template_study_id ?? null,
+        });
+        return c.json(
+          {
+            id: created.id,
+            cloned_rules: created.clonedRules,
+            expected_created: created.expectedCreated,
+          },
+          201,
+        );
+      } catch (e) {
+        if (e instanceof StudyAdminError) {
+          return c.json({ error: e.message }, e.kind === "conflict" ? 409 : 400);
+        }
+        throw e;
+      }
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: "patch",
+      path: "/studies/{studyId}",
+      security,
+      summary: "Update a study's title, phase, or status",
+      description:
+        "Status moves forward only: planning → active → closed (planning → closed for an abandoned study). protocol_number and sponsor are the record's identity and are immutable — a different protocol is a different study (ADR-0034).",
+      request: {
+        params: z.object({ studyId: z.string().uuid() }),
+        body: {
+          content: {
+            "application/json": {
+              schema: z.object({
+                title: z.string().trim().min(1).optional(),
+                phase: z.string().trim().min(1).nullable().optional(),
+                status: z.enum(["planning", "active", "closed"]).optional(),
+              }),
+            },
+          },
+        },
+      },
+      responses: {
+        200: json(z.object({ id: z.string().uuid() }), "Updated"),
+        400: json(ErrorSchema, "Illegal status transition"),
+        404: json(ErrorSchema, "Not found"),
+      },
+    }),
+    async (c) => {
+      const body = c.req.valid("json");
+      try {
+        const updated = await updateStudy(db, c.get("actor"), {
+          studyId: c.req.valid("param").studyId,
+          title: body.title,
+          phase: body.phase,
+          status: body.status,
+        });
+        return c.json({ id: updated.id }, 200);
+      } catch (e) {
+        if (e instanceof StudyAdminError) {
+          return c.json({ error: e.message }, e.kind === "not_found" ? 404 : 400);
+        }
+        throw e;
+      }
+    },
+  );
 
   app.openapi(
     createRoute({

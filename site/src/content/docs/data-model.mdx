@@ -68,6 +68,11 @@ no schema change.
 
 - **organization**: sponsor, CRO, or site institution.
 - **study**: protocol number, title, phase; belongs to a sponsoring organization.
+  Creatable through the API since ADR-0034 (an *unscoped* admin grant — a new
+  study is a new top-level scope), optionally cloning another study's
+  requirement rules in the same transaction. Title and phase are editable;
+  status moves forward only (`planning → active → closed`); the protocol
+  number and sponsor are the record's identity and never change.
 - **protocol_version**: labeled versions with effective dates. Requirement
   rules can demand re-collection per version (amended protocol signature pages,
   for instance).
@@ -172,6 +177,13 @@ Monitoring visits, issues, enrollment, and milestones follow the same rule:
 facts in tables, lifecycle in views. The [operational layer guide](/ctms-core/operations/)
 covers them in full; the derived views are `v_monitoring_visit_status`,
 `v_issue_status`, `v_site_enrollment`, and `v_milestone_status`.
+
+Study startup follows it too (ADR-0034): `v_study_startup` computes one row
+per study of readiness counts — sites by status, sites lacking an active PI,
+rules by scope, placeholders the sync function would insert but hasn't,
+expected and missing totals, milestones, people with study-scoped access.
+The dashboard's startup checklist renders this view; an item completes when
+the underlying fact changes, never by a checkbox.
 
 The site-seat logs (ADR-0023) extend the same pattern to the site's own
 records: **delegation** (delegate, delegated tasks, start/end dates,
