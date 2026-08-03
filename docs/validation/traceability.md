@@ -1,6 +1,6 @@
 # Requirement traceability matrix
 
-Generated from a live test run (commit d16bb52, node v23.11.0, 2026-07-31T18:21:50.573Z); regenerate with `pnpm validation:artifacts`.
+Generated from a live test run (commit 6407a92, node v23.11.0, 2026-07-31T19:35:02.041Z); regenerate with `pnpm validation:artifacts`.
 Join key: the requirement token appearing verbatim in test names, so this
 matrix cannot drift from the suite without showing it.
 

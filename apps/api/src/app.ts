@@ -1480,7 +1480,7 @@ export function buildApp(db: Db, sql: Sql) {
       security,
       summary: "Search documents by metadata and content",
       description:
-        "Document search (ADR-0019, ADR-0022): every whitespace token in q must appear in the document's metadata (title, artifact taxonomy, site, person, uploader, file names, filing source, status) or in its versions' extracted text — 'raman license' finds Dr. Raman's medical license, a phrase from inside the protocol finds the protocol. Content matches carry a snippet of the surrounding text.",
+        "Document search (ADR-0019, ADR-0022): every whitespace token in q must appear in the document's metadata (title, artifact taxonomy, site, person, uploader, file names, filing source, status) or in its versions' extracted text — 'raman license' finds Dr. Raman's medical license, a phrase from inside the protocol finds the protocol. Content matches carry a snippet of the surrounding text. Results order by a deterministic relevance rank (ADR-0037): per token, the highest metadata tier it hits (title 8, taxonomy 4, other metadata 2) plus its content occurrences capped at 4; ties order by latest upload. The rank is returned with each result.",
       request: {
         params: z.object({ studyId: z.string().uuid() }),
         query: z.object({

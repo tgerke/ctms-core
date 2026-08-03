@@ -201,6 +201,13 @@ export async function portfolio(sql: Sql) {
  * text (ADR-0022). Predictable substring semantics — "04.01" finds the IRB
  * zone, "raman license" finds Dr. Raman's license, a phrase from inside the
  * protocol finds the protocol — with no index to drift from the record.
+ *
+ * Results order by a deterministic rank (ADR-0037), computed in the same
+ * query and never stored: per token, the highest metadata tier it hits
+ * (title 8, taxonomy 4, anything else 2) plus its content occurrences capped
+ * at 4 — so what a document *is* outranks what it merely *mentions*, and a
+ * content-only match can never overtake a title match on the same token.
+ * Ties keep the previous ordering (latest upload, then artifact code).
  */
 export async function searchDocuments(
   sql: Sql,
@@ -214,12 +221,29 @@ export async function searchDocuments(
   if (tokens.length === 0) return [];
   const limit = Math.min(filter.limit ?? 50, 200);
   const rows = await sql`
-    SELECT s.*
+    SELECT s.*, r.rank
     FROM v_document_search s
+    CROSS JOIN LATERAL (
+      SELECT sum(
+        CASE
+          WHEN position(t.w IN lower(s.title)) > 0 THEN 8
+          WHEN position(t.w IN lower(concat_ws(' ',
+            s.artifact_code, s.artifact_name, s.section_name, s.zone_name))) > 0 THEN 4
+          WHEN position(t.w IN s.haystack) > 0 THEN 2
+          ELSE 0
+        END
+        + least(
+            (length(lower(coalesce(s.content_text, '')))
+             - length(replace(lower(coalesce(s.content_text, '')), t.w, '')))
+            / length(t.w),
+            4)
+      )::int AS rank
+      FROM unnest(${words}::text[]) AS t(w)
+    ) r
     WHERE s.study_id = ${filter.studyId}
       AND concat_ws(' ', s.haystack, lower(coalesce(s.content_text, ''))) LIKE ALL(${tokens})
       AND (${filter.status ?? null}::text IS NULL OR s.status::text = ${filter.status ?? null})
-    ORDER BY s.latest_uploaded_at DESC NULLS LAST, s.artifact_code
+    ORDER BY r.rank DESC, s.latest_uploaded_at DESC NULLS LAST, s.artifact_code
     LIMIT ${limit}`;
   // The full extracted text stays in SQL (the view has it); the API carries a
   // snippet around the content match instead.

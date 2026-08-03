@@ -9,6 +9,8 @@ import { StatusChip } from "../status";
 // document's metadata — title, artifact taxonomy, site, person, uploader,
 // file names, filing source, status — or the extracted text inside its
 // versions. Content matches show a snippet of the surrounding text.
+// Results arrive best-match first (ADR-0037): title and artifact hits
+// outrank content-only mentions; the API's rank drives the order.
 
 const DOC_STATUSES = ["pending_review", "effective", "returned", "superseded"] as const;
 
@@ -47,7 +49,8 @@ export default function SearchPage({ study }: { study: Study | undefined }) {
           Searches every document's title, TMF artifact, site, person,
           uploader, file names, and the text inside each version in{" "}
           {study.protocol_number}. Every word must match — try "raman license"
-          or a phrase from inside a document.
+          or a phrase from inside a document. Best matches come first: a hit
+          in the title or artifact outranks a passing mention in the text.
         </p>
       </div>
 

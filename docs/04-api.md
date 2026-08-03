@@ -84,6 +84,10 @@ person, uploader, file names, filing source) or the extracted text inside
 its versions: `q=1572 003` finds site 003's Form FDA 1572, and a phrase
 from inside the monitoring plan finds the monitoring plan. Content matches
 carry `matched_in_content` and a `content_snippet` of the surrounding text.
+Results come best-match first (ADR-0037): each row carries a deterministic
+`rank` — per token, a title hit outranks a taxonomy hit outranks other
+metadata, plus content occurrences capped at 4 — and ties order by latest
+upload.
 
 The cross-study view is `GET /portfolio` (ADR-0021): one row per study with
 completeness counts, attention items, review-queue size, open issues,

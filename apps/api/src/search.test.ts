@@ -15,6 +15,7 @@ let app: ReturnType<typeof buildApp>;
 let studyId: string;
 let studySiteId: string;
 let fixtureArtifactId: number;
+let rankingPersonId: string;
 
 const ADMIN = { Authorization: "Bearer dev-admin-token" };
 const MONITOR = { Authorization: "Bearer dev-monitor-token" };
@@ -40,6 +41,14 @@ beforeAll(async () => {
     VALUES (${section!.id}, '99.99.99', 'API Test Fixture')
     ON CONFLICT (code) DO UPDATE SET name = EXCLUDED.name RETURNING id`;
   fixtureArtifactId = artifact!.id;
+  // The ranking fixtures are person-scoped so they can never be picked up by
+  // another test file's "existing document with this artifact + scope"
+  // lookup (those all run with person_id null). Raman and Patel appear in
+  // name-based search assertions, so any other person keeps those honest.
+  const [person] = await sql`
+    SELECT id FROM person WHERE family_name NOT IN ('Raman', 'Patel')
+    ORDER BY family_name LIMIT 1`;
+  rankingPersonId = person!.id;
 });
 afterAll(() => sql.end());
 
@@ -47,13 +56,20 @@ async function uploadFixture(
   bytes: BlobPart,
   fileName: string,
   mimeType: string,
+  // forceNew gives a test its own document; without it uploads pile onto the
+  // shared fixture document as versions (the ADR-0022 tests rely on that).
+  // personScoped keeps forceNew documents out of every other file's
+  // artifact + site scope.
+  opts: { title?: string; forceNew?: boolean; personScoped?: boolean } = {},
 ): Promise<{ document_id: string; version_id: string; sha256: string }> {
   const form = new FormData();
   form.set("file", new File([bytes], fileName, { type: mimeType }));
   form.set("tmf_artifact_id", String(fixtureArtifactId));
   form.set("study_id", studyId);
   form.set("study_site_id", studySiteId);
-  form.set("title", "Content search fixture");
+  if (opts.personScoped) form.set("person_id", rankingPersonId);
+  form.set("title", opts.title ?? "Content search fixture");
+  if (opts.forceNew) form.set("force_new", "true");
   const res = await app.request("/documents", { method: "POST", headers: ADMIN, body: form });
   expect(res.status).toBe(201);
   return (await res.json()) as { document_id: string; version_id: string; sha256: string };
@@ -173,5 +189,81 @@ describe("content full-text search (ADR-0022)", () => {
     // And the failed bytes are invisible to content search.
     const { rows } = await search(brokenMarker);
     expect(rows.length).toBe(0);
+  });
+});
+
+describe("relevance ranking (ADR-0037)", () => {
+  // Each test uploads in the order that would put the WRONG document first
+  // under the old latest-upload ordering, so a pass proves rank drives.
+
+  it("a title match outranks a content-only match, whatever uploaded last", async () => {
+    const marker = `rank${Date.now()}`;
+    const titled = await uploadFixture(
+      "body text with nothing notable in it",
+      "titled.txt",
+      "text/plain",
+      { title: `Ranking fixture ${marker}`, forceNew: true, personScoped: true },
+    );
+    const mention = await uploadFixture(
+      `the ${marker} appears once in passing`,
+      "mention.txt",
+      "text/plain",
+      { forceNew: true, personScoped: true },
+    );
+
+    const { rows } = await search(marker);
+    expect(rows.map((r) => r.document_id)).toEqual([
+      titled.document_id,
+      mention.document_id,
+    ]);
+    expect(rows[0].rank).toBeGreaterThan(rows[1].rank);
+  });
+
+  it("more content occurrences rank higher, capped so bulk cannot run away", async () => {
+    const marker = `occ${Date.now()}`;
+    const thrice = await uploadFixture(
+      `${marker} then ${marker} then ${marker}`,
+      "thrice.txt",
+      "text/plain",
+      { forceNew: true, personScoped: true },
+    );
+    const flood = await uploadFixture(
+      Array.from({ length: 40 }, () => marker).join(" "),
+      "flood.txt",
+      "text/plain",
+      { forceNew: true, personScoped: true },
+    );
+    const once = await uploadFixture(`${marker} alone`, "once.txt", "text/plain", {
+      forceNew: true,
+      personScoped: true,
+    });
+
+    const { rows } = await search(marker);
+    expect(rows.length).toBe(3);
+    expect(rows[rows.length - 1].document_id).toBe(once.document_id);
+    const rankOf = (id: string) => rows.find((r) => r.document_id === id)!.rank;
+    expect(rankOf(thrice.document_id)).toBeGreaterThan(rankOf(once.document_id));
+    // 40 mentions score the same as 4: the cap keeps a wordy document from
+    // drowning everything else.
+    expect(rankOf(flood.document_id)).toBe(4);
+  });
+
+  it("equal ranks keep the previous ordering: latest upload first", async () => {
+    const marker = `tie${Date.now()}`;
+    const older = await uploadFixture(`${marker} alpha`, "older.txt", "text/plain", {
+      forceNew: true,
+      personScoped: true,
+    });
+    const newer = await uploadFixture(`${marker} beta`, "newer.txt", "text/plain", {
+      forceNew: true,
+      personScoped: true,
+    });
+
+    const { rows } = await search(marker);
+    expect(rows[0].rank).toBe(rows[1].rank);
+    expect(rows.map((r) => r.document_id)).toEqual([
+      newer.document_id,
+      older.document_id,
+    ]);
   });
 });

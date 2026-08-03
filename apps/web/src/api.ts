@@ -196,6 +196,8 @@ export interface SearchResult {
   // the text around that match.
   matched_in_content: boolean;
   content_snippet: string | null;
+  // Relevance score behind the result order (ADR-0037).
+  rank: number;
 }
 
 // --- Review queue (ADR-0018) -------------------------------------------------

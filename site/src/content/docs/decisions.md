@@ -492,6 +492,21 @@ a fresh attestation can be added. The signed paper DoA log remains the
 authoritative Part 11 record — the structured layer grows toward replacing
 it without claiming it has.
 
+## ADR-0037: Search relevance is a deterministic rank, computed per query
+
+Content full-text (ADR-0022) made latest-upload ordering dishonest: a title
+that is exactly what the user typed could sit below a newer document
+mentioning the same words once on page 40. The fix keeps matching untouched
+— every word still substring-matches metadata or content — and adds only an
+`ORDER BY`: per token, the highest metadata tier hit (title over taxonomy
+over the rest) plus content occurrences capped so bulk cannot run away,
+with ties falling back to the old order. Postgres `ts_rank` was rejected
+because its tokenizer disagrees with the documented substring semantics
+("04.01" matches today but scores zero in a tsquery) and its scores are not
+explainable row by row. The rank is never stored — recomputed each query
+from the same view the match reads — and each result carries it, so "why is
+this first?" is answerable from the response and a documented weight table.
+
 ---
 
 Three of these (ADR-0004, ADR-0006, and ADR-0010) are the same idea applied
